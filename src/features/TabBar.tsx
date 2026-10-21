@@ -1,10 +1,13 @@
 import { useWorkspace } from "../stores/workspace";
 
-export default function TabBar() {
+interface Props {
+  onClose: (id: string) => void;
+}
+
+export default function TabBar({ onClose }: Props) {
   const tabs = useWorkspace((s) => s.tabs);
   const activeId = useWorkspace((s) => s.activeId);
   const setActive = useWorkspace((s) => s.setActive);
-  const closeTab = useWorkspace((s) => s.closeTab);
   const newTab = useWorkspace((s) => s.newTab);
 
   if (tabs.length === 0) {
@@ -27,7 +30,7 @@ export default function TabBar() {
             onMouseDown={(e) => {
               if (e.button === 1) {
                 e.preventDefault();
-                closeTab(tab.id);
+                onClose(tab.id);
               }
             }}
           >
@@ -38,7 +41,7 @@ export default function TabBar() {
               aria-label="关闭"
               onClick={(e) => {
                 e.stopPropagation();
-                closeTab(tab.id);
+                onClose(tab.id);
               }}
             >
               ×
