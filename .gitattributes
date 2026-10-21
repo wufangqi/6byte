@@ -1,0 +1,13 @@
+# Keep line endings stable across platforms so prettier/rustfmt checks agree.
+* text=auto eol=lf
+
+# Windows scripts: content is LF in the repo, checkout is handled by the above.
+*.ps1 text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.ico binary
+*.icns binary
+*.wasm binary
