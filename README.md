@@ -2,7 +2,11 @@
 
 > 跨平台、极轻、AI 原生的文本工作台。打开 `md` / `txt` / `log` 就能用，数据留在本机。
 
-**当前阶段：M0–M2 已交付（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），准备 v0.1.0 发布**
+[![CI](https://github.com/wufangqi/aneditor/actions/workflows/ci.yml/badge.svg)](https://github.com/wufangqi/aneditor/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/wufangqi/aneditor?label=release)](https://github.com/wufangqi/aneditor/releases/latest)
+[![License](https://img.shields.io/github/license/wufangqi/aneditor)](./LICENSE)
+
+**当前阶段：M0–M2 已交付并发布 v0.1.0（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -39,7 +43,11 @@
 
 ## 安装（终端用户）
 
-从 release 下载 `AI Native Editor_0.1.0_x64-setup.exe`（NSIS，单用户安装，无需管理员权限）或 `.msi`（企业部署用）。
+从 [Releases v0.1.0](https://github.com/wufangqi/aneditor/releases/tag/v0.1.0) 下载：
+
+- `AI.Native.Editor_0.1.0_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `AI.Native.Editor_0.1.0_x64_en-US.msi`（企业部署 / 静默安装）
+
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
 ## 开发
@@ -86,6 +94,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 安装包 | `pnpm tauri build` | ✅ MSI 2.77 MB / NSIS 2.10 MB |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
 | 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 48/48（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮） |
+| 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
 
