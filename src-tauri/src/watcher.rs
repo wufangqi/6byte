@@ -67,6 +67,7 @@ impl FileWatcher {
             .parent()
             .map(Path::to_path_buf)
             .ok_or_else(|| "无法监听没有父目录的路径。".to_string())?;
+        let variants = path_variants(&path);
 
         let mut inner = self
             .inner
@@ -76,7 +77,7 @@ impl FileWatcher {
             .shared
             .watched
             .lock()
-            .map(|set| set.contains(&path))
+            .map(|set| variants.iter().any(|variant| set.contains(variant)))
             .unwrap_or(false)
         {
             return Ok(());
@@ -103,7 +104,7 @@ impl FileWatcher {
         *inner.dirs.entry(parent).or_insert(0) += 1;
 
         if let Ok(mut set) = inner.shared.watched.lock() {
-            set.insert(path);
+            set.extend(variants);
         }
         Ok(())
     }
@@ -111,6 +112,7 @@ impl FileWatcher {
     /// Stop watching `path`; the OS watcher is dropped once nothing is watched.
     pub fn unwatch(&self, path: &Path) {
         let Ok(path) = absolute(path) else { return };
+        let variants = path_variants(&path);
         let mut inner = match self.inner.lock() {
             Ok(inner) => inner,
             Err(_) => return,
@@ -120,13 +122,20 @@ impl FileWatcher {
             .shared
             .watched
             .lock()
-            .map(|mut set| set.remove(&path))
+            .map(|mut set| {
+                variants
+                    .iter()
+                    .map(|variant| set.remove(variant))
+                    .fold(false, |acc, hit| acc || hit)
+            })
             .unwrap_or(false);
         if !removed {
             return;
         }
         if let Ok(mut last) = inner.shared.last_emitted.lock() {
-            last.remove(&path);
+            for variant in &variants {
+                last.remove(variant);
+            }
         }
 
         if let Some(parent) = path.parent() {
@@ -147,6 +156,19 @@ impl FileWatcher {
     }
 }
 
+/// Paths the OS may report for the same file: the path as given plus its
+/// canonical form. macOS FSEvents reports `/private/var/...` for `/var/...`
+/// paths, while Windows reports the path exactly as it was registered.
+fn path_variants(path: &Path) -> Vec<PathBuf> {
+    let mut variants = vec![path.to_path_buf()];
+    if let Ok(canonical) = fs::canonicalize(path) {
+        if canonical != path && !variants.contains(&canonical) {
+            variants.push(canonical);
+        }
+    }
+    variants
+}
+
 fn handle_event(shared: &Shared, event: &Event) {
     let watched = match shared.watched.lock() {
         Ok(watched) => watched,
@@ -154,7 +176,11 @@ fn handle_event(shared: &Shared, event: &Event) {
     };
 
     for path in &event.paths {
-        if !watched.contains(path) {
+        let matched = watched.contains(path)
+            || path_variants(path)
+                .iter()
+                .any(|variant| watched.contains(variant));
+        if !matched {
             continue;
         }
         let signature = match fs::metadata(path) {
