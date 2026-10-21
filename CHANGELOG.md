@@ -25,7 +25,9 @@
 - Markdown 分屏预览（M2 MVP）：`markdown-it` 渲染（禁原始 HTML、自动链接、fence 语言类）、
   120 ms 防抖实时更新、编辑器 ↔ 预览双向比例滚动同步、`#anchor` 页内跳转、外链点击拦截提示；
   Ctrl+Shift+M 或状态栏「预览」按钮切换，开关持久化。
-- Markdown 代码高亮：Shiki 4 高亮 10 种常用语言（js/ts/json/html/css/rust/python/bash/markdown/yaml），按需加载，不支持的语言回退纯文本。
+- Markdown 代码高亮：Shiki 4 高亮 10 种常用语言（js/ts/json/html/css/rust/python/bash/markdown/yaml），
+  按需加载（首次出现代码块时才加载 wasm 与 grammar），不支持的语言回退纯文本。
+- Markdown 图片粘贴：在编辑器内粘贴图片会写入源文件同目录的 `assets/`（文件名净化、20 MB 上限、原子写），
   光标处插入 `![图片](assets/xxx.png)`，预览经 Tauri asset 协议显示本地图片。
 - Markdown 大纲：标题自动生成稳定锚点（重名自动去重），预览工具栏「大纲（N）」浮层按层级列出，
   点击跳转到预览对应位置（悬停显示源行号）。
@@ -54,5 +56,6 @@
 
 - 新增 ESLint 10（flat config）、Prettier、Vitest；前端单测 57 例、Rust 单测 52 个用例（49 通过 + 3 个 ignored 性能探针）。
 - 新增 GitHub Actions CI（三平台：前端检查 + Rust fmt/clippy/test）。
-- 新增 `scripts/e2e-smoke.ps1`：通过 WebView2 DevTools 协议驱动安装版，覆盖大文件预览、混合换行、
-  会话失效文件、外部修改静默重载、脏标签冲突三选一、跨文件搜索跳转六个单元测试到不了的路径。
+- 新增 `scripts/e2e-smoke.ps1`：通过 WebView2 DevTools 协议驱动安装版，覆盖单元测试到不了的 12 条路径
+  （大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏标签冲突三选一 / 跨文件搜索跳转 / 查找替换 /
+  Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮），共 48 条断言。
