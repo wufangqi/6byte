@@ -228,14 +228,38 @@ mod tests {
         watcher.watch(&file).unwrap();
 
         // Give the OS watcher a moment to register before touching the file.
-        std::thread::sleep(Duration::from_millis(250));
-        fs::write(&file, "second version").unwrap();
+        std::thread::sleep(Duration::from_millis(500));
 
-        let event = receiver
-            .recv_timeout(Duration::from_secs(5))
-            .expect("expected a file change event");
-        assert_eq!(event.path, file.to_string_lossy());
-        assert!(event.size > 0);
+        // Some backends report a transient truncate event (size 0) before the
+        // real write, and macOS coalesces events; retry writes until a content
+        // event arrives instead of depending on a single OS notification.
+        let mut received = None;
+        for attempt in 0..6 {
+            fs::write(&file, format!("second version {attempt}")).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(3);
+            while Instant::now() < deadline {
+                match receiver.recv_timeout(Duration::from_millis(250)) {
+                    Ok(event) if event.size > 0 => {
+                        received = Some(event);
+                        break;
+                    }
+                    Ok(_) => continue,
+                    Err(_) => break,
+                }
+            }
+            if received.is_some() {
+                break;
+            }
+        }
+
+        let event = received.expect("expected a file change event with content");
+        // macOS reports canonicalised paths (/private/var vs /var), so compare
+        // the file name rather than the whole path.
+        assert!(
+            event.path.ends_with("notes.txt"),
+            "unexpected path: {}",
+            event.path
+        );
         assert!(event.mtime_ms > 0);
 
         watcher.unwatch(&file);
