@@ -9,18 +9,13 @@
 use encoding_rs::{Encoding, UTF_16BE, UTF_16LE, UTF_8};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Eol {
+    #[default]
     Lf,
     Crlf,
     Cr,
-}
-
-impl Default for Eol {
-    fn default() -> Self {
-        Eol::Lf
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -34,6 +29,10 @@ pub struct FileMeta {
     pub eol: Eol,
     /// True when the bytes could not be decoded cleanly.
     pub lossy: bool,
+    /// True when the file mixed CRLF/LF/CR line endings. Saving normalizes the
+    /// whole buffer to `eol`, so the UI warns before doing that.
+    #[serde(default)]
+    pub mixed_eol: bool,
 }
 
 pub struct Decoded {
@@ -73,7 +72,7 @@ pub fn decode(bytes: &[u8]) -> Decoded {
 }
 
 fn finish(content: String, charset: &str, bom: bool, lossy: bool) -> Decoded {
-    let eol = detect_eol(&content);
+    let (eol, mixed_eol) = detect_eol(&content);
     Decoded {
         content,
         meta: FileMeta {
@@ -81,11 +80,13 @@ fn finish(content: String, charset: &str, bom: bool, lossy: bool) -> Decoded {
             bom,
             eol,
             lossy,
+            mixed_eol,
         },
     }
 }
 
-fn detect_eol(text: &str) -> Eol {
+/// Returns the dominant line ending plus whether more than one flavour occurs.
+fn detect_eol(text: &str) -> (Eol, bool) {
     let bytes = text.as_bytes();
     let (mut crlf, mut lf, mut cr) = (0usize, 0usize, 0usize);
     let mut i = 0;
@@ -106,13 +107,18 @@ fn detect_eol(text: &str) -> Eol {
         i += 1;
     }
 
-    if crlf > 0 && crlf >= lf && crlf >= cr {
+    let flavours = usize::from(crlf > 0) + usize::from(lf > 0) + usize::from(cr > 0);
+    let mixed = flavours > 1;
+
+    let eol = if crlf > 0 && crlf >= lf && crlf >= cr {
         Eol::Crlf
     } else if cr > 0 && cr > lf && cr > crlf {
         Eol::Cr
     } else {
         Eol::Lf
-    }
+    };
+
+    (eol, mixed)
 }
 
 /// Encode `content` back to bytes using the metadata recorded at open time.
@@ -226,9 +232,44 @@ mod tests {
             bom: false,
             eol: Eol::Crlf,
             lossy: false,
+            mixed_eol: false,
         };
         let bytes = encode("a\nb\n", &meta).unwrap();
         assert_eq!(bytes, b"a\r\nb\r\n");
+    }
+
+    #[test]
+    fn detects_mixed_eol() {
+        let file = decode(b"a\r\nb\nc\r\n");
+        assert_eq!(file.meta.eol, Eol::Crlf, "CRLF is dominant");
+        assert!(file.meta.mixed_eol);
+    }
+
+    #[test]
+    fn single_flavour_is_not_mixed() {
+        assert!(!decode(b"a\nb\n").meta.mixed_eol);
+        assert!(!decode(b"a\r\nb\r\n").meta.mixed_eol);
+        assert!(!decode(b"a\rb\r").meta.mixed_eol);
+        assert!(!decode(b"single line").meta.mixed_eol);
+    }
+
+    #[test]
+    fn mixed_eol_is_normalized_to_dominant_on_save() {
+        let file = decode(b"a\r\nb\nc\r\n");
+        let bytes = encode(&file.content, &file.meta).unwrap();
+        assert_eq!(bytes, b"a\r\nb\r\nc\r\n");
+        // Re-decoding the saved bytes must report a clean, single flavour.
+        let reopened = decode(&bytes);
+        assert!(!reopened.meta.mixed_eol);
+        assert_eq!(reopened.meta.eol, Eol::Crlf);
+    }
+
+    #[test]
+    fn cr_only_file_survives_round_trip() {
+        let file = decode(b"a\rb\rc");
+        assert_eq!(file.meta.eol, Eol::Cr);
+        assert!(!file.meta.mixed_eol);
+        assert_eq!(encode(&file.content, &file.meta).unwrap(), b"a\rb\rc");
     }
 
     #[test]
@@ -250,7 +291,78 @@ mod tests {
             bom: false,
             eol: Eol::Lf,
             lossy: false,
+            mixed_eol: false,
         };
         assert!(encode("emoji 😀", &meta).is_err());
+    }
+}
+
+/// Fixed on-disk fixtures (bytes checked into `src-tauri/fixtures/`), so encoding
+/// behaviour is regression-tested against real files rather than strings built in
+/// the test body.
+#[cfg(test)]
+mod fixture_tests {
+    use super::*;
+
+    #[test]
+    fn utf8_lf_is_clean() {
+        let file = decode(include_bytes!("../fixtures/utf8-lf.txt"));
+        assert_eq!(file.meta.charset, "UTF-8");
+        assert_eq!(file.meta.eol, Eol::Lf);
+        assert!(!file.meta.bom && !file.meta.lossy && !file.meta.mixed_eol);
+        assert_eq!(file.content, "中文\n测试\n");
+    }
+
+    #[test]
+    fn utf8_bom_crlf_keeps_bom_metadata() {
+        let file = decode(include_bytes!("../fixtures/utf8-bom-crlf.txt"));
+        assert_eq!(file.meta.charset, "UTF-8");
+        assert!(file.meta.bom);
+        assert_eq!(file.meta.eol, Eol::Crlf);
+        assert_eq!(file.content, "hello\r\nworld\r\n");
+    }
+
+    #[test]
+    fn gbk_crlf_round_trips_byte_exactly() {
+        let raw = include_bytes!("../fixtures/gbk-crlf.txt");
+        let file = decode(raw);
+        assert_eq!(file.meta.charset, "GBK");
+        assert_eq!(file.meta.eol, Eol::Crlf);
+        assert!(!file.meta.lossy);
+        assert_eq!(file.content, "中文测试\r\n测试\r\n");
+        assert_eq!(encode(&file.content, &file.meta).unwrap(), raw.to_vec());
+    }
+
+    #[test]
+    fn utf16le_bom_is_decoded() {
+        let file = decode(include_bytes!("../fixtures/utf16le-bom.txt"));
+        assert_eq!(file.meta.charset, "UTF-16LE");
+        assert!(file.meta.bom);
+        assert_eq!(file.content, "hi\r\n");
+    }
+
+    #[test]
+    fn cr_only_file_keeps_cr() {
+        let file = decode(include_bytes!("../fixtures/cr-only.txt"));
+        assert_eq!(file.meta.eol, Eol::Cr);
+        assert!(!file.meta.mixed_eol);
+        assert_eq!(
+            encode(&file.content, &file.meta).unwrap(),
+            b"a\rb\rc".to_vec()
+        );
+    }
+
+    #[test]
+    fn mixed_eol_fixture_is_flagged() {
+        let file = decode(include_bytes!("../fixtures/mixed-eol.txt"));
+        assert!(file.meta.mixed_eol);
+        assert_eq!(file.meta.eol, Eol::Crlf, "CRLF is the dominant flavour");
+    }
+
+    #[test]
+    fn gb18030_four_byte_sequence_decodes_without_loss() {
+        let file = decode(include_bytes!("../fixtures/gb18030-4byte.txt"));
+        assert!(!file.meta.lossy);
+        assert_eq!(file.content, "\u{20000}\n");
     }
 }
