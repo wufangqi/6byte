@@ -1,0 +1,11 @@
+# pnpm 10+ blocks dependency build scripts by default. Neither package needs one:
+# both ship prebuilt binaries via optionalDependencies
+# (@esbuild/win32-x64, @tauri-apps/cli-win32-x64-msvc).
+allowBuilds:
+  esbuild: false
+  "@tauri-apps/cli": false
+
+# `hoisted` (npm-style flat node_modules) is required on this Windows setup:
+# Node's ESM resolver does not realpath through pnpm's junctions here, so the
+# default isolated layout makes `vite` fail with "Cannot find package 'picomatch'".
+nodeLinker: hoisted

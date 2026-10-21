@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dist-ssr/
+.tmp/
+*.local
+.DS_Store
+.idea/
+.vscode/
+
+# Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# OS
+Thumbs.db
