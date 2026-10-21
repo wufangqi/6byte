@@ -123,10 +123,13 @@ impl FileWatcher {
             .watched
             .lock()
             .map(|mut set| {
-                variants
-                    .iter()
-                    .map(|variant| set.remove(variant))
-                    .fold(false, |acc, hit| acc || hit)
+                let mut removed = false;
+                for variant in &variants {
+                    if set.remove(variant) {
+                        removed = true;
+                    }
+                }
+                removed
             })
             .unwrap_or(false);
         if !removed {
