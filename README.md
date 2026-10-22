@@ -38,7 +38,7 @@
 | 桌面运行时 | Tauri 2（系统 WebView，安装包 1.5–2 MB） |
 | 前端 | React 19 + TypeScript + Vite 6 |
 | 编辑器 | CodeMirror 6（多选、折叠、搜索面板、Markdown 高亮） |
-| Markdown 预览 | markdown-it 15（分屏 + 滚动同步，M2 MVP） |
+| Markdown 预览 | markdown-it 15（分屏 + 滚动同步）；KaTeX / Mermaid 按需加载 |
 | 核心层（Rust） | 编码检测与回写（`encoding_rs` + `chardetng`）、原子保存、文件 stat、大文件行索引与区间读取 |
 | 状态 | zustand 5 |
 | 质量 | ESLint 10 + Prettier + Vitest + GitHub Actions（三平台） |
@@ -107,7 +107,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 100 MB 行索引 | ≤ 150 ms | **64.6 ms**（154 万行，首次建索引） |
 | 跨文件 grep（1000 个文件） | ≤ 2 s | **64.5 ms** |
 | 35 MB 打开到首屏（只读预览） | ≤ 1 s | **458 ms**（含应用启动，CDP 实测） |
-| 输入延迟 P95 | ≤ 16 ms | 未测（需 DevTools Performance 面板） |
+| 输入延迟 P95 | ≤ 16 ms | **5.6 ms**（1000 行 L0）；L1：10 MB **3.0 ms**、19 MB **2.7 ms** |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | ⚠️ 空载私有 **220 MB**（WebView2 基线）；关 GPU 可降至 159 MB（见 perf.md） |
 | 安装包 | ≤ 20 MB | ✅ 2.09 MB（NSIS） |
 
@@ -132,13 +132,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] Markdown 分屏预览（Ctrl+Shift+M 或状态栏「预览」）：markdown-it 渲染、120 ms 防抖实时更新、双向比例滚动同步、外链拦截提示；**分隔条可拖拽调整左右宽度**（双击恢复 50/50，方向键微调）
 - [x] 导出 HTML：预览工具栏一键导出，自包含（内联样式、图片内联为 data URI、无外部依赖），默认写到源文件同目录
 - [x] 大纲面板：标题自动锚点 + 「大纲（N）」浮层，点击跳转到预览对应位置
-- [x] 图片粘贴：编辑器内粘贴图片自动存到 `assets/` 并插入 Markdown 引用，预览经 asset 协议显示
+- [x] 图片粘贴：编辑器内粘贴图片自动存到 `assets/` 并插入 Markdown 引用，预览经 data URI 显示
+- [x] Mermaid 图表与 KaTeX 公式：预览里按需渲染；图表失败留在代码块，公式无法解析时仍显示原文
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
 
 ## 尚未实现（按路线图 M1 → M4）
 
 - [ ] 跨文件 grep 的增量/正则缓存优化（M2 视需要）
-- [ ] Markdown 后续：mermaid/katex 图表（M2 剩余）
 - [ ] AI 层：Ctrl+K 内联 diff、Provider 抽象、请求可撤销（M3）
 - [ ] 便携版、winget、自动更新、右键菜单（M4）
 

@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>6byte</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("ainative.theme");
+          var preference =
+            stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
+          var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var resolved = preference === "system" ? (systemDark ? "dark" : "light") : preference;
+          document.documentElement.setAttribute("data-theme", preference);
+          document.documentElement.setAttribute("data-resolved", resolved);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

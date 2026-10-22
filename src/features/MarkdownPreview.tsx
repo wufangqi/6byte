@@ -3,6 +3,8 @@ import type { MouseEvent } from "react";
 import { getDocText, getScrollElement, subscribeDocChanges } from "../editor/registry";
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
+import { renderKatexHtml, renderMermaidSvg } from "./diagrams";
+import { useResolvedTheme } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { highlightCode } from "./highlight";
 import { extractHeadings, type OutlineItem } from "./outline";
@@ -31,6 +33,7 @@ const renderAll = (tabId: string, baseDir: string | null) => {
  * 120 ms debounce and keeps its scroll position in sync with the editor.
  */
 export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Props) {
+  const resolvedTheme = useResolvedTheme();
   const [rendered, setRendered] = useState(() => renderAll(tabId, baseDir));
   const [outlineOpen, setOutlineOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -74,7 +77,7 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
     return () => {
       cancelled = true;
     };
-  }, [html]);
+  }, [html, resolvedTheme]);
 
   // Upgrade escaped code blocks to Shiki-highlighted ones (lazy load, once).
   useEffect(() => {
@@ -86,9 +89,9 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
       const code = block.querySelector("code");
       const language = /language-([\w-]+)/.exec(code?.className ?? "")?.[1];
       const source = code?.textContent ?? "";
-      if (!language || !source.trim()) continue;
+      if (!language || language.toLowerCase() === "mermaid" || !source.trim()) continue;
 
-      void highlightCode(source, language).then((highlighted) => {
+      void highlightCode(source, language, resolvedTheme).then((highlighted) => {
         if (cancelled || !highlighted || !block.isConnected) return;
         block.outerHTML = highlighted;
       });
@@ -97,7 +100,47 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
     return () => {
       cancelled = true;
     };
-  }, [html]);
+  }, [html, resolvedTheme]);
+
+  // KaTeX and Mermaid load on demand. A failed formula or diagram stays as text.
+  useEffect(() => {
+    const root = scrollerRef.current;
+    if (!root) return;
+    let cancelled = false;
+
+    const mathNodes = Array.from(root.querySelectorAll<HTMLElement>(".math-inline, .math-block"));
+    const mermaidNodes = Array.from(
+      root.querySelectorAll<HTMLElement>("pre.md-code code.language-mermaid")
+    );
+    if (mathNodes.length === 0 && mermaidNodes.length === 0) return;
+
+    void (async () => {
+      for (const node of mathNodes) {
+        if (cancelled) return;
+        const display =
+          node.classList.contains("math-block") || node.classList.contains("math-display");
+        const rendered = await renderKatexHtml(node.textContent ?? "", display);
+        if (cancelled || !node.isConnected) return;
+        if (rendered) node.innerHTML = rendered;
+      }
+      for (const code of mermaidNodes) {
+        if (cancelled) return;
+        const pre = code.closest("pre");
+        if (!pre?.isConnected) continue;
+        const svg = await renderMermaidSvg(code.textContent ?? "", resolvedTheme);
+        if (cancelled || !pre.isConnected) return;
+        if (!svg) continue;
+        const diagram = document.createElement("div");
+        diagram.className = "mermaid-diagram";
+        diagram.innerHTML = svg;
+        pre.replaceWith(diagram);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [html, resolvedTheme]);
 
   // Bidirectional, fraction-based scroll sync; the editor remains the source of truth.
   useEffect(() => {
@@ -196,7 +239,11 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
       </div>
       <div className="markdown-preview__scroll" ref={scrollerRef} onClick={onPreviewClick}>
         {html ? (
-          <div className="markdown-preview__body" dangerouslySetInnerHTML={{ __html: html }} />
+          <div
+            key={resolvedTheme}
+            className="markdown-preview__body"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
         ) : (
           <p className="markdown-preview__empty">没有可预览的内容。</p>
         )}

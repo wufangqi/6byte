@@ -41,7 +41,7 @@ Changelog: [CHANGELOG.md](./CHANGELOG.md)
 | Desktop runtime | Tauri 2 (system WebView, installers around 2 MB) |
 | Frontend | React 19 + TypeScript + Vite 6 |
 | Editor | CodeMirror 6 (multi-selection, folding, search panel, Markdown highlighting) |
-| Markdown preview | markdown-it 15 (split view + scroll sync, M2) |
+| Markdown preview | markdown-it 15 (split view + scroll sync); KaTeX / Mermaid loaded on demand |
 | Core (Rust) | Encoding detection & re-encoding (`encoding_rs` + `chardetng`), atomic save, file stat, large-file line index and range reads |
 | State | zustand 5 |
 | Quality | ESLint 10 + Prettier + Vitest + GitHub Actions (three platforms) |
@@ -111,7 +111,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 100 MB line index | ≤ 150 ms | **64.6 ms** (1.54 M lines, first index build) |
 | Cross-file grep (1000 files) | ≤ 2 s | **64.5 ms** |
 | 35 MB open to first paint (read-only) | ≤ 1 s | **458 ms** (including app startup, measured via CDP) |
-| Input latency P95 | ≤ 16 ms | not measured yet (needs DevTools Performance) |
+| Input latency P95 | ≤ 16 ms | **5.6 ms** (1000-line L0); L1: 10 MB **3.0 ms**, 19 MB **2.7 ms** |
 | Memory with 3 files | ≤ 260 MB (idle baseline ≤ 230 MB) | ⚠️ idle private memory **220 MB** (WebView2 baseline); down to 159 MB with GPU disabled (see perf.md) |
 | Installer | ≤ 20 MB | ✅ 2.10 MB (NSIS) |
 
@@ -136,14 +136,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] Markdown split preview (Ctrl+Shift+M or the status-bar "预览" button): markdown-it rendering, 120 ms debounced live updates, two-way proportional scroll sync, external-link interception; **draggable divider** (double-click resets to 50/50, arrow keys nudge)
 - [x] HTML export: one click in the preview toolbar, self-contained (inline styles, no external assets), written next to the source file by default
 - [x] Outline panel: stable heading anchors + an "大纲 (N)" popover that scrolls the preview to the chosen heading
-- [x] Image paste: pasting an image stores it under `assets/` and inserts a Markdown reference; previews load it through the asset protocol
+- [x] Image paste: pasting an image stores it under `assets/` and inserts a Markdown reference; previews inline it as a data URI
+- [x] Mermaid diagrams and KaTeX math in the preview (loaded on demand). A diagram that fails to parse stays a code block; a formula that fails stays as written
 - [x] Cross-file search panel (Ctrl+Shift+F, regex + case toggle + click-to-jump)
 
 ## Not implemented yet (M2 → M4)
 
 - [ ] Incremental / cached cross-file grep (if needed for M2)
 - [ ] memmap range reads for files >100 MB (currently rejected)
-- [ ] More Markdown: mermaid / katex diagrams (rest of M2)
 - [ ] AI layer: Ctrl+K inline diff, provider abstraction, undoable requests (M3)
 - [ ] Portable build, winget, auto-update, Explorer context menu (M4)
 

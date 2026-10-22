@@ -182,6 +182,34 @@ describe("removeRecent", () => {
   });
 });
 
+describe("setPreview", () => {
+  it("starts closed and only changes the tab that was toggled", () => {
+    const first = tabFromFile(makeFile("D:/tmp/a.md"));
+    const second = tabFromFile(makeFile("D:/tmp/b.md"));
+    expect(first.preview).toBe(false);
+    expect(second.preview).toBe(false);
+
+    useWorkspace.getState().addTab(first);
+    useWorkspace.getState().addTab(second);
+    useWorkspace.getState().setPreview(first.id, true);
+
+    const state = useWorkspace.getState();
+    expect(state.tabs.find((tab) => tab.id === first.id)?.preview).toBe(true);
+    expect(state.tabs.find((tab) => tab.id === second.id)?.preview).toBe(false);
+  });
+
+  it("leaves a reopened file in the default editor", () => {
+    const opened = tabFromFile(makeFile("D:/tmp/a.md"));
+    useWorkspace.getState().addTab(opened);
+    useWorkspace.getState().setPreview(opened.id, true);
+    useWorkspace.getState().closeTab(opened.id);
+
+    const again = tabFromFile(makeFile("D:/tmp/a.md"));
+    useWorkspace.getState().addTab(again);
+    expect(selectActiveTab(useWorkspace.getState())?.preview).toBe(false);
+  });
+});
+
 describe("closeTab", () => {
   it("activates the neighbouring tab when the active one closes", () => {
     const first = tabFromFile(makeFile("D:/tmp/a.md"));

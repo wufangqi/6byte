@@ -1,12 +1,13 @@
 /**
  * Lazy Shiki highlighter for fenced code blocks in the Markdown preview (M2).
  *
- * Only the ten languages we actually support plus one theme are bundled, and the
+ * Only the ten languages we actually support plus the light and dark themes are bundled, and the
  * whole thing is a dynamic import: the editor's initial bundle stays small and
  * the first preview with a code fence pays a one-off cost. If the highlighter
  * cannot load, the caller keeps markdown-it's plain escaped `<pre>`.
  */
 import type { HighlighterCore, LanguageRegistration, ThemeRegistrationAny } from "shiki/core";
+import type { ResolvedTheme } from "./theme";
 
 const LANGUAGES = [
   "javascript",
@@ -36,7 +37,10 @@ const ALIASES: Record<string, string> = {
   md: "markdown",
 };
 
-export const SHIKI_THEME = "github-dark";
+const SHIKI_THEMES = {
+  dark: "github-dark",
+  light: "github-light",
+} as const;
 
 type LanguageModule = { default: LanguageRegistration[] };
 type ThemeModule = { default: ThemeRegistrationAny };
@@ -58,16 +62,17 @@ let highlighterPromise: Promise<HighlighterCore | null> | null = null;
 
 const loadHighlighter = (): Promise<HighlighterCore | null> => {
   highlighterPromise ??= (async () => {
-    const [{ createHighlighterCore }, { createOnigurumaEngine }, theme, ...languageSets] =
+    const [{ createHighlighterCore }, { createOnigurumaEngine }, dark, light, ...languageSets] =
       await Promise.all([
         import("shiki/core"),
         import("shiki/engine/oniguruma"),
         import("shiki/themes/github-dark.mjs") as Promise<ThemeModule>,
+        import("shiki/themes/github-light.mjs") as Promise<ThemeModule>,
         ...languageModules,
       ]);
 
     return createHighlighterCore({
-      themes: [theme.default],
+      themes: [dark.default, light.default],
       langs: languageSets.flatMap((module) => (module as LanguageModule).default),
       engine: createOnigurumaEngine(import("shiki/wasm")),
     });
@@ -89,7 +94,8 @@ export function normalizeLanguage(language: string | null | undefined): string |
  */
 export async function highlightCode(
   code: string,
-  language: string | null | undefined
+  language: string | null | undefined,
+  theme: ResolvedTheme = "dark"
 ): Promise<string | null> {
   const normalized = normalizeLanguage(language);
   if (!normalized || !code.trim()) return null;
@@ -98,7 +104,7 @@ export async function highlightCode(
   try {
     return highlighter.codeToHtml(code.replace(/\n$/, ""), {
       lang: normalized,
-      theme: SHIKI_THEME,
+      theme: SHIKI_THEMES[theme],
     });
   } catch {
     return null;

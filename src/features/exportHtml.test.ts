@@ -38,6 +38,12 @@ describe("buildHtmlDocument", () => {
     expect(html).not.toContain('<script>alert("x")</script>');
   });
 
+  it("bakes the light palette into the stylesheet", () => {
+    const html = buildHtmlDocument("笔记", "正文", { theme: "light" });
+    expect(html).toContain("color-scheme: light");
+    expect(html).toContain("#f3f4f7");
+  });
+
   it("falls back to a placeholder title", () => {
     const html = buildHtmlDocument("   ", "text");
     expect(html).toContain("<title>未命名文档</title>");

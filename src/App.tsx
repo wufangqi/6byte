@@ -13,17 +13,22 @@ import {
 } from "./features/splitPane";
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
+import MenuBar from "./features/MenuBar";
 import StatusBar from "./features/StatusBar";
 import TabBar from "./features/TabBar";
 import Welcome from "./features/Welcome";
 import { ask } from "./features/dialogStore";
 import DialogHost from "./features/Dialog";
 import {
+  currentWindowOwnsSession,
   isTauri,
   onCloseRequested,
   onFileChanged,
   onFileDrop,
   openDocument,
+  listTextFiles,
+  openNewWindow,
+  pickDirectory,
   pickOpenPaths,
   pickSavePath,
   saveAsset,
@@ -37,6 +42,7 @@ import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { formatSize, formatTime } from "./lib/format";
 import { samePath } from "./lib/paths";
 import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
+import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
 import {
   selectActiveTab,
@@ -48,7 +54,6 @@ import {
 
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
-const PREVIEW_KEY = "ainative.preview";
 const SPLIT_KEY = "ainative.splitPercent";
 const SESSION_DEBOUNCE_MS = 500;
 
@@ -72,21 +77,13 @@ export default function App() {
   const active = useWorkspace(selectActiveTab);
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
-  const [previewOn, setPreviewOn] = useState(() => {
-    try {
-      return localStorage.getItem(PREVIEW_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const previewOn = Boolean(active?.mode === "text" && active.preview);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PREVIEW_KEY, previewOn ? "1" : "0");
-    } catch {
-      /* ignore storage errors */
-    }
-  }, [previewOn]);
+  const togglePreview = useCallback(() => {
+    const tab = selectActiveTab(useWorkspace.getState());
+    if (!tab || tab.mode !== "text") return;
+    useWorkspace.getState().setPreview(tab.id, !tab.preview);
+  }, []);
 
   // Draggable editor/preview split (mouse drag or arrow keys on the separator).
   const [splitPercent, setSplitPercent] = useState(() => {
@@ -194,6 +191,38 @@ export default function App() {
     }
   }, [openPaths]);
 
+  const openFolder = useCallback(async () => {
+    const store = useWorkspace.getState();
+    try {
+      const directory = await pickDirectory();
+      if (!directory) return;
+      const files = await listTextFiles(directory);
+      if (files.length === 0) {
+        store.setNotice("该文件夹里没有可打开的文本文件。");
+        return;
+      }
+      await openPaths(files);
+      if (files.length >= 40) store.setNotice("已打开该文件夹中的前 40 个文本文件。");
+    } catch (e) {
+      useWorkspace.getState().setError(errorMessage(e));
+    }
+  }, [openPaths]);
+
+  const openRecent = useCallback(
+    (path: string) => {
+      void openPaths([path]);
+    },
+    [openPaths]
+  );
+
+  const createWindow = useCallback(async () => {
+    try {
+      await openNewWindow();
+    } catch (e) {
+      useWorkspace.getState().setError(errorMessage(e));
+    }
+  }, []);
+
   /** Open a grep hit: focus its tab (opening the file if needed) and reveal the line. */
   const openMatch = useCallback(
     async (path: string, line: number) => {
@@ -279,7 +308,7 @@ export default function App() {
           ? htmlPathFor(tab.path)
           : await pickSavePath(`${title.replace(/[\\/:*?"<>|]/g, "-")}.html`);
         if (!target) return;
-        const html = buildHtmlDocument(title, content, { baseDir });
+        const html = buildHtmlDocument(title, content, { baseDir, theme: getResolvedTheme() });
         const portable = await inlineLocalImages(html, loadImageDataUrl);
         await writeFile(target, portable, { ...DEFAULT_META });
         store.setNotice(`已导出 HTML：${target}`);
@@ -414,6 +443,14 @@ export default function App() {
     },
     [reloadFromDisk]
   );
+
+  const saveAll = useCallback(async () => {
+    const tabs = useWorkspace.getState().tabs.filter((tab) => tab.mode === "text" && tab.dirty);
+    for (const tab of tabs) {
+      const saved = await saveTab(tab.id);
+      if (!saved) return;
+    }
+  }, [saveTab]);
 
   const requestCloseTab = useCallback(
     async (tabId: string) => {
@@ -553,7 +590,7 @@ export default function App() {
       /* ignore malformed storage */
     }
 
-    if (!isTauri) return;
+    if (!isTauri || !currentWindowOwnsSession()) return;
     try {
       const rawSession = localStorage.getItem(SESSION_KEY);
       if (!rawSession) return;
@@ -572,7 +609,9 @@ export default function App() {
   }, [openPaths]);
 
   // Persist the open file list (paths only), debounced so typing never hits storage.
+  // Extra windows stay out of this list so they cannot replace the main window's files.
   useEffect(() => {
+    if (!currentWindowOwnsSession()) return;
     let timer: number | undefined;
     const unsubscribe = useWorkspace.subscribe(() => {
       window.clearTimeout(timer);
@@ -662,13 +701,20 @@ export default function App() {
         setGrepOpen((open) => !open);
       } else if (key === "m" && event.shiftKey) {
         event.preventDefault();
-        setPreviewOn((on) => !on);
+        togglePreview();
       } else if (key === "o") {
         event.preventDefault();
         void openViaDialog();
+      } else if (key === "n" && event.shiftKey) {
+        event.preventDefault();
+        void createWindow();
       } else if (key === "n") {
         event.preventDefault();
         useWorkspace.getState().newTab();
+      } else if (key === "r" && !event.shiftKey) {
+        event.preventDefault();
+        const recent = useWorkspace.getState().recent[0];
+        if (recent) void openPaths([recent]);
       } else if (key === "w") {
         event.preventDefault();
         const store = useWorkspace.getState();
@@ -678,7 +724,7 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [saveTab, openViaDialog, requestCloseTab]);
+  }, [saveTab, openViaDialog, openPaths, createWindow, requestCloseTab, togglePreview]);
 
   // Default grep root: the directory of the active file.
   const lastSeparator = active?.path
@@ -688,6 +734,22 @@ export default function App() {
 
   return (
     <div className="app">
+      <MenuBar
+        onNew={() => useWorkspace.getState().newTab()}
+        onNewWindow={() => void createWindow()}
+        onOpenFile={() => void openViaDialog()}
+        onOpenFolder={() => void openFolder()}
+        onOpenPath={openRecent}
+        onSave={() => {
+          const tab = selectActiveTab(useWorkspace.getState());
+          if (tab) void saveTab(tab.id);
+        }}
+        onSaveAs={() => {
+          const tab = selectActiveTab(useWorkspace.getState());
+          if (tab) void saveTab(tab.id, true);
+        }}
+        onSaveAll={() => void saveAll()}
+      />
       <TabBar onClose={(id) => void requestCloseTab(id)} />
 
       {(error || notice) && (
@@ -785,7 +847,7 @@ export default function App() {
 
       <StatusBar
         previewOn={previewOn}
-        onTogglePreview={() => setPreviewOn((on) => !on)}
+        onTogglePreview={togglePreview}
         canPreview={Boolean(active && active.mode === "text")}
       />
 
