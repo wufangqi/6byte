@@ -82,6 +82,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 
 ## 提交与 PR
 
+> **`master` 是受保护分支**：禁止 force push 与删除，管理员同样受限，并要求 6 项 CI 检查
+> （Windows/macOS/Ubuntu × 前端/Rust）。因为 required checks 会拦截直推，**所有改动都走 PR**：
+> 从 `master` 拉分支 → push 分支 → 开 PR → CI 全绿后合并。
+
 - 提交信息使用 Conventional Commits：`feat:` / `fix:` / `refactor:` / `docs:` / `chore:` / `test:`。
 - PR 合并前必须通过：`tsc`、`eslint`、`prettier --check`、`vitest`、`cargo fmt --check`、
   `cargo clippy -D warnings`、`cargo test --lib`（CI 会在三平台跑）。
