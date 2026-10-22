@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-10-22
+
+### Added
+
+- Markdown 分屏预览支持**拖拽调整左右宽度**：拖动中间分隔条在 20%–85% 之间调整，双击恢复 50/50，
+  分隔条获得焦点后可用 ←/→ 微调 ±3%；比例持久化到 `localStorage`（`ainative.splitPercent`）。
+
 ## [0.1.2] - 2026-10-22
 
 ### Changed
@@ -71,7 +78,7 @@
 
 ### Tooling
 
-- 新增 ESLint 10（flat config）、Prettier、Vitest；前端单测 57 例、Rust 单测 52 个用例（49 通过 + 3 个 ignored 性能探针）。
+- 新增 ESLint 10（flat config）、Prettier、Vitest；前端单测 64 例、Rust 单测 52 个用例（49 通过 + 3 个 ignored 性能探针）。
 - 新增 GitHub Actions CI（三平台：前端检查 + Rust fmt/clippy/test）。
 - 新增 `scripts/e2e-smoke.ps1`：通过 WebView2 DevTools 协议驱动安装版，覆盖单元测试到不了的 12 条路径
   （大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏标签冲突三选一 / 跨文件搜索跳转 / 查找替换 /

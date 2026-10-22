@@ -952,3 +952,58 @@ code {
 .markdown-preview__body pre.shiki code {
   background: transparent;
 }
+
+/* ---------- resizable split divider (T19) ---------- */
+
+.split__pane {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  min-width: 0;
+}
+
+.split__pane > .editor-host {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.split__pane--preview {
+  flex: 1 1 auto;
+}
+
+.split__pane--preview > .markdown-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.split__divider {
+  position: relative;
+  flex: 0 0 6px;
+  background: var(--border);
+  cursor: col-resize;
+  outline: none;
+  transition: background 120ms ease;
+}
+
+.split__divider::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 2px;
+  height: 28px;
+  margin: auto;
+  border-radius: 2px;
+  background: var(--fg-dim);
+  opacity: 0.5;
+}
+
+.split__divider:hover,
+.split__divider:focus-visible {
+  background: var(--accent-dim);
+}
+
+.split__divider:hover::after,
+.split__divider:focus-visible::after {
+  background: var(--fg);
+  opacity: 0.9;
+}

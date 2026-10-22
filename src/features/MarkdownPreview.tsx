@@ -156,8 +156,17 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
   };
 
   const jumpTo = (slug: string) => {
-    const target = scrollerRef.current?.querySelector(`[id="${slug}"]`);
-    target?.scrollIntoView({ block: "start" });
+    const scroller = scrollerRef.current;
+    const target = scroller?.querySelector<HTMLElement>(`[id="${slug}"]`);
+    if (scroller && target) {
+      // Compute the offset explicitly: `scrollIntoView` may scroll ancestor
+      // containers (or the window) instead of the preview scroller.
+      const offset =
+        target.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, offset - 8);
+    }
     setOutlineOpen(false);
   };
 

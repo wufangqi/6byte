@@ -91,7 +91,7 @@ function Set-SessionAndReload {
   $page = Get-PageTarget
   if (-not $page) { throw "no WebView2 page target on port $Port" }
   $socket = Connect-Cdp $page.webSocketDebuggerUrl
-  Invoke-CdpEval $socket "localStorage.setItem('ainative.session', JSON.stringify([$json])); localStorage.setItem('ainative.preview', '0'); 'ok'" | Out-Null
+  Invoke-CdpEval $socket "localStorage.setItem('ainative.session', JSON.stringify([$json])); localStorage.setItem('ainative.preview', '0'); localStorage.setItem('ainative.splitPercent', '50'); 'ok'" | Out-Null
   Invoke-CdpEval $socket 'location.reload(); "ok"' | Out-Null
   $socket.Dispose()
   Start-Sleep -Seconds $SettleSeconds
@@ -112,7 +112,7 @@ try {
 }
 
 # ---------------------------------------------------------------- large file
-Write-Host '[1/12] large-file staged loading' -ForegroundColor Cyan
+Write-Host '[1/13] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."
   $stream = [IO.File]::Create($LogFile)
@@ -157,7 +157,7 @@ Assert-True ($after.lines -gt 0) 'window still rendered after scroll'
 $socket.Dispose()
 
 # ------------------------------------------------- mixed EOL + missing file
-Write-Host '[2/12] mixed line endings badge' -ForegroundColor Cyan
+Write-Host '[2/13] mixed line endings badge' -ForegroundColor Cyan
 $fixture = Join-Path $PSScriptRoot '..\src-tauri\fixtures\mixed-eol.txt'
 $missing = Join-Path $PSScriptRoot '..\src-tauri\fixtures\does-not-exist.txt'
 $socket = Set-SessionAndReload -Paths @($fixture, $missing)
@@ -173,12 +173,12 @@ $mixedResult = Invoke-CdpEval $socket ($mixed -replace "`r`n", ' ')
 Assert-True ($mixedResult.warnings -contains '混合换行') 'mixed EOL badge shown' "$($mixedResult.warnings -join ',')"
 $socket.Dispose()
 
-Write-Host '[3/12] session restore with a missing path' -ForegroundColor Cyan
+Write-Host '[3/13] session restore with a missing path' -ForegroundColor Cyan
 Assert-True ($mixedResult.banner -like '*已无法打开*') 'one-off banner for skipped files' "$($mixedResult.banner)"
 Assert-True ($mixedResult.session -notlike '*does-not-exist*') 'missing path dropped from session' "$($mixedResult.session)"
 
 # ------------------------------------------- external change (T13 file watch)
-Write-Host '[4/12] external change reloads a clean tab' -ForegroundColor Cyan
+Write-Host '[4/13] external change reloads a clean tab' -ForegroundColor Cyan
 $watchedFile = Join-Path $env:TEMP 'ainative-e2e-watch.txt'
 Set-Content -Path $watchedFile -Value 'before external change' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($watchedFile)
@@ -196,7 +196,7 @@ $socket.Dispose()
 Remove-Item $watchedFile -ErrorAction SilentlyContinue
 
 # ------------------------------- dirty tab: three-way conflict prompt (T13)
-Write-Host '[5/12] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
+Write-Host '[5/13] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
 $conflictFile = Join-Path $env:TEMP 'ainative-e2e-conflict.txt'
 Set-Content -Path $conflictFile -Value 'base content' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($conflictFile)
@@ -252,7 +252,7 @@ $socket.Dispose()
 Remove-Item $conflictFile -ErrorAction SilentlyContinue
 
 # ------------------------------------------- cross-file search (T14 grep)
-Write-Host '[6/12] cross-file search opens the hit' -ForegroundColor Cyan
+Write-Host '[6/13] cross-file search opens the hit' -ForegroundColor Cyan
 $grepDir = Join-Path $env:TEMP 'ainative-e2e-grep'
 New-Item -ItemType Directory -Force -Path $grepDir | Out-Null
 $grepTarget = Join-Path $grepDir 'target-note.txt'
@@ -314,7 +314,7 @@ $socket.Dispose()
 Remove-Item $grepDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- find & replace panel (T16)
-Write-Host '[7/12] search panel finds and replaces' -ForegroundColor Cyan
+Write-Host '[7/13] search panel finds and replaces' -ForegroundColor Cyan
 $findDir = Join-Path $env:TEMP 'ainative-e2e-find'
 New-Item -ItemType Directory -Force -Path $findDir | Out-Null
 $findFile = Join-Path $findDir 'find-target.txt'
@@ -367,7 +367,7 @@ $socket.Dispose()
 Remove-Item $findDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown split preview (T19)
-Write-Host '[8/12] markdown split preview renders live' -ForegroundColor Cyan
+Write-Host '[8/13] markdown split preview renders live' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewFile = Join-Path $previewDir 'preview-target.md'
@@ -421,7 +421,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- export HTML (T19)
-Write-Host '[9/12] preview exports a self-contained HTML file' -ForegroundColor Cyan
+Write-Host '[9/13] preview exports a self-contained HTML file' -ForegroundColor Cyan
 $exportDir = Join-Path $env:TEMP 'ainative-e2e-export'
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
 $exportFile = Join-Path $exportDir 'export-target.md'
@@ -456,7 +456,7 @@ Assert-True ($htmlText -like '*<title>export-target</title>*') 'exported html ha
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown outline (T19)
-Write-Host '[10/12] markdown outline jumps inside the preview' -ForegroundColor Cyan
+Write-Host '[10/13] markdown outline jumps inside the preview' -ForegroundColor Cyan
 $outlineDir = Join-Path $env:TEMP 'ainative-e2e-outline'
 New-Item -ItemType Directory -Force -Path $outlineDir | Out-Null
 $outlineFile = Join-Path $outlineDir 'outline-target.md'
@@ -508,7 +508,7 @@ $socket.Dispose()
 Remove-Item $outlineDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- image paste into assets/ (T19)
-Write-Host '[11/12] pasted image is saved and previewed' -ForegroundColor Cyan
+Write-Host '[11/13] pasted image is saved and previewed' -ForegroundColor Cyan
 $pasteDir = Join-Path $env:TEMP 'ainative-e2e-paste'
 New-Item -ItemType Directory -Force -Path $pasteDir | Out-Null
 $pasteFile = Join-Path $pasteDir 'paste-target.md'
@@ -546,7 +546,7 @@ Assert-True ($assetFiles.Count -eq 1) 'image bytes written to assets/' "count=$(
 Remove-Item $pasteDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- shiki code highlighting (T19)
-Write-Host '[12/12] code fences are highlighted by shiki' -ForegroundColor Cyan
+Write-Host '[12/13] code fences are highlighted by shiki' -ForegroundColor Cyan
 $highlightDir = Join-Path $env:TEMP 'ainative-e2e-highlight'
 New-Item -ItemType Directory -Force -Path $highlightDir | Out-Null
 $highlightFile = Join-Path $highlightDir 'highlight-target.md'
@@ -578,6 +578,53 @@ Assert-True ($highlighted.shiki) 'shiki replaces the plain code block'
 Assert-True ($highlighted.tokens -gt 0) 'syntax tokens are rendered' "tokens=$($highlighted.tokens)"
 $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
+
+# --------------------------------------- resizable split divider (T19)
+Write-Host '[13/13] split divider is draggable' -ForegroundColor Cyan
+$splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
+New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
+$splitFile = Join-Path $splitDir 'split-target.md'
+$splitSource = "# Split`n`n" + ((1..40 | ForEach-Object { "para $_" }) -join "`n`n")
+Set-Content -Path $splitFile -Value $splitSource -Encoding UTF8
+$socket = Set-SessionAndReload -Paths @($splitFile)
+
+$drag = @'
+(async () => {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const split = document.querySelector('.split');
+  const divider = document.querySelector('.split__divider');
+  const pane = document.querySelector('.split__pane');
+  if (!split || !divider || !pane) return { divider: false };
+  const rect = split.getBoundingClientRect();
+  const before = pane.getBoundingClientRect().width;
+  const startX = rect.left + rect.width * 0.5;
+  const targetX = rect.left + rect.width * 0.3;
+  divider.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: startX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: targetX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { clientX: targetX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const after = pane.getBoundingClientRect().width;
+  divider.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const reset = pane.getBoundingClientRect().width;
+  return {
+    divider: true,
+    before,
+    after,
+    reset,
+    half: rect.width / 2,
+  };
+})()
+'@
+$dragged = Invoke-CdpEval $socket ($drag -replace "`r`n", ' ')
+Assert-True ($dragged.divider) 'split divider is present'
+Assert-True ($dragged.after -lt $dragged.before - 20) 'dragging left narrows the editor pane' "before=$([math]::Round($dragged.before,0)) after=$([math]::Round($dragged.after,0))"
+Assert-True ([math]::Abs($dragged.reset - $dragged.half) -le 4) 'double-click restores the 50/50 split' "reset=$([math]::Round($dragged.reset,0)) half=$([math]::Round($dragged.half,0))"
+$socket.Dispose()
+Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host ''
 
 Write-Host ''
 if ($script:Failures -eq 0) {

@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/wufangqi/6byte?label=release)](https://github.com/wufangqi/6byte/releases/latest)
 [![License](https://img.shields.io/github/license/wufangqi/6byte)](./LICENSE)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.2（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.3（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -43,7 +43,7 @@
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.2](https://github.com/wufangqi/6byte/releases/tag/v0.1.2) 下载：
+从 [Releases v0.1.3](https://github.com/wufangqi/6byte/releases/tag/v0.1.3) 下载：
 
 - `aneditor_0.1.1_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
 - `aneditor_0.1.1_x64_en-US.msi`（企业部署 / 静默安装）
@@ -86,14 +86,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 57/57（store + 格式化 + 大文件窗口几何 + markdown 渲染/图片路径 + 大纲 + 滚动同步 + HTML 导出 + 语言别名） |
+| 前端单测 | `pnpm test` | ✅ 64/64（store + 格式化 + 大文件窗口几何 + markdown 渲染/图片路径 + 大纲 + 滚动同步 + HTML 导出 + 语言别名 + 分屏比例） |
 | 前端打包 | `pnpm build` | ✅ 主包 920 KB / gzip 324 KB（+ 按需 Shiki chunk，总计 2.3 MB） |
 | Rust 单测 | `cargo test --lib` | ✅ 49 passed / 0 failed（+3 ignored 性能探针；编码 + 文件命令 + 大文件索引/区间 + 文件监听 + grep + 图片落盘 + fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
 | 安装包 | `pnpm tauri build` | ✅ MSI 2.77 MB / NSIS 2.10 MB |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 48/48（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 51/51（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮 / 分屏拖拽） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
@@ -127,7 +127,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] 会话恢复时失效文件自动跳过并一次性提示（随后从会话中剔除）
 - [x] 脏标签 / 关窗拦截（保存 / 不保存 / 取消）
 - [x] CodeMirror 6 查找面板（Ctrl+F，正则与捕获组替换，面板已中文化）
-- [x] Markdown 分屏预览（Ctrl+Shift+M 或状态栏「预览」）：markdown-it 渲染、120 ms 防抖实时更新、双向比例滚动同步、外链拦截提示（M2 MVP）
+- [x] Markdown 分屏预览（Ctrl+Shift+M 或状态栏「预览」）：markdown-it 渲染、120 ms 防抖实时更新、双向比例滚动同步、外链拦截提示；**分隔条可拖拽调整左右宽度**（双击恢复 50/50，方向键微调）
 - [x] 导出 HTML：预览工具栏一键导出，自包含（内联样式、无外部依赖），默认写到源文件同目录
 - [x] 大纲面板：标题自动锚点 + 「大纲（N）」浮层，点击跳转到预览对应位置
 - [x] 图片粘贴：编辑器内粘贴图片自动存到 `assets/` 并插入 Markdown 引用，预览经 asset 协议显示

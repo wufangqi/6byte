@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent } from "react";
 import CodeEditor from "./editor/CodeEditor";
 import GrepPanel from "./features/GrepPanel";
+import {
+  DEFAULT_SPLIT_PERCENT,
+  MAX_SPLIT_PERCENT,
+  MIN_SPLIT_PERCENT,
+  SPLIT_KEYBOARD_STEP,
+  adjustSplitPercent,
+  clampSplitPercent,
+  normalizeSplitPercent,
+} from "./features/splitPane";
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
 import StatusBar from "./features/StatusBar";
@@ -37,6 +47,7 @@ import {
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
 const PREVIEW_KEY = "ainative.preview";
+const SPLIT_KEY = "ainative.splitPercent";
 const SESSION_DEBOUNCE_MS = 500;
 
 const errorMessage = (error: unknown): string =>
@@ -74,6 +85,56 @@ export default function App() {
       /* ignore storage errors */
     }
   }, [previewOn]);
+
+  // Draggable editor/preview split (mouse drag or arrow keys on the separator).
+  const [splitPercent, setSplitPercent] = useState(() => {
+    try {
+      const stored = localStorage.getItem(SPLIT_KEY);
+      return stored === null ? DEFAULT_SPLIT_PERCENT : normalizeSplitPercent(Number(stored));
+    } catch {
+      return DEFAULT_SPLIT_PERCENT;
+    }
+  });
+  const splitRef = useRef<HTMLDivElement | null>(null);
+  const splitDragging = useRef(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(SPLIT_KEY, String(splitPercent));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [splitPercent]);
+
+  const startSplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const container = splitRef.current;
+    if (!container || event.button !== 0) return;
+    event.preventDefault();
+
+    const rect = container.getBoundingClientRect();
+    splitDragging.current = true;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const onMove = (moveEvent: PointerEvent) => {
+      if (!splitDragging.current) return;
+      setSplitPercent(clampSplitPercent(moveEvent.clientX, rect.left, rect.width));
+    };
+    const onUp = () => {
+      splitDragging.current = false;
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }, []);
 
   // Success banners are transient; errors stay until dismissed.
   useEffect(() => {
@@ -630,27 +691,53 @@ export default function App() {
           active.mode === "large" ? (
             <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
           ) : previewOn ? (
-            <div className="split">
-              <CodeEditor
-                key={`${active.id}:${active.version}`}
-                tabId={active.id}
-                content={active.content}
-                filename={active.name}
-                version={active.version}
-                simplified={active.size > 5 * 1024 * 1024}
-                onStats={(id, stats) => useWorkspace.getState().markEdited(id, stats)}
-                onFlush={(id, content, version) =>
-                  useWorkspace.getState().setContent(id, content, version)
-                }
-                onPasteImage={handlePasteImage}
+            <div className="split" ref={splitRef}>
+              <div className="split__pane" style={{ width: `${splitPercent}%` }}>
+                <CodeEditor
+                  key={`${active.id}:${active.version}`}
+                  tabId={active.id}
+                  content={active.content}
+                  filename={active.name}
+                  version={active.version}
+                  simplified={active.size > 5 * 1024 * 1024}
+                  onStats={(id, stats) => useWorkspace.getState().markEdited(id, stats)}
+                  onFlush={(id, content, version) =>
+                    useWorkspace.getState().setContent(id, content, version)
+                  }
+                  onPasteImage={handlePasteImage}
+                />
+              </div>
+              <div
+                className="split__divider"
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="拖拽调整编辑器与预览宽度"
+                aria-valuemin={MIN_SPLIT_PERCENT}
+                aria-valuemax={MAX_SPLIT_PERCENT}
+                aria-valuenow={Math.round(splitPercent)}
+                tabIndex={0}
+                title="拖拽调整宽度，双击恢复 50/50，方向键微调"
+                onPointerDown={startSplitDrag}
+                onDoubleClick={() => setSplitPercent(50)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowLeft") {
+                    event.preventDefault();
+                    setSplitPercent((value) => adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP));
+                  } else if (event.key === "ArrowRight") {
+                    event.preventDefault();
+                    setSplitPercent((value) => adjustSplitPercent(value, SPLIT_KEYBOARD_STEP));
+                  }
+                }}
               />
-              <MarkdownPreview
-                key={active.id}
-                tabId={active.id}
-                name={active.name}
-                baseDir={grepRoot}
-                onExport={() => void exportActiveAsHtml()}
-              />
+              <div className="split__pane split__pane--preview">
+                <MarkdownPreview
+                  key={active.id}
+                  tabId={active.id}
+                  name={active.name}
+                  baseDir={grepRoot}
+                  onExport={() => void exportActiveAsHtml()}
+                />
+              </div>
             </div>
           ) : (
             <CodeEditor
