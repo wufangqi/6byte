@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import { getDocText, getScrollElement, subscribeDocChanges } from "../editor/registry";
-import { toAssetUrl } from "../ipc/api";
+import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { renderMarkdown } from "./markdown";
 import { highlightCode } from "./highlight";
@@ -57,18 +57,23 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
     };
   }, [tabId, baseDir]);
 
-  // Relative images cannot be loaded by the webview directly; rewrite them to
-  // asset-protocol URLs after each render (T19 image paste).
+  // Relative images cannot be loaded by the webview directly; read them through
+  // Rust and inline them as data URIs after each render (T19 image paste).
   useEffect(() => {
     const root = scrollerRef.current;
     if (!root) return;
+    let cancelled = false;
     for (const image of root.querySelectorAll<HTMLImageElement>("img[data-local-path]")) {
       const localPath = image.getAttribute("data-local-path");
-      if (localPath && image.dataset.assetSrc !== "1") {
-        image.dataset.assetSrc = "1";
-        image.src = toAssetUrl(localPath);
-      }
+      if (!localPath || image.dataset.assetSrc === "1") continue;
+      image.dataset.assetSrc = "1";
+      void loadImageDataUrl(localPath).then((uri) => {
+        if (!cancelled && uri && image.isConnected) image.src = uri;
+      });
     }
+    return () => {
+      cancelled = true;
+    };
   }, [html]);
 
   // Upgrade escaped code blocks to Shiki-highlighted ones (lazy load, once).

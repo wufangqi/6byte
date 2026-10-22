@@ -25,11 +25,12 @@
 | 100 MB 行索引（首次建索引） | ≤ 150 ms | **64.6 ms**（1,542,024 行） | ✅ |
 | 大文件单次区间读取（400 行） | ≤ 5 ms | **0.37–0.87 ms** | ✅ |
 | 35 MB 打开到首屏（只读预览） | ≤ 1 s | **458 ms**（含应用启动，CDP 计时） | ✅ |
+| 120 MB 打开到首屏（memmap 只读，E2E） | ≤ 2 s | 实测通过（E2E 第 15 步，含应用启动与会话恢复） | ✅ |
 | 跨文件 grep（1000 个文件） | ≤ 2 s | **64.5 ms**（每文件 20 行） | ✅ |
 | 输入延迟 P95 | ≤ 16 ms | **未测** | ⚠️ 待 DevTools 采样 |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | 空文档私有内存 **220 MB**（工作集 427 MB）；关 GPU 可到 159 MB | ⚠️ 预算按实测修订（见 §2.3） |
-| 前端包体 | — | 主包 **920 KB / gzip 324 KB**（+ Shiki 按需 chunk，总计 2.3 MB） | ✅ |
-| 安装包 | ≤ 20 MB | NSIS 2.10 MB / MSI 2.77 MB | ✅ |
+| 前端包体 | — | 主包 **947 KB / gzip 325 KB**（+ Shiki 按需 chunk，总计 2.3 MB） | ✅ |
+| 安装包 | ≤ 20 MB | NSIS 2.09 MB / MSI 2.75 MB | ✅ |
 
 ## 1. 冷启动
 
@@ -207,11 +208,11 @@ cargo test --release --lib perf_grep -- --ignored --nocapture
 
 | 产物 | 体积 |
 |---|---|
-| `dist/assets/index-*.js` | 920.5 KB（gzip 323.7 KB） |
-| `dist/assets/index-*.css` | 12.3 KB（gzip 2.9 KB） |
-| MSI | 2.77 MB |
-| NSIS setup | 2.10 MB |
-| 应用 exe（release） | 4.98 MB |
+| `dist/assets/index-*.js` | 946.5 KB（gzip 325.0 KB） |
+| `dist/assets/index-*.css` | 14.0 KB（gzip 3.1 KB） |
+| MSI | 2.75 MB |
+| NSIS setup | 2.09 MB |
+| 应用 exe（release） | 4.94 MB |
 
 ## 7. 未测项与后续
 

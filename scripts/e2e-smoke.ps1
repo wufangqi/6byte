@@ -126,7 +126,7 @@ try {
 }
 
 # ---------------------------------------------------------------- large file
-Write-Host '[1/14] large-file staged loading' -ForegroundColor Cyan
+Write-Host '[1/15] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."
   $stream = [IO.File]::Create($LogFile)
@@ -171,7 +171,7 @@ Assert-True ($after.lines -gt 0) 'window still rendered after scroll'
 $socket.Dispose()
 
 # ------------------------------------------------- mixed EOL + missing file
-Write-Host '[2/14] mixed line endings badge' -ForegroundColor Cyan
+Write-Host '[2/15] mixed line endings badge' -ForegroundColor Cyan
 $fixture = Join-Path $PSScriptRoot '..\src-tauri\fixtures\mixed-eol.txt'
 $missing = Join-Path $PSScriptRoot '..\src-tauri\fixtures\does-not-exist.txt'
 $socket = Set-SessionAndReload -Paths @($fixture, $missing)
@@ -187,12 +187,12 @@ $mixedResult = Invoke-CdpEval $socket ($mixed -replace "`r`n", ' ')
 Assert-True ($mixedResult.warnings -contains '混合换行') 'mixed EOL badge shown' "$($mixedResult.warnings -join ',')"
 $socket.Dispose()
 
-Write-Host '[3/14] session restore with a missing path' -ForegroundColor Cyan
+Write-Host '[3/15] session restore with a missing path' -ForegroundColor Cyan
 Assert-True ($mixedResult.banner -like '*已无法打开*') 'one-off banner for skipped files' "$($mixedResult.banner)"
 Assert-True ($mixedResult.session -notlike '*does-not-exist*') 'missing path dropped from session' "$($mixedResult.session)"
 
 # ------------------------------------------- external change (T13 file watch)
-Write-Host '[4/14] external change reloads a clean tab' -ForegroundColor Cyan
+Write-Host '[4/15] external change reloads a clean tab' -ForegroundColor Cyan
 $watchedFile = Join-Path $env:TEMP 'ainative-e2e-watch.txt'
 Set-Content -Path $watchedFile -Value 'before external change' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($watchedFile)
@@ -210,7 +210,7 @@ $socket.Dispose()
 Remove-Item $watchedFile -ErrorAction SilentlyContinue
 
 # ------------------------------- dirty tab: three-way conflict prompt (T13)
-Write-Host '[5/14] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
+Write-Host '[5/15] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
 $conflictFile = Join-Path $env:TEMP 'ainative-e2e-conflict.txt'
 Set-Content -Path $conflictFile -Value 'base content' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($conflictFile)
@@ -266,7 +266,7 @@ $socket.Dispose()
 Remove-Item $conflictFile -ErrorAction SilentlyContinue
 
 # ------------------------------------------- cross-file search (T14 grep)
-Write-Host '[6/14] cross-file search opens the hit' -ForegroundColor Cyan
+Write-Host '[6/15] cross-file search opens the hit' -ForegroundColor Cyan
 $grepDir = Join-Path $env:TEMP 'ainative-e2e-grep'
 New-Item -ItemType Directory -Force -Path $grepDir | Out-Null
 $grepTarget = Join-Path $grepDir 'target-note.txt'
@@ -328,7 +328,7 @@ $socket.Dispose()
 Remove-Item $grepDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- find & replace panel (T16)
-Write-Host '[7/14] search panel finds and replaces' -ForegroundColor Cyan
+Write-Host '[7/15] search panel finds and replaces' -ForegroundColor Cyan
 $findDir = Join-Path $env:TEMP 'ainative-e2e-find'
 New-Item -ItemType Directory -Force -Path $findDir | Out-Null
 $findFile = Join-Path $findDir 'find-target.txt'
@@ -381,7 +381,7 @@ $socket.Dispose()
 Remove-Item $findDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown split preview (T19)
-Write-Host '[8/14] markdown split preview renders live' -ForegroundColor Cyan
+Write-Host '[8/15] markdown split preview renders live' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewFile = Join-Path $previewDir 'preview-target.md'
@@ -435,7 +435,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- export HTML (T19)
-Write-Host '[9/14] preview exports a self-contained HTML file' -ForegroundColor Cyan
+Write-Host '[9/15] preview exports a self-contained HTML file' -ForegroundColor Cyan
 $exportDir = Join-Path $env:TEMP 'ainative-e2e-export'
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
 $exportFile = Join-Path $exportDir 'export-target.md'
@@ -470,7 +470,7 @@ Assert-True ($htmlText -like '*<title>export-target</title>*') 'exported html ha
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown outline (T19)
-Write-Host '[10/14] markdown outline jumps inside the preview' -ForegroundColor Cyan
+Write-Host '[10/15] markdown outline jumps inside the preview' -ForegroundColor Cyan
 $outlineDir = Join-Path $env:TEMP 'ainative-e2e-outline'
 New-Item -ItemType Directory -Force -Path $outlineDir | Out-Null
 $outlineFile = Join-Path $outlineDir 'outline-target.md'
@@ -522,10 +522,11 @@ $socket.Dispose()
 Remove-Item $outlineDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- image paste into assets/ (T19)
-Write-Host '[11/14] pasted image is saved and previewed' -ForegroundColor Cyan
+Write-Host '[11/15] pasted image is saved, previewed and exported' -ForegroundColor Cyan
 $pasteDir = Join-Path $env:TEMP 'ainative-e2e-paste'
 New-Item -ItemType Directory -Force -Path $pasteDir | Out-Null
 $pasteFile = Join-Path $pasteDir 'paste-target.md'
+$pasteHtml = Join-Path $pasteDir 'paste-target.html'
 Set-Content -Path $pasteFile -Value "# Paste`n`n" -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($pasteFile)
 
@@ -542,25 +543,30 @@ $paste = @'
   transfer.items.add(file);
   editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 1500));
+  const imageSrc = document.querySelector('.markdown-preview img')?.getAttribute('src') ?? null;
+  document.querySelector('.markdown-preview__export')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 1500));
   return {
     text: document.querySelector('.cm-content')?.textContent ?? '',
     banner: document.querySelector('.banner--ok .banner__text')?.textContent?.trim() ?? null,
-    imageSrc: document.querySelector('.markdown-preview img')?.getAttribute('src') ?? null,
+    imageSrc,
   };
 })()
 '@
 $pasted = Invoke-CdpEval $socket ($paste -replace "`r`n", ' ')
 Assert-True ($pasted.text -match '!\[图片\]\(assets/') 'markdown snippet inserted' "$($pasted.text)"
-Assert-True ($null -ne $pasted.banner -and $pasted.banner -like '*已保存图片*') 'success banner for the pasted image' "$($pasted.banner)"
-Assert-True ($null -ne $pasted.imageSrc -and $pasted.imageSrc -like '*asset*') 'preview loads the image via the asset protocol' "$($pasted.imageSrc)"
+Assert-True ($null -ne $pasted.banner -and ($pasted.banner -like '*已保存图片*' -or $pasted.banner -like '*已导出*')) 'success banner for the pasted image' "$($pasted.banner)"
+Assert-True ($null -ne $pasted.imageSrc -and $pasted.imageSrc -like 'data:image/png;base64,*') 'preview inlines the image as a data URI' "$($pasted.imageSrc)"
 $socket.Dispose()
 
 $assetFiles = @(Get-ChildItem -Path (Join-Path $pasteDir 'assets') -Filter 'image-*.png' -ErrorAction SilentlyContinue)
 Assert-True ($assetFiles.Count -eq 1) 'image bytes written to assets/' "count=$($assetFiles.Count)"
+$exportedHtml = if (Test-Path $pasteHtml) { [IO.File]::ReadAllText($pasteHtml, [Text.UTF8Encoding]::new($false)) } else { '' }
+Assert-True ($exportedHtml -like '*data:image/png;base64,*') 'exported HTML inlines the image' "$(($exportedHtml.Length)) chars"
 Remove-Item $pasteDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- shiki code highlighting (T19)
-Write-Host '[12/14] code fences are highlighted by shiki' -ForegroundColor Cyan
+Write-Host '[12/15] code fences are highlighted by shiki' -ForegroundColor Cyan
 $highlightDir = Join-Path $env:TEMP 'ainative-e2e-highlight'
 New-Item -ItemType Directory -Force -Path $highlightDir | Out-Null
 $highlightFile = Join-Path $highlightDir 'highlight-target.md'
@@ -594,7 +600,7 @@ $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- resizable split divider (T19)
-Write-Host '[13/14] split divider is draggable' -ForegroundColor Cyan
+Write-Host '[13/15] split divider is draggable' -ForegroundColor Cyan
 $splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
 New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
 $splitFile = Join-Path $splitDir 'split-target.md'
@@ -641,7 +647,7 @@ Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 
 # --------------------------------------- recent files: delete (v0.1.4)
-Write-Host '[14/14] recent files can be deleted' -ForegroundColor Cyan
+Write-Host '[14/15] recent files can be deleted' -ForegroundColor Cyan
 $recentDir = Join-Path $env:TEMP 'ainative-e2e-recent'
 New-Item -ItemType Directory -Force -Path $recentDir | Out-Null
 $recentA = Join-Path $recentDir 'recent-a.md'
@@ -683,6 +689,48 @@ $socket.Dispose()
 Remove-Item $recentDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
+
+# --------------------------------------- L3 large file >100 MB (M-01)
+Write-Host '[15/15] read-only viewer opens a >100 MB file' -ForegroundColor Cyan
+$hugeLog = Join-Path $env:TEMP 'ainative-e2e-huge.log'
+if (-not (Test-Path $hugeLog)) {
+  Write-Host "      creating $hugeLog (~110 MB)..."
+  $stream = [IO.File]::Create($hugeLog)
+  $writer = New-Object IO.StreamWriter($stream)
+  $stamp = [DateTime]::UtcNow
+  $line = '{0:yyyy-MM-ddTHH:mm:ssZ} INFO request served in {1}ms path=/api/v1/items/{1}'
+  for ($i = 0; $i -lt 1600000; $i++) {
+    $writer.WriteLine(($line -f $stamp.AddMilliseconds($i), ($i % 250)))
+  }
+  $writer.Close()
+  $stream.Close()
+}
+
+$socket = Set-SessionAndReload -Paths @($hugeLog) -SettleSeconds 6
+$huge = @'
+(async () => {
+  const notice = document.querySelector('.viewer__notice')?.textContent?.trim() ?? null;
+  const lines = document.querySelectorAll('.viewer__line').length;
+  const scroller = document.querySelector('.viewer__scroller');
+  if (scroller) {
+    scroller.scrollTop = 300000;
+    scroller.dispatchEvent(new Event('scroll'));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  return {
+    notice,
+    lines,
+    first: document.querySelector('.viewer__num')?.textContent ?? null,
+    scrolledLines: document.querySelectorAll('.viewer__line').length,
+  };
+})()
+'@
+$hugeResult = Invoke-CdpEval $socket ($huge -replace "`r`n", ' ')
+Assert-True ($null -ne $hugeResult.notice -and $hugeResult.notice -like '*只读*' -and $hugeResult.notice -like '*MB*') 'L3 file opens in the read-only viewer' "$($hugeResult.notice)"
+Assert-True ($hugeResult.lines -gt 0) 'L3 first window rendered' "lines=$($hugeResult.lines)"
+Assert-True ($hugeResult.first -ne '1' -and $hugeResult.scrolledLines -gt 0) 'L3 scrolling refetches a range' "first=$($hugeResult.first)"
+$socket.Dispose()
+Remove-Item $hugeLog -ErrorAction SilentlyContinue
 
 Write-Host ''
 if ($script:Failures -eq 0) {

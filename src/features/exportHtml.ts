@@ -41,9 +41,19 @@ export function htmlPathFor(markdownPath: string): string {
   return `${markdownPath.replace(/\.(md|markdown|mdx)$/i, "")}.html`;
 }
 
+export interface ExportOptions {
+  /** Directory of the source document, used to resolve relative image paths. */
+  baseDir?: string;
+}
+
 /** Build a self-contained HTML document from Markdown source. */
-export function buildHtmlDocument(title: string, markdown: string): string {
+export function buildHtmlDocument(
+  title: string,
+  markdown: string,
+  options: ExportOptions = {}
+): string {
   const safeTitle = escapeHtml(title.trim() || "未命名文档");
+  const body = renderMarkdown(markdown, options.baseDir ? { baseDir: options.baseDir } : {});
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -54,9 +64,32 @@ export function buildHtmlDocument(title: string, markdown: string): string {
 </head>
 <body>
 <main class="markdown-body">
-${renderMarkdown(markdown)}
+${body}
 </main>
 </body>
 </html>
 `;
+}
+
+/**
+ * Replace locally-resolved `<img>` tags (`data-local-path` from the Markdown
+ * renderer) with inline data URIs so the exported file is portable.
+ */
+export async function inlineLocalImages(
+  html: string,
+  load: (path: string) => Promise<string | null>
+): Promise<string> {
+  const tags = Array.from(html.matchAll(/<img[^>]*data-local-path="([^"]+)"[^>]*>/g));
+  let result = html;
+  for (const match of tags) {
+    const tag = match[0];
+    const uri = await load(match[1]);
+    if (!uri) continue;
+    const replaced = tag
+      .replace(/\sdata-local-path="[^"]*"/, "")
+      .replace(/\ssrc="[^"]*"/, "")
+      .replace(/^<img/, `<img src="${uri}"`);
+    result = result.replace(tag, replaced);
+  }
+  return result;
 }

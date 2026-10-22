@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.4（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.5（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -45,10 +45,10 @@
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.4](https://github.com/wufangqi/6byte/releases/tag/v0.1.4) 下载：
+从 [Releases v0.1.5](https://github.com/wufangqi/6byte/releases/tag/v0.1.5) 下载：
 
-- `6byte_0.1.4_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
-- `6byte_0.1.4_x64_en-US.msi`（企业部署 / 静默安装）
+- `6byte_0.1.5_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `6byte_0.1.5_x64_en-US.msi`（企业部署 / 静默安装）
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
@@ -88,14 +88,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 67/67（store + 格式化 + 大文件窗口几何 + markdown 渲染/图片路径 + 大纲 + 滚动同步 + HTML 导出 + 语言别名 + 分屏比例） |
-| 前端打包 | `pnpm build` | ✅ 主包 920 KB / gzip 324 KB（+ 按需 Shiki chunk，总计 2.3 MB） |
-| Rust 单测 | `cargo test --lib` | ✅ 49 passed / 0 failed（+3 ignored 性能探针；编码 + 文件命令 + 大文件索引/区间 + 文件监听 + grep + 图片落盘 + fixture 语料） |
+| 前端单测 | `pnpm test` | ✅ 77/77（store + 格式化 + 大文件窗口几何 + markdown 渲染/图片路径 + 大纲 + 滚动同步 + HTML 导出 + 语言别名 + 分屏比例） |
+| 前端打包 | `pnpm build` | ✅ 主包 947 KB / gzip 325 KB（+ 按需 Shiki chunk，总计 2.3 MB） |
+| Rust 单测 | `cargo test --lib` | ✅ 52 passed / 0 failed（+4 ignored 性能探针；编码 + 文件命令 + 大文件索引/区间 + 文件监听 + grep + 图片落盘 + fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
-| 安装包 | `pnpm tauri build` | ✅ MSI 2.77 MB / NSIS 2.10 MB |
+| 安装包 | `pnpm tauri build` | ✅ MSI 2.75 MB / NSIS 2.09 MB |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 55/55（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮 / 分屏拖拽 / 最近删除） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 59/59（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮 / 分屏拖拽 / 最近删除） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
@@ -109,7 +109,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 35 MB 打开到首屏（只读预览） | ≤ 1 s | **458 ms**（含应用启动，CDP 实测） |
 | 输入延迟 P95 | ≤ 16 ms | 未测（需 DevTools Performance 面板） |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | ⚠️ 空载私有 **220 MB**（WebView2 基线）；关 GPU 可降至 159 MB（见 perf.md） |
-| 安装包 | ≤ 20 MB | ✅ 2.10 MB（NSIS） |
+| 安装包 | ≤ 20 MB | ✅ 2.09 MB（NSIS） |
 
 ## 已实现
 
@@ -121,7 +121,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] 原子保存（临时文件 + rename，失败降级）
 - [x] 外部修改检测（stat 比对，冲突三选一）
 - [x] 大文件分级（T12）：≤5 MB 全功能；5–20 MB 关闭折叠/语法装饰；20–100 MB 只读虚拟滚动预览
-      （Rust 行偏移索引 + 区间读取，单次 400 行，打开 35 MB 到首屏 458 ms）；>100 MB 明确拒绝
+      （Rust 行偏移索引 + 区间读取，单次 400 行，打开 35 MB 到首屏 458 ms）；>100 MB 通过 memmap 只读预览（上限 512 MB，120 MB 建索引 93 ms）
 - [x] 二进制防护（64 KB NUL 探测，UTF-16 BOM 豁免）
 - [x] 混合换行识别：状态栏「混合换行」徽标，保存前确认后统一为主导换行符
 - [x] 跨文件搜索（Ctrl+Shift+F）：Rust `regex` 扫目录树，跳过二进制/依赖目录，结果点击跳转到对应行
@@ -130,7 +130,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] 脏标签 / 关窗拦截（保存 / 不保存 / 取消）
 - [x] CodeMirror 6 查找面板（Ctrl+F，正则与捕获组替换，面板已中文化）
 - [x] Markdown 分屏预览（Ctrl+Shift+M 或状态栏「预览」）：markdown-it 渲染、120 ms 防抖实时更新、双向比例滚动同步、外链拦截提示；**分隔条可拖拽调整左右宽度**（双击恢复 50/50，方向键微调）
-- [x] 导出 HTML：预览工具栏一键导出，自包含（内联样式、无外部依赖），默认写到源文件同目录
+- [x] 导出 HTML：预览工具栏一键导出，自包含（内联样式、图片内联为 data URI、无外部依赖），默认写到源文件同目录
 - [x] 大纲面板：标题自动锚点 + 「大纲（N）」浮层，点击跳转到预览对应位置
 - [x] 图片粘贴：编辑器内粘贴图片自动存到 `assets/` 并插入 Markdown 引用，预览经 asset 协议显示
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
@@ -138,7 +138,6 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ## 尚未实现（按路线图 M1 → M4）
 
 - [ ] 跨文件 grep 的增量/正则缓存优化（M2 视需要）
-- [ ] >100 MB 的 memmap 区间读取（M1 后续，当前明确拒绝）
 - [ ] Markdown 后续：mermaid/katex 图表（M2 剩余）
 - [ ] AI 层：Ctrl+K 内联 diff、Provider 抽象、请求可撤销（M3）
 - [ ] 便携版、winget、自动更新、右键菜单（M4）
@@ -171,14 +170,11 @@ docs/                 项目梳理、待办清单、性能实测、发布验收�
 - 切换标签会重置该标签的撤销历史（M0 取舍：每个标签一个 `EditorView`；后续改多文档共享视图）。
 - 切换 Markdown 预览会重挂编辑器，同样会重置该标签的撤销历史。
 - 预览高亮只覆盖 10 种常用语言，其他语言显示为纯文本。
-- 图片粘贴默认存到源文件同目录的 `assets/`；预览通过 Tauri asset 协议读取本地文件（只读）。
-- 导出 HTML 中的图片仍是相对路径，尚未内联为 data URI。
+- 图片粘贴默认存到源文件同目录的 `assets/`；预览/导出通过 Rust 命令读取并内联为 data URI（单张上限 32 MB）。
 - 导出 HTML 默认写到源文件同目录的同名 `.html`，再次导出会覆盖该文件。
 - 脏标记只增不减：撤销回到保存点后仍显示未保存。
 - 混合换行文件保存时会统一为主导 EOL（保存前会弹窗确认）。
-- 20–100 MB 的文件以只读预览打开，暂不支持编辑保存。
-- 超过 100 MB 的文件直接拒绝（memmap 区间读取待 M1 后续）。
-- 同一文件「另存为」到已打开的路径会产生重复标签。
+- 20 MB 以上的文件以只读预览打开（>100 MB 走 memmap，上限 512 MB），暂不支持编辑保存。
 - 无自动更新、无便携版（M4）。
 
 ## 参与贡献

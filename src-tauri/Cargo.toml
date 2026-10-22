@@ -1,6 +1,6 @@
 [package]
 name = "aneditor"
-version = "0.1.4"
+version = "0.1.5"
 description = "AI-native lightweight text editor"
 authors = ["aneditor contributors"]
 edition = "2021"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -22,6 +22,8 @@ encoding_rs = "0.8"
 chardetng = "0.1"
 notify = "8.2.0"
 regex = "1.13.1"
+memmap2 = "0.9.12"
+base64 = "0.23.1"
 
 [profile.release]
 panic = "abort"
