@@ -6,6 +6,8 @@
 [![Release](https://img.shields.io/github/v/release/wufangqi/6byte?label=release)](https://github.com/wufangqi/6byte/releases/latest)
 [![License](https://img.shields.io/github/license/wufangqi/6byte)](./LICENSE)
 
+**中文** · [English](./README.en.md)
+
 **当前阶段：M0–M2 已交付并发布 v0.1.4（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
@@ -45,8 +47,8 @@
 
 从 [Releases v0.1.4](https://github.com/wufangqi/6byte/releases/tag/v0.1.4) 下载：
 
-- `aneditor_0.1.1_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
-- `aneditor_0.1.1_x64_en-US.msi`（企业部署 / 静默安装）
+- `6byte_0.1.4_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `6byte_0.1.4_x64_en-US.msi`（企业部署 / 静默安装）
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
