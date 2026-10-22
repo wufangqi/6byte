@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付；v0.1.5 已发布（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki）；标题栏、主题、按文件预览、Mermaid/KaTeX 已合入，等待 v0.1.6 发版；下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.6（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki/Mermaid/KaTeX、标题栏与主题、按文件预览）；下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -45,10 +45,10 @@
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.5](https://github.com/wufangqi/6byte/releases/tag/v0.1.5) 下载：
+从 [Releases v0.1.6](https://github.com/wufangqi/6byte/releases/tag/v0.1.6) 下载：
 
-- `6byte_0.1.5_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
-- `6byte_0.1.5_x64_en-US.msi`（企业部署 / 静默安装）
+- `6byte_0.1.6_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `6byte_0.1.6_x64_en-US.msi`（企业部署 / 静默安装）
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
