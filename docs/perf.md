@@ -9,7 +9,7 @@
 | 机器 | Intel Core i5-1335U（10 核 12 线程，1.3 GHz 基频）/ SK hynix BC901 NVMe SSD |
 | 系统 | Windows 11 专业版 10.0.26300 |
 | 构建 | `pnpm tauri build`（release, opt-level 3），WebView2 Runtime 148.0.3967.83 |
-| 应用 | 0.1.0，NSIS 单用户安装（`C:\Users\admin\AppData\Local\AI Native Editor`） |
+| 应用 | 0.1.0，NSIS 单用户安装（`C:\Users\admin\AppData\Local\aneditor`） |
 | 测量时间 | 2026-10-21，已预热（WebView2 profile 已存在） |
 
 > 说明：这是**开发机上的单次抽样**，不是严格的基准测试。数字用于发现数量级问题与回归，
@@ -33,7 +33,7 @@
 
 ## 1. 冷启动
 
-方法：连续 20 次「启动进程 → 轮询 `MainWindowTitle == "AI 原生编辑器"`」，每次之间强制结束进程，
+方法：连续 20 次「启动进程 → 轮询 `MainWindowTitle == "aneditor"`」，每次之间强制结束进程，
 不重启系统、不清 WebView2 profile（即「用户日常二次打开」场景，非真正冷磁盘）。
 
 | 统计量 | 值 |
@@ -46,16 +46,16 @@
 复现：
 
 ```powershell
-$exe = "$env:LOCALAPPDATA\AI Native Editor\ai-native-editor.exe"
+$exe = "$env:LOCALAPPDATA\aneditor\aneditor.exe"
 $times = @()
 for ($i = 0; $i -lt 20; $i++) {
-  Get-Process ai-native-editor -EA SilentlyContinue | Stop-Process -Force
+  Get-Process aneditor -EA SilentlyContinue | Stop-Process -Force
   Start-Sleep -Milliseconds 400
   $sw = [Diagnostics.Stopwatch]::StartNew()
   Start-Process $exe
   while ($sw.ElapsedMilliseconds -lt 15000) {
-    $p = Get-Process ai-native-editor -EA SilentlyContinue | Select-Object -First 1
-    if ($p -and $p.MainWindowTitle -eq "AI 原生编辑器") { break }
+    $p = Get-Process aneditor -EA SilentlyContinue | Select-Object -First 1
+    if ($p -and $p.MainWindowTitle -eq "aneditor") { break }
     Start-Sleep -Milliseconds 20
   }
   $times += [math]::Round($sw.Elapsed.TotalSeconds, 3)
@@ -75,7 +75,7 @@ WebView2 进程间有大量共享页，**求和应看私有内存**（工作集�
 
 | 进程 | 角色 | 工作集 | 私有 |
 |---|---|---|---|
-| ai-native-editor | Tauri 宿主 | 25.1 MB | 4.9 MB |
+| aneditor | Tauri 宿主 | 25.1 MB | 4.9 MB |
 | msedgewebview2 | browser | 163.2 MB | 74.2 MB |
 | msedgewebview2 | gpu-process | 78.0 MB | 66.2 MB |
 | msedgewebview2 | renderer | 85.9 MB | 43.5 MB |
@@ -116,10 +116,10 @@ GPU 进程在这台核显机器上独占约 50–66 MB 私有内存。
 复现：
 
 ```powershell
-$exe = "$env:LOCALAPPDATA\AI Native Editor\ai-native-editor.exe"
+$exe = "$env:LOCALAPPDATA\aneditor\aneditor.exe"
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--disable-gpu --in-process-gpu'  # 可留空做基线
 Start-Process $exe; Start-Sleep -Seconds 10
-$root = (Get-Process ai-native-editor).Id
+$root = (Get-Process aneditor).Id
 $procs = Get-CimInstance Win32_Process
 $desc = @($root); $changed = $true
 while ($changed) {
@@ -180,7 +180,7 @@ cargo test --release --lib perf_large_file -- --ignored --nocapture
 
 # 端到端（需先带远程调试端口启动安装版）
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-Start-Process "$env:LOCALAPPDATA\AI Native Editor\ai-native-editor.exe"
+Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 

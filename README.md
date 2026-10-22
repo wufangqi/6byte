@@ -1,4 +1,4 @@
-# AI 原生文本编辑器
+# aneditor
 
 > 跨平台、极轻、AI 原生的文本工作台。打开 `md` / `txt` / `log` 就能用，数据留在本机。
 
@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/github/v/release/wufangqi/aneditor?label=release)](https://github.com/wufangqi/aneditor/releases/latest)
 [![License](https://img.shields.io/github/license/wufangqi/aneditor)](./LICENSE)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.0（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.1（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -43,10 +43,10 @@
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.0](https://github.com/wufangqi/aneditor/releases/tag/v0.1.0) 下载：
+从 [Releases v0.1.1](https://github.com/wufangqi/aneditor/releases/tag/v0.1.1) 下载：
 
-- `AI.Native.Editor_0.1.0_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
-- `AI.Native.Editor_0.1.0_x64_en-US.msi`（企业部署 / 静默安装）
+- `aneditor_0.1.1_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `aneditor_0.1.1_x64_en-US.msi`（企业部署 / 静默安装）
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
@@ -72,7 +72,7 @@ cd src-tauri && cargo fmt --all -- --check && cargo clippy --all-targets -- -D w
 
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-Start-Process "$env:LOCALAPPDATA\AI Native Editor\ai-native-editor.exe"
+Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 

@@ -13,7 +13,7 @@
 
   Prerequisites:
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-    Start-Process "$env:LOCALAPPDATA\AI Native Editor\ai-native-editor.exe"
+    Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
 
 .PARAMETER Port
   DevTools port (default 9222).
@@ -119,7 +119,7 @@ $demoDir = Join-Path $env:TEMP 'ainative-readme-demo'
 New-Item -ItemType Directory -Force -Path $demoDir | Out-Null
 $demoFile = Join-Path $demoDir 'welcome.md'
 $demo = @'
-# AI 原生编辑器
+# aneditor
 
 轻量、跨平台、数据留在本机的文本工作台。
 

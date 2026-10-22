@@ -5,6 +5,15 @@
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-22
+
+### Changed
+
+- 产品更名为 **aneditor**：可执行文件 `aneditor.exe`、安装目录 `%LOCALAPPDATA%\aneditor`、窗口标题、
+  安装包名（`aneditor_0.1.1_x64-setup.exe` / `.msi`）与 bundle identifier（`dev.aneditor.app`）全部更新，
+  E2E / 截图脚本与文档中的路径同步修改。
+- 注意：bundle identifier 变化后，v0.1.0 的会话与最近文件不会继承；安装新版后旧版本可手动卸载。
+
 ## [0.1.0] - 2026-10-21
 
 ### Added

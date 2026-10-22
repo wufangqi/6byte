@@ -13,7 +13,7 @@ export default function TabBar({ onClose }: Props) {
   if (tabs.length === 0) {
     return (
       <div className="tabbar tabbar--empty">
-        <span className="tabbar__brand">AI 原生编辑器</span>
+        <span className="tabbar__brand">aneditor</span>
       </div>
     );
   }

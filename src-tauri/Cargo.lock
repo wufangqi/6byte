@@ -18,21 +18,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ai-native-editor"
-version = "0.1.0"
-dependencies = [
- "chardetng",
- "encoding_rs",
- "notify",
- "regex",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
-]
-
-[[package]]
 name = "alloc-no-stdlib"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -54,6 +39,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae221649c9976a6f6c56ae1facf410f3ddb33cc661c4b7b61020a912d4237fbc"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "aneditor"
+version = "0.1.1"
+dependencies = [
+ "chardetng",
+ "encoding_rs",
+ "notify",
+ "regex",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
 ]
 
 [[package]]

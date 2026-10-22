@@ -1,13 +1,13 @@
 [package]
-name = "ai-native-editor"
-version = "0.1.0"
+name = "aneditor"
+version = "0.1.1"
 description = "AI-native lightweight text editor"
-authors = ["ai-native-editor contributors"]
+authors = ["aneditor contributors"]
 edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
-name = "ai_native_editor_lib"
+name = "aneditor_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
