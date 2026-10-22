@@ -29,8 +29,9 @@
 | 跨文件 grep（1000 个文件） | ≤ 2 s | **64.5 ms**（每文件 20 行） | ✅ |
 | 输入延迟 P95（按键 → 编辑器布局） | ≤ 16 ms | 1000 行 L0 **5.6 ms**；10 MB L1 **3.0 ms**；19 MB L1 **2.7 ms** | ✅ |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | 空文档私有内存 **220 MB**（工作集 427 MB）；关 GPU 可到 159 MB | ⚠️ 预算按实测修订（见 §2.3） |
-| 前端包体 | — | 主包 **947 KB / gzip 325 KB**（+ Shiki 按需 chunk，总计 2.3 MB） | ✅ |
-| 安装包 | ≤ 20 MB | NSIS 2.09 MB / MSI 2.75 MB | ✅ |
+| KaTeX 字体与 Mermaid | — | `mermaid.core` 677 KB、`katex` 256 KB 及 KaTeX 字体按需加载，只影响包体不影响首屏 | ✅ |
+| 前端包体 | — | 主包 **961 KB / gzip 330 KB**；dist 总计 **8.6 MB**（Shiki/KaTeX/Mermaid 与 KaTeX 字体按需） | ✅ |
+| 安装包 | ≤ 20 MB | NSIS 4.24 MB / MSI 4.95 MB（含 KaTeX/Mermaid 资源） | ✅ |
 
 ## 1. 冷启动
 
@@ -208,11 +209,11 @@ cargo test --release --lib perf_grep -- --ignored --nocapture
 
 | 产物 | 体积 |
 |---|---|
-| `dist/assets/index-*.js` | 946.5 KB（gzip 325.0 KB） |
-| `dist/assets/index-*.css` | 14.0 KB（gzip 3.1 KB） |
-| MSI | 2.75 MB |
-| NSIS setup | 2.09 MB |
-| 应用 exe（release） | 4.94 MB |
+| `dist/assets/index-*.js` | 961.2 KB（gzip 329.6 KB） |
+| `dist/assets/index-*.css` | 16.6 KB（gzip 3.7 KB） |
+| MSI | 4.95 MB |
+| NSIS setup | 4.24 MB |
+| 应用 exe（release） | 7.15 MB |
 
 ## 7. 输入延迟（M-02 / T27）
 

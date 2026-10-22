@@ -85,7 +85,7 @@ function Eval-Js {
 function Set-Session {
   param($Socket, [string[]]$Paths)
   $quoted = ($Paths | ForEach-Object { "'" + $_.Replace('\', '\\') + "'" }) -join ','
-  Eval-Js $Socket "localStorage.setItem('ainative.session', JSON.stringify([$quoted])); localStorage.setItem('ainative.preview', '0'); 'ok'" | Out-Null
+  Eval-Js $Socket "localStorage.setItem('ainative.session', JSON.stringify([$quoted])); 'ok'" | Out-Null
   Eval-Js $Socket 'location.reload(); "ok"' | Out-Null
 }
 
@@ -125,14 +125,14 @@ $demoDir = Join-Path $env:TEMP 'ainative-readme-demo'
 New-Item -ItemType Directory -Force -Path $demoDir | Out-Null
 $demoFile = Join-Path $demoDir 'welcome.md'
 $demo = @'
-# aneditor
+# 6byte
 
 轻量、跨平台、数据留在本机的文本工作台。
 
 ## 已支持
 
 - 编码自动识别与**原样回写**（UTF-8 / GBK / UTF-16）
-- 大文件只读预览（20–100 MB）
+- 大文件只读预览（>100 MB 走 memmap，上限 512 MB）
 - 文件监听与外部修改三选一
 
 ```ts
@@ -140,7 +140,7 @@ const editor = createEditor({ readOnly: false });
 console.log(editor.version);
 ```
 '@
-Set-Content -Path $demoFile -Value $demo -Encoding UTF8
+[IO.File]::WriteAllText($demoFile, $demo.Replace("`r`n", "`n"), [Text.UTF8Encoding]::new($false))
 Set-Session $socket @($demoFile)
 $socket.Dispose()
 Start-Sleep -Seconds 4
