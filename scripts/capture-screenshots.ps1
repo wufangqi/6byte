@@ -13,7 +13,7 @@
 
   Prerequisites:
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-    Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
+    Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 
 .PARAMETER Port
   DevTools port (default 9222).

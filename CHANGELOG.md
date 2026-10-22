@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-10-22
+
+### Changed
+
+- 产品更名为 **6byte**：安装目录 `%LOCALAPPDATA%\6byte`、窗口标题、界面品牌与安装包名
+  （`6byte_0.1.2_x64-setup.exe` / `.msi`）全部更新；E2E / 截图脚本与文档路径同步。
+- bundle identifier 保持 `dev.aneditor.app` 不变，因此 **0.1.1 的会话与最近文件会继承**。
+
 ## [0.1.1] - 2026-10-22
 
 ### Changed

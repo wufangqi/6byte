@@ -39,7 +39,7 @@ cargo test --lib
 
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
+Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 
@@ -102,7 +102,7 @@ README 截图（可选，发版前刷新）：
 
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
+Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/capture-screenshots.ps1
 ```
 

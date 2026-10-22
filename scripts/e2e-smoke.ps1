@@ -15,7 +15,7 @@
 
   Prerequisites:
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
-    Start-Process "$env:LOCALAPPDATA\aneditor\aneditor.exe"
+    Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 
   Exit code 0 = all checks passed.
 
@@ -107,7 +107,7 @@ try {
   Write-Host "No DevTools endpoint on port $Port." -ForegroundColor Yellow
   Write-Host 'Launch the app with:'
   Write-Host "  `$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=$Port'"
-  Write-Host "  Start-Process `"`$env:LOCALAPPDATA\aneditor\aneditor.exe`""
+  Write-Host "  Start-Process `"`$env:LOCALAPPDATA\6byte\6byte.exe`""
   exit 2
 }
 
