@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.6（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki/Mermaid/KaTeX、标题栏与主题、按文件预览）；下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.6（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki/Mermaid/KaTeX、标题栏与主题、按文件预览、中英双语界面）；下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -88,14 +88,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 102/102（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、标题栏与预览状态） |
+| 前端单测 | `pnpm test` | ✅ 110/110（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、i18n 文案/复数/Rust 错误映射、标题栏与预览状态） |
 | 前端打包 | `pnpm build` | ✅ 主包 961 KB / gzip 330 KB（+ 按需 Shiki/KaTeX/Mermaid chunk，dist 总计 8.6 MB） |
 | Rust 单测 | `cargo test --lib` | ✅ 53 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
 | 安装包 | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.24 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 71/71（第 0 步清空会话/主题；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 84/84（21 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
@@ -137,6 +137,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] 自定义标题栏：文件菜单（新建 / 新窗口 / 打开文件 / 打开文件夹 / 打开最近 / 保存 / 另存为 / 保存全部）与视图菜单（浅色 / 深色 / 跟随系统），窗口按钮与应用图标
 - [x] 主题：浅色 / 深色 / 跟随系统，写入 `localStorage`（`ainative.theme`）；编辑器、预览、Shiki 代码高亮、Mermaid 图表与导出 HTML 都跟随主题
 - [x] 按文件预览：每个标签独立记住预览开关，重新打开文件回到编辑模式
+- [x] 界面中英双语：菜单、状态栏、搜索、预览与对话框全部双语；视图 → 语言切换，写入 `localStorage`（`ainative.locale`），重启后保持
 - [x] 打开文件夹（`list_text_files`，一次最多 40 个文本文件）与新建窗口（空白会话，只有主窗口恢复/保存会话）
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
 

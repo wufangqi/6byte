@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { t } from "../i18n/locale";
 import {
   DEFAULT_META,
   type DocumentMode,
@@ -126,7 +127,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         ...state.tabs,
         {
           id,
-          name: `未命名 ${state.tabs.length + 1}`,
+          name: t("tab.untitled", { n: state.tabs.length + 1 }),
           path: null,
           mode: "text",
           content: "",

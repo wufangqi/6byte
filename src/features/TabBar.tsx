@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import { useWorkspace } from "../stores/workspace";
 
 interface Props {
@@ -9,6 +10,7 @@ export default function TabBar({ onClose }: Props) {
   const activeId = useWorkspace((s) => s.activeId);
   const setActive = useWorkspace((s) => s.setActive);
   const newTab = useWorkspace((s) => s.newTab);
+  const { t } = useI18n();
 
   if (tabs.length === 0) return null;
 
@@ -29,10 +31,10 @@ export default function TabBar({ onClose }: Props) {
             }}
           >
             <span className="tab__name">{tab.name}</span>
-            {tab.dirty && <span className="tab__dot" aria-label="未保存" />}
+            {tab.dirty && <span className="tab__dot" aria-label={t("tab.unsaved")} />}
             <button
               className="tab__close"
-              aria-label="关闭"
+              aria-label={t("tab.close")}
               onClick={(e) => {
                 e.stopPropagation();
                 onClose(tab.id);
@@ -43,7 +45,7 @@ export default function TabBar({ onClose }: Props) {
           </div>
         ))}
       </div>
-      <button className="tabbar__new" title="新建 (Ctrl+N)" onClick={newTab}>
+      <button className="tabbar__new" title={t("tab.new")} onClick={newTab}>
         +
       </button>
     </div>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { setLocale, useI18n, type Locale } from "../i18n";
 import { isTauri } from "../ipc/api";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
 import { setThemePreference, useThemePreference, type ThemePreference } from "./theme";
@@ -14,12 +15,6 @@ interface Props {
   onSaveAs(): void;
   onSaveAll(): void;
 }
-
-const THEMES: { id: ThemePreference; label: string }[] = [
-  { id: "light", label: "浅色" },
-  { id: "dark", label: "深色" },
-  { id: "system", label: "跟随系统" },
-];
 
 const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
@@ -45,6 +40,17 @@ export default function MenuBar({
   const [maximized, setMaximized] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canSave = active?.mode === "text";
+  const { t, locale } = useI18n();
+
+  const themes: { id: ThemePreference; label: string }[] = [
+    { id: "light", label: t("menu.light") },
+    { id: "dark", label: t("menu.dark") },
+    { id: "system", label: t("menu.system") },
+  ];
+  const languages: { id: Locale; label: string }[] = [
+    { id: "zh", label: t("menu.langZh") },
+    { id: "en", label: t("menu.langEn") },
+  ];
 
   useEffect(() => {
     if (!menu) return;
@@ -100,30 +106,34 @@ export default function MenuBar({
               setMenu((value) => (value === "file" ? null : "file"));
             }}
           >
-            文件
+            {t("menu.file")}
           </button>
           {menu === "file" && (
-            <div className="menu menu--file" role="menu" aria-label="文件">
+            <div className="menu menu--file" role="menu" aria-label={t("menu.file")}>
               <FileItem
-                label="新建"
+                label={t("menu.new")}
                 shortcut="Ctrl+N"
                 onClick={onNew}
                 close={() => setMenu(null)}
               />
               <FileItem
-                label="新建窗口"
+                label={t("menu.newWindow")}
                 shortcut="Ctrl+Shift+N"
                 onClick={onNewWindow}
                 close={() => setMenu(null)}
               />
               <div className="menu__sep" />
               <FileItem
-                label="打开文件…"
+                label={t("menu.openFile")}
                 shortcut="Ctrl+O"
                 onClick={onOpenFile}
                 close={() => setMenu(null)}
               />
-              <FileItem label="打开文件夹…" onClick={onOpenFolder} close={() => setMenu(null)} />
+              <FileItem
+                label={t("menu.openFolder")}
+                onClick={onOpenFolder}
+                close={() => setMenu(null)}
+              />
               <div
                 className="menu__branch"
                 onMouseEnter={() => setRecentOpen(true)}
@@ -136,13 +146,13 @@ export default function MenuBar({
                   aria-expanded={recentOpen}
                   onClick={() => setRecentOpen(true)}
                 >
-                  <span>打开最近</span>
+                  <span>{t("menu.openRecent")}</span>
                   <span className="menu__shortcut">Ctrl+R</span>
                 </button>
                 {recentOpen && (
-                  <div className="menu menu--sub" role="menu" aria-label="最近打开">
+                  <div className="menu menu--sub" role="menu" aria-label={t("menu.recent")}>
                     {recent.length === 0 ? (
-                      <div className="menu__label">没有最近打开的文件</div>
+                      <div className="menu__label">{t("menu.recentEmpty")}</div>
                     ) : (
                       recent.slice(0, 8).map((path) => (
                         <button
@@ -164,21 +174,21 @@ export default function MenuBar({
               </div>
               <div className="menu__sep" />
               <FileItem
-                label="保存"
+                label={t("menu.save")}
                 shortcut="Ctrl+S"
                 disabled={!canSave}
                 onClick={onSave}
                 close={() => setMenu(null)}
               />
               <FileItem
-                label="另存为…"
+                label={t("menu.saveAs")}
                 shortcut="Ctrl+Shift+S"
                 disabled={!canSave}
                 onClick={onSaveAs}
                 close={() => setMenu(null)}
               />
               <FileItem
-                label="全部保存"
+                label={t("menu.saveAll")}
                 disabled={!canSaveAll}
                 onClick={onSaveAll}
                 close={() => setMenu(null)}
@@ -194,12 +204,12 @@ export default function MenuBar({
             aria-expanded={menu === "view"}
             onClick={() => setMenu((value) => (value === "view" ? null : "view"))}
           >
-            视图
+            {t("menu.view")}
           </button>
           {menu === "view" && (
-            <div className="menu" role="menu" aria-label="视图">
-              <div className="menu__label">主题</div>
-              {THEMES.map((theme) => (
+            <div className="menu" role="menu" aria-label={t("menu.view")}>
+              <div className="menu__label">{t("menu.theme")}</div>
+              {themes.map((theme) => (
                 <button
                   key={theme.id}
                   type="button"
@@ -217,6 +227,26 @@ export default function MenuBar({
                   {theme.label}
                 </button>
               ))}
+              <div className="menu__sep" />
+              <div className="menu__label">{t("menu.language")}</div>
+              {languages.map((language) => (
+                <button
+                  key={language.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={language.id === locale}
+                  className="menu__item"
+                  onClick={() => {
+                    setLocale(language.id);
+                    setMenu(null);
+                  }}
+                >
+                  <span className="menu__check" aria-hidden="true">
+                    {language.id === locale ? "✓" : ""}
+                  </span>
+                  {language.label}
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -227,7 +257,7 @@ export default function MenuBar({
           <button
             type="button"
             className="titlebar__control"
-            aria-label="最小化"
+            aria-label={t("menu.minimize")}
             onClick={() => void getCurrentWindow().minimize()}
           >
             <WindowIcon kind="minimize" />
@@ -235,7 +265,7 @@ export default function MenuBar({
           <button
             type="button"
             className="titlebar__control"
-            aria-label={maximized ? "还原" : "最大化"}
+            aria-label={maximized ? t("menu.restore") : t("menu.maximize")}
             onClick={() => {
               void getCurrentWindow().toggleMaximize();
               setMaximized((value) => !value);
@@ -246,7 +276,7 @@ export default function MenuBar({
           <button
             type="button"
             className="titlebar__control titlebar__control--close"
-            aria-label="关闭"
+            aria-label={t("menu.close")}
             onClick={() => void getCurrentWindow().close()}
           >
             <WindowIcon kind="close" />

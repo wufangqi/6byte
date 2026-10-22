@@ -43,11 +43,11 @@ Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 
-覆盖内容（20 步 / 76 条断言，第 0 步先清空会话）：大文件只读预览（首屏 + 滚动重取）、混合换行徽标、会话恢复时失效文件的
+覆盖内容（21 步 / 84 条断言，第 0 步先清空会话）：大文件只读预览（首屏 + 滚动重取）、混合换行徽标、会话恢复时失效文件的
 一次性提示与清理、外部修改后干净标签静默重载、脏标签外部修改的三选一冲突弹窗、Ctrl+Shift+F 跨文件搜索
 并点击跳转、Ctrl+F 查找替换（面板中文化、命中高亮、全部替换后变脏）、Ctrl+Shift+M Markdown 分屏预览
 （渲染 h1/粗体/代码块 + 输入后预览实时更新）、预览导出 HTML（成功横幅 + 目标文件内容）、大纲列表
-（条目数 + 点击滚动）、图片粘贴（构造 ClipboardEvent → Markdown 片段 + assets/ 落盘 + asset 协议图片）、Shiki 高亮（代码块被替换为 `<pre class="shiki">` 且产生语法 token）、分屏分隔条拖拽（拖动变窄 + 双击恢复 50/50）、最近打开删除（删一条 + localStorage 同步）、自定义标题栏（文件/视图菜单、窗口按钮）、主题切换与重载持久化、按文件独立预览、Mermaid/KaTeX 渲染、浅色主题下代码与图表重绘。
+（条目数 + 点击滚动）、图片粘贴（构造 ClipboardEvent → Markdown 片段 + assets/ 落盘 + asset 协议图片）、Shiki 高亮（代码块被替换为 `<pre class="shiki">` 且产生语法 token）、分屏分隔条拖拽（拖动变窄 + 双击恢复 50/50）、最近打开删除（删一条 + localStorage 同步）、自定义标题栏（文件/视图菜单、窗口按钮）、主题切换与重载持久化、按文件独立预览、Mermaid/KaTeX 渲染、浅色主题下代码与图表重绘、中英界面切换与重载持久化。
 
 > 注意：该脚本是 PowerShell 5.1 脚本，文件必须保存为 **UTF-8 with BOM**，否则 PS 5.1 会按 ANSI 解析中文
 > 字面量导致断言失败。修改后请用 `[IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($true))`

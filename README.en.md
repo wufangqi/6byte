@@ -8,9 +8,9 @@
 
 [中文](./README.md) · **English**
 
-**Current stage: M0–M2 shipped in v0.1.4 — encoding core, data-safety hardening, staged large-file read-only preview, file watching, cross-file grep, Markdown split preview / export / outline / image paste / Shiki highlighting. Next: M3 (AI layer).**
+**Current stage: M0–M2 shipped in v0.1.6 — encoding core, data-safety hardening, staged large-file read-only preview, file watching, cross-file grep, Markdown split preview / export / outline / image paste / Shiki / Mermaid / KaTeX, custom title bar, themes, per-file preview and a bilingual (Chinese / English) UI. Next: M3 (AI layer).**
 
-> Note: the application UI is currently in Chinese; English UI (i18n) is planned for M4.
+> The application UI is available in **Chinese and English** (switch under **View → Language**); the choice is remembered.
 > The detailed docs under `docs/` are written in Chinese.
 
 Roadmap & design notes: [技术选型与路线图.md](./技术选型与路线图.md) ·
@@ -92,15 +92,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 |---|---|---|
 | Frontend type check | `pnpm exec tsc --noEmit` | ✅ 0 errors |
 | Lint / formatting | `pnpm lint`, `pnpm format:check` | ✅ pass |
-| Frontend unit tests | `pnpm test` | ✅ 67/67 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, language aliases, split ratio) |
-| Frontend bundle | `pnpm build` | ✅ 920 KB main / 324 KB gzip (+ lazy Shiki chunks, 2.3 MB total) |
-| Rust unit tests | `cargo test --lib` | ✅ 49 passed / 0 failed (+3 ignored perf probes; encoding, file commands, large-file index/range, watcher, grep, assets, fixture corpus) |
+| Frontend unit tests | `pnpm test` | ✅ 110/110 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n catalogs/plurals/Rust error mapping, title bar and preview state) |
+| Frontend bundle | `pnpm build` | ✅ ~961 KB main / ~330 KB gzip (+ lazy Shiki, KaTeX and Mermaid chunks) |
+| Rust unit tests | `cargo test --lib` | ✅ 53 passed / 0 failed (+4 ignored perf probes; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus) |
 | Rust formatting | `cargo fmt --all -- --check` | ✅ pass |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ pass (locally needs `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`, see docs/perf.md) |
-| Installers | `pnpm tauri build` | ✅ MSI 2.77 MB / NSIS 2.10 MB |
+| Installers | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.25 MB |
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
-| E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 55/55 (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete) |
-| Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust, run 39599120518) |
+| E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 84/84 across 21 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence) |
+| Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
 
 ## Performance (honest numbers, details in [docs/perf.md](./docs/perf.md))
 
@@ -132,13 +132,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] External-change watching (`notify`, parent-directory watch): silently reloads clean tabs, offers keep-mine / load-from-disk / later for dirty ones
 - [x] Session restore skips missing files with a single summary notice (and drops them from the session)
 - [x] Dirty-tab and window-close interception (save / discard / cancel)
-- [x] CodeMirror 6 search panel (Ctrl+F, regex and capture-group replacement, localized to Chinese)
+- [x] CodeMirror 6 search panel (Ctrl+F, regex and capture-group replacement, bilingual)
 - [x] Markdown split preview (Ctrl+Shift+M or the status-bar "预览" button): markdown-it rendering, 120 ms debounced live updates, two-way proportional scroll sync, external-link interception; **draggable divider** (double-click resets to 50/50, arrow keys nudge)
 - [x] HTML export: one click in the preview toolbar, self-contained (inline styles, no external assets), written next to the source file by default
 - [x] Outline panel: stable heading anchors + an "大纲 (N)" popover that scrolls the preview to the chosen heading
 - [x] Image paste: pasting an image stores it under `assets/` and inserts a Markdown reference; previews inline it as a data URI
 - [x] Mermaid diagrams and KaTeX math in the preview (loaded on demand). A diagram that fails to parse stays a code block; a formula that fails stays as written
 - [x] Cross-file search panel (Ctrl+Shift+F, regex + case toggle + click-to-jump)
+- [x] Custom title bar: File and View menus, window controls, app icon
+- [x] Themes: light / dark / follow system (persisted); editor, preview, Shiki, Mermaid and exported HTML follow the theme
+- [x] Per-file Markdown preview: each tab remembers its own toggle; reopening a file starts in edit mode
+- [x] Open folder (up to 40 text files at once) and new windows with an empty session
+- [x] Mermaid diagrams and KaTeX math in the preview, loaded on demand
+- [x] Bilingual UI (Chinese / English): menus, status bar, search, preview and dialogs; switch under View → Language, persisted in `localStorage` (`ainative.locale`)
 
 ## Not implemented yet (M2 → M4)
 
@@ -152,7 +158,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 src/                  React frontend
   editor/             CodeMirror wrapper, extensions, live view registry (only place importing @codemirror/*)
-  features/           tab bar / status bar / welcome / dialogs / large-file viewer / grep panel / Markdown preview, export, outline, image paste
+  features/           title bar menus / theme / tab bar / status bar / welcome / dialogs / large-file viewer / grep panel / Markdown preview, export, outline, image paste, diagrams
+  i18n/               message catalogs (zh/en), locale state, Rust error localisation
   ipc/                typed wrappers for every Tauri command and event (only place importing @tauri-apps/*)
   stores/             zustand state
   lib/                pure helpers
@@ -177,13 +184,12 @@ docs/                 project review, backlog, performance, release checklist
 - Toggling the Markdown preview remounts the editor, which also resets that tab's undo history.
 - Preview highlighting covers 10 common languages; other languages fall back to plain text.
 - Pasted images are stored in `assets/` next to the source file; previews read them through the Tauri asset protocol (read-only).
-- Images in exported HTML keep relative paths; they are not inlined as data URIs yet.
 - HTML export defaults to a same-named `.html` next to the source file and overwrites it on re-export.
 - The dirty flag only grows: undoing back to the saved state still shows unsaved.
 - Files with mixed line endings are normalized to the dominant EOL on save (confirmed first).
 - Files of 20–100 MB open in read-only preview and cannot be edited/saved yet.
-- Files over 100 MB are rejected (memmap range reads are future work).
-- "Save as" onto a path that is already open creates a duplicate tab.
+- Files over 100 MB open as a read-only memmap preview (512 MB cap).
+- "Save as" onto a path that is already open switches to that tab instead of duplicating it.
 - No auto-update, no portable build (M4).
 
 ## Contributing

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { localizeError, useI18n } from "../i18n";
 import { readRange } from "../ipc/api";
 import { formatSize } from "../lib/format";
 import { useWorkspace, type Tab } from "../stores/workspace";
@@ -11,6 +12,7 @@ import { LINE_HEIGHT, WINDOW_LINES, needsFetch, windowStartFor } from "./largeFi
 export default function LargeFileViewer({ tab }: { tab: Tab }) {
   const [windowStart, setWindowStart] = useState(0);
   const [lines, setLines] = useState<string[]>([]);
+  const { t, tp } = useI18n();
 
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const inFlight = useRef(false);
@@ -32,7 +34,7 @@ export default function LargeFileViewer({ tab }: { tab: Tab }) {
         setLines(range.lines);
       } catch (error) {
         if (mounted.current) {
-          useWorkspace.getState().setError(error instanceof Error ? error.message : String(error));
+          useWorkspace.getState().setError(localizeError(error));
         }
       } finally {
         inFlight.current = false;
@@ -61,11 +63,14 @@ export default function LargeFileViewer({ tab }: { tab: Tab }) {
   return (
     <div className="viewer">
       <div className="viewer__notice">
-        <span className="viewer__badge">只读</span>
+        <span className="viewer__badge">{t("viewer.badge")}</span>
         <span>
-          大文件预览（不加载全文）· {formatSize(tab.size)} · {totalLines.toLocaleString()} 行
+          {t("viewer.notice", {
+            size: formatSize(tab.size),
+            lines: tp("viewer.lines", totalLines, { count: totalLines }),
+          })}
         </span>
-        {lines.length === 0 && <span className="viewer__loading">加载中…</span>}
+        {lines.length === 0 && <span className="viewer__loading">{t("viewer.loading")}</span>}
       </div>
 
       <div className="viewer__scroller" ref={scrollerRef} onScroll={onScroll}>

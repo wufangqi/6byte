@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { t } from "../i18n/locale";
 import { windowOwnsSession } from "./sessionOwner";
 import type {
   FileChangeEvent,
@@ -25,9 +26,9 @@ export function currentWindowOwnsSession(): boolean {
   return windowOwnsSession(getCurrentWindow().label);
 }
 
-const TEXT_FILTERS = [
+const textFilters = () => [
   {
-    name: "文本文件",
+    name: t("dialog.filter.text"),
     extensions: [
       "md",
       "markdown",
@@ -44,18 +45,18 @@ const TEXT_FILTERS = [
       "py",
     ],
   },
-  { name: "所有文件", extensions: ["*"] },
+  { name: t("dialog.filter.all"), extensions: ["*"] },
 ];
 
-function requireTauri(action: string): void {
+function requireTauri(actionKey: string): void {
   if (!isTauri) {
-    throw new Error(`${action}需要 Tauri 运行时（请使用 pnpm tauri dev 或安装版）`);
+    throw new Error(t("ipc.requireTauri", { action: t(actionKey) }));
   }
 }
 
 /** Read a file, letting Rust decide the encoding. */
 export async function readFile(path: string): Promise<OpenedFile> {
-  requireTauri("文件读取");
+  requireTauri("ipc.read");
   return invoke<OpenedFile>("read_file", { path });
 }
 
@@ -64,7 +65,7 @@ export async function readFile(path: string): Promise<OpenedFile> {
  * read-only descriptor whose content is streamed through {@link readRange}.
  */
 export async function openDocument(path: string): Promise<OpenDocument> {
-  requireTauri("文件读取");
+  requireTauri("ipc.read");
   return invoke<OpenDocument>("open_document", { path });
 }
 
@@ -74,7 +75,7 @@ export async function readRange(
   startLine: number,
   endLine: number
 ): Promise<LineRange> {
-  requireTauri("文件读取");
+  requireTauri("ipc.read");
   return invoke<LineRange>("read_range", { path, startLine, endLine });
 }
 
@@ -91,25 +92,25 @@ export async function writeFile(
   meta: FileMeta,
   allowLossy = false
 ): Promise<WriteResult> {
-  requireTauri("文件保存");
+  requireTauri("ipc.save");
   return invoke<WriteResult>("write_file", { path, content, meta, allowLossy });
 }
 
 /** Current on-disk size and mtime, used to detect external edits before saving. */
 export async function statFile(path: string): Promise<FileStat> {
-  requireTauri("文件状态读取");
+  requireTauri("ipc.stat");
   return invoke<FileStat>("stat_file", { path });
 }
 
 /** Ask Rust to watch a file for external changes (emits `file-changed`). */
 export async function watchFile(path: string): Promise<void> {
-  requireTauri("文件监听");
+  requireTauri("ipc.watch");
   return invoke<void>("watch_file", { path });
 }
 
 /** Stop watching a file. */
 export async function unwatchFile(path: string): Promise<void> {
-  requireTauri("文件监听");
+  requireTauri("ipc.watch");
   return invoke<void>("unwatch_file", { path });
 }
 
@@ -128,19 +129,19 @@ export async function grepFiles(
   caseSensitive: boolean,
   maxResults?: number
 ): Promise<GrepResponse> {
-  requireTauri("跨文件搜索");
+  requireTauri("ipc.grep");
   return invoke<GrepResponse>("grep_files", { root, pattern, caseSensitive, maxResults });
 }
 
 /** Save a pasted image into `<dir>/assets/` and return its relative path. */
 export async function saveAsset(dir: string, filename: string, bytes: number[]): Promise<string> {
-  requireTauri("图片保存");
+  requireTauri("ipc.imageSave");
   return invoke<string>("save_asset", { dir, filename, bytes });
 }
 
 /** Read a local binary file as base64 (used to inline images as data URIs). */
 export async function readBinaryBase64(path: string): Promise<string> {
-  requireTauri("图片读取");
+  requireTauri("ipc.imageRead");
   return invoke<string>("read_binary_base64", { path });
 }
 
@@ -148,7 +149,7 @@ export async function pickOpenPaths(): Promise<string[]> {
   const selected = await openDialog({
     multiple: true,
     directory: false,
-    filters: TEXT_FILTERS,
+    filters: textFilters(),
   });
   if (!selected) return [];
   return Array.isArray(selected) ? selected : [selected];
@@ -157,20 +158,20 @@ export async function pickOpenPaths(): Promise<string[]> {
 export async function pickSavePath(suggestedName: string): Promise<string | null> {
   const path = await saveDialog({
     defaultPath: suggestedName,
-    filters: TEXT_FILTERS,
+    filters: textFilters(),
   });
   return path ?? null;
 }
 
 /** Text files sitting directly in a folder (nested folders are not opened). */
 export async function listTextFiles(path: string): Promise<string[]> {
-  requireTauri("打开文件夹");
+  requireTauri("ipc.folder");
   return invoke<string[]>("list_text_files", { path });
 }
 
 /** Open a fresh editor window. It does not reopen the files in this window. */
 export async function openNewWindow(): Promise<void> {
-  requireTauri("新建窗口");
+  requireTauri("ipc.newWindow");
   const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
   const created = new WebviewWindow(`editor-${Date.now()}`, {
     url: "/",
@@ -188,7 +189,9 @@ export async function openNewWindow(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     void created.once("tauri://created", () => resolve());
     void created.once("tauri://error", (event) => {
-      reject(new Error(typeof event.payload === "string" ? event.payload : "无法新建窗口"));
+      reject(
+        new Error(typeof event.payload === "string" ? event.payload : t("ipc.newWindowFailed"))
+      );
     });
   });
 }

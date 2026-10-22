@@ -1,3 +1,4 @@
+import { t } from "../i18n/locale";
 import { renderMarkdown } from "./markdown";
 import type { ResolvedTheme } from "./theme";
 
@@ -98,10 +99,10 @@ export function buildHtmlDocument(
   markdown: string,
   options: ExportOptions = {}
 ): string {
-  const safeTitle = escapeHtml(title.trim() || "未命名文档");
+  const safeTitle = escapeHtml(title.trim() || t("export.untitled"));
   const body = renderMarkdown(markdown, options.baseDir ? { baseDir: options.baseDir } : {});
   return `<!doctype html>
-<html lang="zh-CN">
+<html lang="${t("export.htmlLang")}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
