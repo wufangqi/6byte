@@ -95,7 +95,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
 | 安装包 | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.24 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 59/59（第 0 步先清空会话；大文件预览、混合换行、会话失效、外部修改、脏冲突、grep 跳转、查找替换、Markdown 预览、导出、大纲、图片粘贴、Shiki、分屏拖拽、最近删除） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 71/71（第 0 步清空会话/主题；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
