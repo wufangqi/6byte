@@ -13,6 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use encoding_rs::Encoding;
+use memmap2::Mmap;
 use serde::Serialize;
 
 use crate::codec::{self, FileMeta};
@@ -30,6 +31,10 @@ const READ_CHUNK_BYTES: usize = 256 * 1024;
 /// A single `read_range` reply is capped so one enormous line cannot blow up the IPC.
 const MAX_RANGE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_CACHED_INDEXES: usize = 4;
+/// Files above this size are read through a memory map instead of seek+read.
+const MMAP_THRESHOLD_BYTES: u64 = 20 * 1024 * 1024;
+/// Upper bound for the read-only viewer (beyond it we refuse with a clear message).
+pub const MAX_READ_ONLY_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileLevel {
@@ -167,12 +172,8 @@ impl LargeFileCache {
         };
         byte_end = byte_end.min(byte_start + MAX_RANGE_BYTES);
 
-        let mut file = File::open(path).map_err(|error| format!("读取失败：{error}"))?;
-        file.seek(SeekFrom::Start(byte_start))
-            .map_err(|error| format!("读取失败：{error}"))?;
-        let mut buffer = vec![0u8; (byte_end - byte_start) as usize];
-        file.read_exact(&mut buffer)
-            .map_err(|error| format!("读取失败：{error}"))?;
+        let use_mmap = entry.size > MMAP_THRESHOLD_BYTES;
+        let buffer = read_span(path, byte_start, byte_end, use_mmap)?;
 
         let (text, _, _had_errors) = encoding.decode(&buffer);
         let mut lines: Vec<String> = text
@@ -188,6 +189,33 @@ impl LargeFileCache {
             start_line: start,
             lines,
         })
+    }
+}
+
+/// Read `[start, end)` either with a memory map (large files) or seek+read.
+fn read_span(path: &Path, start: u64, end: u64, use_mmap: bool) -> Result<Vec<u8>, String> {
+    if end < start {
+        return Err("读取区间无效。".to_string());
+    }
+    let length = (end - start) as usize;
+
+    if use_mmap {
+        let file = File::open(path).map_err(|error| format!("读取失败：{error}"))?;
+        // Safety: the map is read-only and we copy the requested bytes out
+        // immediately; atomic saves replace the file instead of writing in place.
+        let map = unsafe { Mmap::map(&file) }.map_err(|error| format!("内存映射失败：{error}"))?;
+        let slice = map
+            .get(start as usize..start as usize + length)
+            .ok_or_else(|| "读取区间超出文件大小。".to_string())?;
+        Ok(slice.to_vec())
+    } else {
+        let mut file = File::open(path).map_err(|error| format!("读取失败：{error}"))?;
+        file.seek(SeekFrom::Start(start))
+            .map_err(|error| format!("读取失败：{error}"))?;
+        let mut buffer = vec![0u8; length];
+        file.read_exact(&mut buffer)
+            .map_err(|error| format!("读取失败：{error}"))?;
+        Ok(buffer)
     }
 }
 
@@ -372,6 +400,53 @@ mod tests {
         let cache = LargeFileCache::default();
         let error = cache.info(&path).unwrap_err();
         assert!(error.contains("二进制"), "unexpected error: {error}");
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn read_span_works_with_mmap_and_seek() {
+        let path = temp_path("mmap-span");
+        fs::write(&path, "hello mmap world").unwrap();
+        assert_eq!(read_span(&path, 0, 5, true).unwrap(), b"hello");
+        assert_eq!(read_span(&path, 6, 10, false).unwrap(), b"mmap");
+        let _ = fs::remove_file(path);
+    }
+
+    /// Not part of CI: `cargo test --release --lib perf_memmap -- --ignored --nocapture`
+    #[test]
+    #[ignore = "performance probe, run manually with --release --ignored --nocapture"]
+    fn perf_memmap_reads_120mb_file() {
+        use std::time::Instant;
+
+        let line = "2026-10-22T00:00:00Z INFO request served in 12ms path=/api/v1/items\n";
+        let target = 120 * 1024 * 1024usize;
+        let mut content = String::with_capacity(target + line.len());
+        while content.len() < target {
+            content.push_str(line);
+        }
+
+        let path = temp_path("perf-mmap");
+        fs::write(&path, &content).unwrap();
+        drop(content);
+
+        let cache = LargeFileCache::default();
+        let started = Instant::now();
+        let info = cache.info(&path).unwrap();
+        println!(
+            "index {} MB: {:?} ({} lines)",
+            info.size / (1024 * 1024),
+            started.elapsed(),
+            info.line_count
+        );
+
+        let middle = info.line_count / 2;
+        let started = Instant::now();
+        let range = cache.read_lines(&path, middle, middle + 400).unwrap();
+        println!(
+            "mmap read_lines 400 lines: {:?} ({} lines)",
+            started.elapsed(),
+            range.lines.len()
+        );
         let _ = fs::remove_file(path);
     }
 

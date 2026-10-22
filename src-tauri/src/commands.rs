@@ -141,11 +141,21 @@ fn open_document_inner(path: String, cache: &LargeFileCache) -> Result<DocumentR
             file: None,
             info: Some(cache.info(&path_buf)?),
         }),
-        FileLevel::L3 => Err(format!(
-            "文件过大（{:.1} MB），只读预览上限为 {} MB；更大的文件将在后续版本支持。",
-            metadata.len() as f64 / (1024.0 * 1024.0),
-            bigfile::L3_MAX_BYTES / (1024 * 1024)
-        )),
+        FileLevel::L3 => {
+            if metadata.len() > bigfile::MAX_READ_ONLY_BYTES {
+                Err(format!(
+                    "文件过大（{:.0} MB），只读预览上限为 {} MB。",
+                    metadata.len() as f64 / (1024.0 * 1024.0),
+                    bigfile::MAX_READ_ONLY_BYTES / (1024 * 1024)
+                ))
+            } else {
+                Ok(DocumentResponse {
+                    mode: "large",
+                    file: None,
+                    info: Some(cache.info(&path_buf)?),
+                })
+            }
+        }
     }
 }
 
@@ -237,6 +247,28 @@ fn sanitize_asset_name(name: &str) -> Result<String, String> {
     Ok(cleaned)
 }
 
+const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Read a local image as base64 so the preview and HTML export can inline it as a data URI.
+#[tauri::command]
+pub fn read_binary_base64(path: String) -> Result<String, String> {
+    use base64::Engine as _;
+
+    let path = PathBuf::from(&path);
+    let metadata = fs::metadata(&path).map_err(|error| format!("读取失败：{error}"))?;
+    if !metadata.is_file() {
+        return Err("所选路径不是文件。".to_string());
+    }
+    if metadata.len() > MAX_IMAGE_BYTES {
+        return Err(format!(
+            "图片过大（上限 {} MB）。",
+            MAX_IMAGE_BYTES / (1024 * 1024)
+        ));
+    }
+
+    let bytes = fs::read(&path).map_err(|error| format!("读取失败：{error}"))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
 /// Write `content` back to `path` using the encoding metadata captured at open time.
 /// The data hits the disk atomically (temp file + rename).
 ///
@@ -480,7 +512,7 @@ mod tests {
     fn open_document_rejects_files_above_the_viewer_limit() {
         let path = temp_path("open-too-big");
         let file = fs::File::create(&path).unwrap();
-        file.set_len(bigfile::L3_MAX_BYTES + 1).unwrap();
+        file.set_len(bigfile::MAX_READ_ONLY_BYTES + 1).unwrap();
         drop(file);
 
         let error = open_document_inner(
@@ -492,6 +524,27 @@ mod tests {
         let _ = fs::remove_file(path);
     }
 
+    #[test]
+    fn read_binary_base64_encodes_file_bytes() {
+        let path = temp_path("base64");
+        fs::write(&path, [1u8, 2, 3]).unwrap();
+        assert_eq!(
+            read_binary_base64(path.to_string_lossy().to_string()).unwrap(),
+            "AQID"
+        );
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn read_binary_base64_rejects_oversized_files() {
+        let path = temp_path("base64-big");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(MAX_IMAGE_BYTES + 1).unwrap();
+        drop(file);
+        let error = read_binary_base64(path.to_string_lossy().to_string()).unwrap_err();
+        assert!(error.contains("图片过大"), "unexpected error: {error}");
+        let _ = fs::remove_file(path);
+    }
     #[test]
     fn atomic_write_replaces_existing_content() {
         let path = temp_path("atomic");

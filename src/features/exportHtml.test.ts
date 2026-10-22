@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHtmlDocument, escapeHtml, htmlPathFor } from "./exportHtml";
+import { buildHtmlDocument, escapeHtml, htmlPathFor, inlineLocalImages } from "./exportHtml";
 
 describe("escapeHtml", () => {
   it("escapes the five HTML metacharacters", () => {
@@ -41,5 +41,38 @@ describe("buildHtmlDocument", () => {
   it("falls back to a placeholder title", () => {
     const html = buildHtmlDocument("   ", "text");
     expect(html).toContain("<title>未命名文档</title>");
+  });
+});
+
+describe("inlineLocalImages", () => {
+  const html =
+    '<p><img src="assets/shot.png" alt="shot" data-local-path="D:\\\\docs\\\\assets\\\\shot.png"></p>';
+
+  it("replaces local images with data URIs", async () => {
+    const result = await inlineLocalImages(html, async (path) => {
+      expect(path).toBe("D:\\\\docs\\\\assets\\\\shot.png");
+      return "data:image/png;base64,AQID";
+    });
+    expect(result).toContain('src="data:image/png;base64,AQID"');
+    expect(result).not.toContain("data-local-path");
+  });
+
+  it("keeps the tag untouched when the image cannot be read", async () => {
+    const result = await inlineLocalImages(html, async () => null);
+    expect(result).toBe(html);
+  });
+
+  it("leaves remote images alone", async () => {
+    const remote = '<img src="https://example.com/a.png">';
+    await expect(inlineLocalImages(remote, async () => "data:image/png;base64,AA")).resolves.toBe(
+      remote
+    );
+  });
+});
+
+describe("buildHtmlDocument with images", () => {
+  it("marks local image paths for inlining when a base dir is given", () => {
+    const doc = buildHtmlDocument("t", "![shot](assets/shot.png)", { baseDir: "D:/docs" });
+    expect(doc).toContain('data-local-path="D:/docs/assets/shot.png"');
   });
 });

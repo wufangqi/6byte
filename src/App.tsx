@@ -35,7 +35,9 @@ import {
 import { getDocText, revealLine } from "./editor/registry";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { formatSize, formatTime } from "./lib/format";
-import { buildHtmlDocument, htmlPathFor } from "./features/exportHtml";
+import { samePath } from "./lib/paths";
+import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
+import { loadImageDataUrl } from "./features/images";
 import {
   selectActiveTab,
   tabFromFile,
@@ -268,12 +270,18 @@ export default function App() {
 
       const content = getDocText(tab.id) ?? tab.content;
       const title = tab.name.replace(/\.(md|markdown|mdx)$/i, "") || "未命名文档";
+      const separator = tab.path
+        ? Math.max(tab.path.lastIndexOf("/"), tab.path.lastIndexOf("\\"))
+        : -1;
+      const baseDir = separator > 0 && tab.path ? tab.path.slice(0, separator) : undefined;
       try {
         const target = tab.path
           ? htmlPathFor(tab.path)
           : await pickSavePath(`${title.replace(/[\\/:*?"<>|]/g, "-")}.html`);
         if (!target) return;
-        await writeFile(target, buildHtmlDocument(title, content), { ...DEFAULT_META });
+        const html = buildHtmlDocument(title, content, { baseDir });
+        const portable = await inlineLocalImages(html, loadImageDataUrl);
+        await writeFile(target, portable, { ...DEFAULT_META });
         store.setNotice(`已导出 HTML：${target}`);
       } catch (e) {
         store.setError(errorMessage(e));
@@ -320,6 +328,18 @@ export default function App() {
         if (!path) return false;
       }
 
+      // Saving as onto a path that another tab already owns would create a
+      // duplicate tab; switch to that tab instead (T30).
+      if (path !== tab.path) {
+        const duplicate = store.tabs.find(
+          (candidate) => candidate.id !== tab.id && candidate.path && samePath(candidate.path, path)
+        );
+        if (duplicate) {
+          store.setError(`「${duplicate.name}」已在另一个标签中打开，已切换到该标签。`);
+          store.setActive(duplicate.id);
+          return false;
+        }
+      }
       // Never silently overwrite edits made outside the app.
       if (tab.path && !saveAs) {
         try {

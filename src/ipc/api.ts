@@ -1,4 +1,4 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
@@ -130,9 +130,10 @@ export async function saveAsset(dir: string, filename: string, bytes: number[]):
   return invoke<string>("save_asset", { dir, filename, bytes });
 }
 
-/** Absolute file path → URL the webview can load (uses the Tauri asset protocol). */
-export function toAssetUrl(filePath: string): string {
-  return isTauri ? convertFileSrc(filePath) : filePath;
+/** Read a local binary file as base64 (used to inline images as data URIs). */
+export async function readBinaryBase64(path: string): Promise<string> {
+  requireTauri("图片读取");
+  return invoke<string>("read_binary_base64", { path });
 }
 
 export async function pickOpenPaths(): Promise<string[]> {
