@@ -58,7 +58,9 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
       window.clearTimeout(debounce);
       unsubscribe();
     };
-  }, [tabId, baseDir]);
+    // The resolved theme is a dependency so switching themes re-renders the
+    // markdown and lets the Shiki/Mermaid effects repaint with the new palette.
+  }, [tabId, baseDir, resolvedTheme]);
 
   // Relative images cannot be loaded by the webview directly; read them through
   // Rust and inline them as data URIs after each render (T19 image paste).

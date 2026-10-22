@@ -129,7 +129,7 @@ try {
 # --------------------------------------- 0. reset persisted state
 # The app restores its last session on launch; a stale session (e.g. files the
 # previous run deleted) makes the first steps flaky. Clear it before testing.
-Write-Host '[0/19] reset persisted session and recent files' -ForegroundColor DarkCyan
+Write-Host '[0/20] reset persisted session and recent files' -ForegroundColor DarkCyan
 $resetPage = Get-PageTarget
 $resetSocket = Connect-Cdp $resetPage.webSocketDebuggerUrl
 Wait-AppReady $resetSocket
@@ -138,7 +138,7 @@ Invoke-CdpEval $resetSocket 'location.reload(); "ok"' | Out-Null
 $resetSocket.Dispose()
 Start-Sleep -Seconds 4
 
-Write-Host '[1/19] large-file staged loading' -ForegroundColor Cyan
+Write-Host '[1/20] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."
   $stream = [IO.File]::Create($LogFile)
@@ -183,7 +183,7 @@ Assert-True ($after.lines -gt 0) 'window still rendered after scroll'
 $socket.Dispose()
 
 # ------------------------------------------------- mixed EOL + missing file
-Write-Host '[2/19] mixed line endings badge' -ForegroundColor Cyan
+Write-Host '[2/20] mixed line endings badge' -ForegroundColor Cyan
 $fixture = Join-Path $PSScriptRoot '..\src-tauri\fixtures\mixed-eol.txt'
 $missing = Join-Path $PSScriptRoot '..\src-tauri\fixtures\does-not-exist.txt'
 $socket = Set-SessionAndReload -Paths @($fixture, $missing)
@@ -199,12 +199,12 @@ $mixedResult = Invoke-CdpEval $socket ($mixed -replace "`r`n", ' ')
 Assert-True ($mixedResult.warnings -contains '混合换行') 'mixed EOL badge shown' "$($mixedResult.warnings -join ',')"
 $socket.Dispose()
 
-Write-Host '[3/19] session restore with a missing path' -ForegroundColor Cyan
+Write-Host '[3/20] session restore with a missing path' -ForegroundColor Cyan
 Assert-True ($mixedResult.banner -like '*已无法打开*') 'one-off banner for skipped files' "$($mixedResult.banner)"
 Assert-True ($mixedResult.session -notlike '*does-not-exist*') 'missing path dropped from session' "$($mixedResult.session)"
 
 # ------------------------------------------- external change (T13 file watch)
-Write-Host '[4/19] external change reloads a clean tab' -ForegroundColor Cyan
+Write-Host '[4/20] external change reloads a clean tab' -ForegroundColor Cyan
 $watchedFile = Join-Path $env:TEMP 'ainative-e2e-watch.txt'
 Set-Content -Path $watchedFile -Value 'before external change' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($watchedFile)
@@ -222,7 +222,7 @@ $socket.Dispose()
 Remove-Item $watchedFile -ErrorAction SilentlyContinue
 
 # ------------------------------- dirty tab: three-way conflict prompt (T13)
-Write-Host '[5/19] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
+Write-Host '[5/20] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
 $conflictFile = Join-Path $env:TEMP 'ainative-e2e-conflict.txt'
 Set-Content -Path $conflictFile -Value 'base content' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($conflictFile)
@@ -278,7 +278,7 @@ $socket.Dispose()
 Remove-Item $conflictFile -ErrorAction SilentlyContinue
 
 # ------------------------------------------- cross-file search (T14 grep)
-Write-Host '[6/19] cross-file search opens the hit' -ForegroundColor Cyan
+Write-Host '[6/20] cross-file search opens the hit' -ForegroundColor Cyan
 $grepDir = Join-Path $env:TEMP 'ainative-e2e-grep'
 New-Item -ItemType Directory -Force -Path $grepDir | Out-Null
 $grepTarget = Join-Path $grepDir 'target-note.txt'
@@ -340,7 +340,7 @@ $socket.Dispose()
 Remove-Item $grepDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- find & replace panel (T16)
-Write-Host '[7/19] search panel finds and replaces' -ForegroundColor Cyan
+Write-Host '[7/20] search panel finds and replaces' -ForegroundColor Cyan
 $findDir = Join-Path $env:TEMP 'ainative-e2e-find'
 New-Item -ItemType Directory -Force -Path $findDir | Out-Null
 $findFile = Join-Path $findDir 'find-target.txt'
@@ -393,7 +393,7 @@ $socket.Dispose()
 Remove-Item $findDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown split preview (T19)
-Write-Host '[8/19] markdown split preview renders live' -ForegroundColor Cyan
+Write-Host '[8/20] markdown split preview renders live' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewFile = Join-Path $previewDir 'preview-target.md'
@@ -447,7 +447,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- export HTML (T19)
-Write-Host '[9/19] preview exports a self-contained HTML file' -ForegroundColor Cyan
+Write-Host '[9/20] preview exports a self-contained HTML file' -ForegroundColor Cyan
 $exportDir = Join-Path $env:TEMP 'ainative-e2e-export'
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
 $exportFile = Join-Path $exportDir 'export-target.md'
@@ -482,7 +482,7 @@ Assert-True ($htmlText -like '*<title>export-target</title>*') 'exported html ha
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown outline (T19)
-Write-Host '[10/19] markdown outline jumps inside the preview' -ForegroundColor Cyan
+Write-Host '[10/20] markdown outline jumps inside the preview' -ForegroundColor Cyan
 $outlineDir = Join-Path $env:TEMP 'ainative-e2e-outline'
 New-Item -ItemType Directory -Force -Path $outlineDir | Out-Null
 $outlineFile = Join-Path $outlineDir 'outline-target.md'
@@ -534,7 +534,7 @@ $socket.Dispose()
 Remove-Item $outlineDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- image paste into assets/ (T19)
-Write-Host '[11/19] pasted image is saved, previewed and exported' -ForegroundColor Cyan
+Write-Host '[11/20] pasted image is saved, previewed and exported' -ForegroundColor Cyan
 $pasteDir = Join-Path $env:TEMP 'ainative-e2e-paste'
 New-Item -ItemType Directory -Force -Path $pasteDir | Out-Null
 $pasteFile = Join-Path $pasteDir 'paste-target.md'
@@ -578,7 +578,7 @@ Assert-True ($exportedHtml -like '*data:image/png;base64,*') 'exported HTML inli
 Remove-Item $pasteDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- shiki code highlighting (T19)
-Write-Host '[12/19] code fences are highlighted by shiki' -ForegroundColor Cyan
+Write-Host '[12/20] code fences are highlighted by shiki' -ForegroundColor Cyan
 $highlightDir = Join-Path $env:TEMP 'ainative-e2e-highlight'
 New-Item -ItemType Directory -Force -Path $highlightDir | Out-Null
 $highlightFile = Join-Path $highlightDir 'highlight-target.md'
@@ -612,7 +612,7 @@ $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- resizable split divider (T19)
-Write-Host '[13/19] split divider is draggable' -ForegroundColor Cyan
+Write-Host '[13/20] split divider is draggable' -ForegroundColor Cyan
 $splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
 New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
 $splitFile = Join-Path $splitDir 'split-target.md'
@@ -659,7 +659,7 @@ Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 
 # --------------------------------------- recent files: delete (v0.1.4)
-Write-Host '[14/19] recent files can be deleted' -ForegroundColor Cyan
+Write-Host '[14/20] recent files can be deleted' -ForegroundColor Cyan
 $recentDir = Join-Path $env:TEMP 'ainative-e2e-recent'
 New-Item -ItemType Directory -Force -Path $recentDir | Out-Null
 $recentA = Join-Path $recentDir 'recent-a.md'
@@ -703,7 +703,7 @@ Remove-Item $recentDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 
 # --------------------------------------- L3 large file >100 MB (M-01)
-Write-Host '[15/19] read-only viewer opens a >100 MB file' -ForegroundColor Cyan
+Write-Host '[15/20] read-only viewer opens a >100 MB file' -ForegroundColor Cyan
 $hugeLog = Join-Path $env:TEMP 'ainative-e2e-huge.log'
 if (-not (Test-Path $hugeLog)) {
   Write-Host "      creating $hugeLog (~110 MB)..."
@@ -745,7 +745,7 @@ $socket.Dispose()
 Remove-Item $hugeLog -ErrorAction SilentlyContinue
 
 # --------------------------------------- title bar menus (T51)
-Write-Host '[16/19] title bar exposes menus, theme items and window controls' -ForegroundColor Cyan
+Write-Host '[16/20] title bar exposes menus, theme items and window controls' -ForegroundColor Cyan
 $socket = Set-SessionAndReload -Paths @()
 $chrome = @'
 (async () => {
@@ -768,7 +768,7 @@ Assert-True ($bar.controls.Count -eq 3) 'window controls: minimize/maximize/clos
 Assert-True (($bar.fileItems -join ' ').Contains('打开文件夹') -and ($bar.fileItems -join ' ').Contains('全部保存')) 'file menu lists folder and save-all actions' "$($bar.fileItems -join ' | ')"
 
 # --------------------------------------- theme switch + persistence (T51)
-Write-Host '[17/19] theme switches from the view menu and survives a reload' -ForegroundColor Cyan
+Write-Host '[17/20] theme switches from the view menu and survives a reload' -ForegroundColor Cyan
 $toLight = @'
 (async () => {
   const openView = () => {
@@ -809,7 +809,7 @@ $dark = Invoke-CdpEval $socket ($toDark -replace "`r`n", ' ')
 Assert-True ($dark.theme -eq 'dark' -and $dark.stored -eq 'dark') 'switching back to dark persists' "$($dark | ConvertTo-Json -Compress)"
 
 # --------------------------------------- per-file preview state (T51)
-Write-Host '[18/19] preview toggle is remembered per file' -ForegroundColor Cyan
+Write-Host '[18/20] preview toggle is remembered per file' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview-state'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewMd = Join-Path $previewDir 'diagram.md'
@@ -843,7 +843,7 @@ Assert-True ($state.onTxt -eq $false) 'switching to a text tab hides the preview
 Assert-True ($state.backOnMd) 'returning to the markdown tab restores its preview' "$($state | ConvertTo-Json -Compress)"
 
 # --------------------------------------- mermaid + katex (T51)
-Write-Host '[19/19] preview renders KaTeX formulas and Mermaid diagrams' -ForegroundColor Cyan
+Write-Host '[19/20] preview renders KaTeX formulas and Mermaid diagrams' -ForegroundColor Cyan
 $render = @'
 (async () => {
   const md = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('diagram.md'));
@@ -869,6 +869,85 @@ Assert-True ($rendered.katex -gt 0) 'KaTeX rendered the inline formula' "katex=$
 Assert-True ($rendered.svg -gt 0) 'Mermaid rendered the diagram as SVG' "svg=$($rendered.svg)"
 $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
+
+# --------------------------------------- theme repaint for code + diagrams (T53)
+Write-Host '[20/20] light theme repaints highlighted code and Mermaid diagrams' -ForegroundColor Cyan
+$themeDir = Join-Path $env:TEMP 'ainative-e2e-theme-repaint'
+New-Item -ItemType Directory -Force -Path $themeDir | Out-Null
+$themeFile = Join-Path $themeDir 'theme-demo.md'
+$themeSource = @'
+# Theme demo
+
+Inline math: $a^2 + b^2$
+
+```ts
+const answer: number = 42;
+console.log(answer);
+```
+
+```mermaid
+graph LR; A-->B;
+```
+'@
+[IO.File]::WriteAllText($themeFile, $themeSource.Replace("`r`n", "`n"), [Text.UTF8Encoding]::new($false))
+$socket = Set-SessionAndReload -Paths @($themeFile)
+$repaint = @'
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
+  const readState = () => {
+    const pre = document.querySelector('.markdown-preview pre.shiki');
+    const diagramStyle = document.querySelector('.markdown-preview .mermaid-diagram svg style');
+    return {
+      bg: pre ? getComputedStyle(pre).backgroundColor : null,
+      diagramStyle: diagramStyle?.textContent ?? null,
+      diagrams: document.querySelectorAll('.markdown-preview .mermaid-diagram svg').length,
+      katex: document.querySelectorAll('.markdown-preview .katex').length,
+    };
+  };
+  let dark = readState();
+  for (let attempt = 0; attempt < 25; attempt++) {
+    dark = readState();
+    if (dark.bg && dark.diagramStyle) break;
+    await sleep(400);
+  }
+  const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
+  trigger?.click();
+  await sleep(200);
+  [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '浅色')?.click();
+  await sleep(400);
+  let light = readState();
+  for (let attempt = 0; attempt < 25; attempt++) {
+    light = readState();
+    if (light.bg && light.diagramStyle && light.bg !== dark.bg) break;
+    await sleep(400);
+  }
+  return { dark, light, styleChanged: dark.diagramStyle !== light.diagramStyle };
+})()
+'@
+$painted = Invoke-CdpEval $socket ($repaint -replace "`r`n", ' ')
+$darkBg = $painted.dark.bg
+$lightBg = $painted.light.bg
+Assert-True ($null -ne $darkBg -and $null -ne $lightBg -and $darkBg -ne $lightBg) 'highlighted code repaints for the light theme' "dark=$darkBg light=$lightBg"
+$rgb = [regex]::Matches($lightBg, '\d+') | ForEach-Object { [int]$_.Value }
+$luminance = if ($rgb.Count -ge 3) { ($rgb[0] + $rgb[1] + $rgb[2]) / 3 } else { 0 }
+Assert-True ($luminance -gt 150) 'light theme uses a light code background' "rgb=$($rgb -join ',') luminance=$luminance"
+Assert-True ($painted.light.diagrams -gt 0 -and $painted.light.katex -gt 0) 'diagram and formula survive the theme switch' "diagrams=$($painted.light.diagrams) katex=$($painted.light.katex)"
+Assert-True ($painted.styleChanged) 'Mermaid re-renders with the light palette' "changed=$($painted.styleChanged)"
+$restoreDark = @'
+(async () => {
+  const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
+  trigger?.click();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '深色')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return document.documentElement.getAttribute('data-theme');
+})()
+'@
+$restored = Invoke-CdpEval $socket ($restoreDark -replace "`r`n", ' ')
+Assert-True ($restored -eq 'dark') 'dark theme restored for the next run' "$restored"
+$socket.Dispose()
+Remove-Item $themeDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
 if ($script:Failures -eq 0) {
