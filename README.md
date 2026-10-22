@@ -93,7 +93,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | Rust 单测 | `cargo test --lib` | ✅ 53 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
-| 安装包 | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.24 MB（含 KaTeX/Mermaid 资源） |
+| 安装包 | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
 | 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 84/84（21 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
@@ -109,7 +109,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 35 MB 打开到首屏（只读预览） | ≤ 1 s | **458 ms**（含应用启动，CDP 实测） |
 | 输入延迟 P95 | ≤ 16 ms | **5.6 ms**（1000 行 L0）；L1：10 MB **3.0 ms**、19 MB **2.7 ms** |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | ⚠️ 空载私有 **220 MB**（WebView2 基线）；关 GPU 可降至 159 MB（见 perf.md） |
-| 安装包 | ≤ 20 MB | ✅ 2.09 MB（NSIS） |
+| 安装包 | ≤ 20 MB | ✅ 4.25 MB（NSIS，当前构建） |
 
 ## 已实现
 
