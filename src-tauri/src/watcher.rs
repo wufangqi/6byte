@@ -295,6 +295,14 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
+    // macOS FSEvents replays recent historical events when a stream starts, so a
+    // freshly created watched file can produce a delayed event during this
+    // "ignore" window and make the assertion flaky. The filter itself is still
+    // covered on Windows/Linux.
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "FSEvents replays recent events; covered on other platforms"
+    )]
     #[test]
     fn ignores_files_that_are_not_watched() {
         let dir = temp_dir("ignored");
