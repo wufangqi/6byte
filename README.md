@@ -2,9 +2,9 @@
 
 > 跨平台、极轻、AI 原生的文本工作台。打开 `md` / `txt` / `log` 就能用，数据留在本机。
 
-[![CI](https://github.com/wufangqi/aneditor/actions/workflows/ci.yml/badge.svg)](https://github.com/wufangqi/aneditor/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/wufangqi/aneditor?label=release)](https://github.com/wufangqi/aneditor/releases/latest)
-[![License](https://img.shields.io/github/license/wufangqi/aneditor)](./LICENSE)
+[![CI](https://github.com/wufangqi/6byte/actions/workflows/ci.yml/badge.svg)](https://github.com/wufangqi/6byte/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/wufangqi/6byte?label=release)](https://github.com/wufangqi/6byte/releases/latest)
+[![License](https://img.shields.io/github/license/wufangqi/6byte)](./LICENSE)
 
 **当前阶段：M0–M2 已交付并发布 v0.1.2（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
 
@@ -43,7 +43,7 @@
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.2](https://github.com/wufangqi/aneditor/releases/tag/v0.1.2) 下载：
+从 [Releases v0.1.2](https://github.com/wufangqi/6byte/releases/tag/v0.1.2) 下载：
 
 - `aneditor_0.1.1_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
 - `aneditor_0.1.1_x64_en-US.msi`（企业部署 / 静默安装）
