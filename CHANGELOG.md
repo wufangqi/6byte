@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-10-22
+
+### Added
+
+- 「最近打开」支持**单项删除**（悬停条目显示 ×）与一键**清空**；删除后立即写回 `localStorage`。
+
+### Fixed
+
+- 欢迎页大标题仍显示旧名「AI 原生文本编辑器」，改为 **6byte**。
+
 ## [0.1.3] - 2026-10-22
 
 ### Added
@@ -78,7 +88,7 @@
 
 ### Tooling
 
-- 新增 ESLint 10（flat config）、Prettier、Vitest；前端单测 64 例、Rust 单测 52 个用例（49 通过 + 3 个 ignored 性能探针）。
+- 新增 ESLint 10（flat config）、Prettier、Vitest；前端单测 67 例、Rust 单测 52 个用例（49 通过 + 3 个 ignored 性能探针）。
 - 新增 GitHub Actions CI（三平台：前端检查 + Rust fmt/clippy/test）。
 - 新增 `scripts/e2e-smoke.ps1`：通过 WebView2 DevTools 协议驱动安装版，覆盖单元测试到不了的 12 条路径
   （大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏标签冲突三选一 / 跨文件搜索跳转 / 查找替换 /

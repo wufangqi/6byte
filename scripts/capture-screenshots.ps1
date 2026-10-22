@@ -108,8 +108,14 @@ try {
 $page = Get-PageTarget
 $socket = Connect-Cdp $page.webSocketDebuggerUrl
 Set-Session $socket @()
+# Seed a couple of recent files so the screenshot shows the delete controls.
+$repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$demoRecent = @((Join-Path $repoRoot 'README.md'), (Join-Path $repoRoot 'CHANGELOG.md'))
+$recentJson = ($demoRecent | ForEach-Object { "'" + $_.Replace('\', '\\') + "'" }) -join ','
+Eval-Js $socket "localStorage.setItem('ainative.recent', JSON.stringify([$recentJson])); 'ok'" | Out-Null
+Eval-Js $socket 'location.reload(); "ok"' | Out-Null
 $socket.Dispose()
-Start-Sleep -Seconds 3
+Start-Sleep -Seconds 4
 $page = Get-PageTarget
 $socket = Connect-Cdp $page.webSocketDebuggerUrl
 Save-Screenshot $socket (Join-Path $OutDir 'welcome.png')

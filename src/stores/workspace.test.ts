@@ -162,6 +162,26 @@ describe("reloadLargeTab", () => {
   });
 });
 
+describe("removeRecent", () => {
+  it("drops a single entry and keeps the order", () => {
+    useWorkspace.getState().setRecent(["D:/a.md", "D:/b.md", "D:/c.md"]);
+    useWorkspace.getState().removeRecent("D:/b.md");
+    expect(useWorkspace.getState().recent).toEqual(["D:/a.md", "D:/c.md"]);
+  });
+
+  it("ignores paths that are not in the list", () => {
+    useWorkspace.getState().setRecent(["D:/a.md"]);
+    useWorkspace.getState().removeRecent("D:/missing.md");
+    expect(useWorkspace.getState().recent).toEqual(["D:/a.md"]);
+  });
+
+  it("clears the list when the last entry is removed", () => {
+    useWorkspace.getState().setRecent(["D:/a.md"]);
+    useWorkspace.getState().removeRecent("D:/a.md");
+    expect(useWorkspace.getState().recent).toEqual([]);
+  });
+});
+
 describe("closeTab", () => {
   it("activates the neighbouring tab when the active one closes", () => {
     const first = tabFromFile(makeFile("D:/tmp/a.md"));

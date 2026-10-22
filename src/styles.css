@@ -1007,3 +1007,63 @@ code {
   background: var(--fg);
   opacity: 0.9;
 }
+
+/* ---------- recent files: delete controls ---------- */
+
+.welcome__recent-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.welcome__recent-head h2 {
+  margin: 0;
+}
+
+.welcome__recent-clear {
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.welcome__recent-clear:hover {
+  color: var(--accent);
+}
+
+.welcome__recent-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.welcome__recent-item .link {
+  flex: 1;
+  min-width: 0;
+}
+
+.welcome__recent-remove {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.welcome__recent-item:hover .welcome__recent-remove,
+.welcome__recent-remove:focus-visible {
+  opacity: 1;
+}
+
+.welcome__recent-remove:hover {
+  background: rgba(247, 118, 142, 0.15);
+  color: var(--danger);
+}

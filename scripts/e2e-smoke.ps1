@@ -85,6 +85,17 @@ function Invoke-CdpEval {
   throw 'CDP evaluate timed out'
 }
 
+function Wait-AppReady {
+  param($Socket, [int]$TimeoutSeconds = 30)
+  $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+  while ((Get-Date) -lt $deadline) {
+    $ready = Invoke-CdpEval $Socket "document.querySelector('.app') !== null"
+    if ($ready -eq $true) { return }
+    Start-Sleep -Milliseconds 300
+  }
+  throw "WebView2 app did not become ready within $TimeoutSeconds s"
+}
+
 function Set-SessionAndReload {
   param([string[]]$Paths, [int]$SettleSeconds = 5)
   $json = ($Paths | ForEach-Object { "'" + $_.Replace('\', '\\') + "'" }) -join ','
@@ -98,7 +109,10 @@ function Set-SessionAndReload {
   # The reload replaces the target's execution context, so reconnect.
   $page = Get-PageTarget
   if (-not $page) { throw "WebView2 page target disappeared after reload" }
-  Connect-Cdp $page.webSocketDebuggerUrl
+  $socket = Connect-Cdp $page.webSocketDebuggerUrl
+  Wait-AppReady $socket
+  Start-Sleep -Milliseconds 800
+  $socket
 }
 
 try {
@@ -112,7 +126,7 @@ try {
 }
 
 # ---------------------------------------------------------------- large file
-Write-Host '[1/13] large-file staged loading' -ForegroundColor Cyan
+Write-Host '[1/14] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."
   $stream = [IO.File]::Create($LogFile)
@@ -157,7 +171,7 @@ Assert-True ($after.lines -gt 0) 'window still rendered after scroll'
 $socket.Dispose()
 
 # ------------------------------------------------- mixed EOL + missing file
-Write-Host '[2/13] mixed line endings badge' -ForegroundColor Cyan
+Write-Host '[2/14] mixed line endings badge' -ForegroundColor Cyan
 $fixture = Join-Path $PSScriptRoot '..\src-tauri\fixtures\mixed-eol.txt'
 $missing = Join-Path $PSScriptRoot '..\src-tauri\fixtures\does-not-exist.txt'
 $socket = Set-SessionAndReload -Paths @($fixture, $missing)
@@ -173,12 +187,12 @@ $mixedResult = Invoke-CdpEval $socket ($mixed -replace "`r`n", ' ')
 Assert-True ($mixedResult.warnings -contains '混合换行') 'mixed EOL badge shown' "$($mixedResult.warnings -join ',')"
 $socket.Dispose()
 
-Write-Host '[3/13] session restore with a missing path' -ForegroundColor Cyan
+Write-Host '[3/14] session restore with a missing path' -ForegroundColor Cyan
 Assert-True ($mixedResult.banner -like '*已无法打开*') 'one-off banner for skipped files' "$($mixedResult.banner)"
 Assert-True ($mixedResult.session -notlike '*does-not-exist*') 'missing path dropped from session' "$($mixedResult.session)"
 
 # ------------------------------------------- external change (T13 file watch)
-Write-Host '[4/13] external change reloads a clean tab' -ForegroundColor Cyan
+Write-Host '[4/14] external change reloads a clean tab' -ForegroundColor Cyan
 $watchedFile = Join-Path $env:TEMP 'ainative-e2e-watch.txt'
 Set-Content -Path $watchedFile -Value 'before external change' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($watchedFile)
@@ -196,7 +210,7 @@ $socket.Dispose()
 Remove-Item $watchedFile -ErrorAction SilentlyContinue
 
 # ------------------------------- dirty tab: three-way conflict prompt (T13)
-Write-Host '[5/13] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
+Write-Host '[5/14] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
 $conflictFile = Join-Path $env:TEMP 'ainative-e2e-conflict.txt'
 Set-Content -Path $conflictFile -Value 'base content' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($conflictFile)
@@ -252,7 +266,7 @@ $socket.Dispose()
 Remove-Item $conflictFile -ErrorAction SilentlyContinue
 
 # ------------------------------------------- cross-file search (T14 grep)
-Write-Host '[6/13] cross-file search opens the hit' -ForegroundColor Cyan
+Write-Host '[6/14] cross-file search opens the hit' -ForegroundColor Cyan
 $grepDir = Join-Path $env:TEMP 'ainative-e2e-grep'
 New-Item -ItemType Directory -Force -Path $grepDir | Out-Null
 $grepTarget = Join-Path $grepDir 'target-note.txt'
@@ -314,7 +328,7 @@ $socket.Dispose()
 Remove-Item $grepDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- find & replace panel (T16)
-Write-Host '[7/13] search panel finds and replaces' -ForegroundColor Cyan
+Write-Host '[7/14] search panel finds and replaces' -ForegroundColor Cyan
 $findDir = Join-Path $env:TEMP 'ainative-e2e-find'
 New-Item -ItemType Directory -Force -Path $findDir | Out-Null
 $findFile = Join-Path $findDir 'find-target.txt'
@@ -367,7 +381,7 @@ $socket.Dispose()
 Remove-Item $findDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown split preview (T19)
-Write-Host '[8/13] markdown split preview renders live' -ForegroundColor Cyan
+Write-Host '[8/14] markdown split preview renders live' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewFile = Join-Path $previewDir 'preview-target.md'
@@ -421,7 +435,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- export HTML (T19)
-Write-Host '[9/13] preview exports a self-contained HTML file' -ForegroundColor Cyan
+Write-Host '[9/14] preview exports a self-contained HTML file' -ForegroundColor Cyan
 $exportDir = Join-Path $env:TEMP 'ainative-e2e-export'
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
 $exportFile = Join-Path $exportDir 'export-target.md'
@@ -456,7 +470,7 @@ Assert-True ($htmlText -like '*<title>export-target</title>*') 'exported html ha
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown outline (T19)
-Write-Host '[10/13] markdown outline jumps inside the preview' -ForegroundColor Cyan
+Write-Host '[10/14] markdown outline jumps inside the preview' -ForegroundColor Cyan
 $outlineDir = Join-Path $env:TEMP 'ainative-e2e-outline'
 New-Item -ItemType Directory -Force -Path $outlineDir | Out-Null
 $outlineFile = Join-Path $outlineDir 'outline-target.md'
@@ -508,7 +522,7 @@ $socket.Dispose()
 Remove-Item $outlineDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- image paste into assets/ (T19)
-Write-Host '[11/13] pasted image is saved and previewed' -ForegroundColor Cyan
+Write-Host '[11/14] pasted image is saved and previewed' -ForegroundColor Cyan
 $pasteDir = Join-Path $env:TEMP 'ainative-e2e-paste'
 New-Item -ItemType Directory -Force -Path $pasteDir | Out-Null
 $pasteFile = Join-Path $pasteDir 'paste-target.md'
@@ -546,7 +560,7 @@ Assert-True ($assetFiles.Count -eq 1) 'image bytes written to assets/' "count=$(
 Remove-Item $pasteDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- shiki code highlighting (T19)
-Write-Host '[12/13] code fences are highlighted by shiki' -ForegroundColor Cyan
+Write-Host '[12/14] code fences are highlighted by shiki' -ForegroundColor Cyan
 $highlightDir = Join-Path $env:TEMP 'ainative-e2e-highlight'
 New-Item -ItemType Directory -Force -Path $highlightDir | Out-Null
 $highlightFile = Join-Path $highlightDir 'highlight-target.md'
@@ -580,7 +594,7 @@ $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- resizable split divider (T19)
-Write-Host '[13/13] split divider is draggable' -ForegroundColor Cyan
+Write-Host '[13/14] split divider is draggable' -ForegroundColor Cyan
 $splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
 New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
 $splitFile = Join-Path $splitDir 'split-target.md'
@@ -623,6 +637,50 @@ Assert-True ($dragged.after -lt $dragged.before - 20) 'dragging left narrows the
 Assert-True ([math]::Abs($dragged.reset - $dragged.half) -le 4) 'double-click restores the 50/50 split' "reset=$([math]::Round($dragged.reset,0)) half=$([math]::Round($dragged.half,0))"
 $socket.Dispose()
 Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
+
+Write-Host ''
+
+# --------------------------------------- recent files: delete (v0.1.4)
+Write-Host '[14/14] recent files can be deleted' -ForegroundColor Cyan
+$recentDir = Join-Path $env:TEMP 'ainative-e2e-recent'
+New-Item -ItemType Directory -Force -Path $recentDir | Out-Null
+$recentA = Join-Path $recentDir 'recent-a.md'
+$recentB = Join-Path $recentDir 'recent-b.md'
+Set-Content -Path $recentA -Value '# A' -Encoding UTF8
+Set-Content -Path $recentB -Value '# B' -Encoding UTF8
+$socket = Set-SessionAndReload -Paths @()
+$recentJson = "['" + $recentA.Replace('\', '\\') + "','" + $recentB.Replace('\', '\\') + "']"
+Invoke-CdpEval $socket "localStorage.setItem('ainative.recent', JSON.stringify($recentJson)); 'ok'" | Out-Null
+Invoke-CdpEval $socket 'location.reload(); "ok"' | Out-Null
+$socket.Dispose()
+Start-Sleep -Seconds 4
+$page = Get-PageTarget
+$socket = Connect-Cdp $page.webSocketDebuggerUrl
+
+$remove = @'
+(async () => {
+  const items = () => [...document.querySelectorAll('.welcome__recent-item')];
+  const before = items().length;
+  const buttons = document.querySelectorAll('.welcome__recent-remove').length;
+  items()[0]?.querySelector('.welcome__recent-remove')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const stored = localStorage.getItem('ainative.recent') ?? '';
+  return {
+    before,
+    buttons,
+    after: items().length,
+    stillHasRemoved: stored.includes('recent-a.md'),
+    stillHasKept: stored.includes('recent-b.md'),
+  };
+})()
+'@
+$removed = Invoke-CdpEval $socket ($remove -replace "`r`n", ' ')
+Assert-True ($removed.before -eq 2) 'recent list shows both entries' "before=$($removed.before)"
+Assert-True ($removed.buttons -eq 2) 'every entry has a delete button' "buttons=$($removed.buttons)"
+Assert-True ($removed.after -eq 1) 'clicking delete removes exactly one entry' "after=$($removed.after)"
+Assert-True ($removed.stillHasRemoved -eq $false -and $removed.stillHasKept) 'localStorage keeps only the remaining entry' "removedA=$($removed.stillHasRemoved) keptB=$($removed.stillHasKept)"
+$socket.Dispose()
+Remove-Item $recentDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
 

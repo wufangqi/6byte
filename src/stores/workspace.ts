@@ -52,6 +52,8 @@ interface WorkspaceState {
   setError(message: string | null): void;
   setNotice(message: string | null): void;
   setRecent(paths: string[]): void;
+  /** Remove one entry from the recent list (e.g. deleted/moved file). */
+  removeRecent(path: string): void;
 }
 
 export const countLines = (content: string): number =>
@@ -241,6 +243,8 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setError: (message) => set({ error: message }),
   setNotice: (message) => set({ notice: message }),
   setRecent: (paths) => set({ recent: dedupe(paths) }),
+  removeRecent: (path) =>
+    set((state) => ({ recent: state.recent.filter((item) => item !== path) })),
 }));
 
 export const selectActiveTab = (state: WorkspaceState): Tab | null =>
