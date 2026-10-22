@@ -97,7 +97,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | Rust unit tests | `cargo test --lib` | ✅ 53 passed / 0 failed (+4 ignored perf probes; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus) |
 | Rust formatting | `cargo fmt --all -- --check` | ✅ pass |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ pass (locally needs `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`, see docs/perf.md) |
-| Installers | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.25 MB |
+| Installers | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB |
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
 | E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 84/84 across 21 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence) |
 | Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
@@ -113,7 +113,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 35 MB open to first paint (read-only) | ≤ 1 s | **458 ms** (including app startup, measured via CDP) |
 | Input latency P95 | ≤ 16 ms | **5.6 ms** (1000-line L0); L1: 10 MB **3.0 ms**, 19 MB **2.7 ms** |
 | Memory with 3 files | ≤ 260 MB (idle baseline ≤ 230 MB) | ⚠️ idle private memory **220 MB** (WebView2 baseline); down to 159 MB with GPU disabled (see perf.md) |
-| Installer | ≤ 20 MB | ✅ 2.10 MB (NSIS) |
+| Installer | ≤ 20 MB | ✅ 4.25 MB (NSIS, current build) |
 
 ## Implemented
 
