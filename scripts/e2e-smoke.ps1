@@ -126,6 +126,18 @@ try {
 }
 
 # ---------------------------------------------------------------- large file
+# --------------------------------------- 0. reset persisted state
+# The app restores its last session on launch; a stale session (e.g. files the
+# previous run deleted) makes the first steps flaky. Clear it before testing.
+Write-Host '[0/15] reset persisted session and recent files' -ForegroundColor DarkCyan
+$resetPage = Get-PageTarget
+$resetSocket = Connect-Cdp $resetPage.webSocketDebuggerUrl
+Wait-AppReady $resetSocket
+Invoke-CdpEval $resetSocket "localStorage.setItem('ainative.session', '[]'); localStorage.setItem('ainative.recent', '[]'); 'ok'" | Out-Null
+Invoke-CdpEval $resetSocket 'location.reload(); "ok"' | Out-Null
+$resetSocket.Dispose()
+Start-Sleep -Seconds 4
+
 Write-Host '[1/15] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."

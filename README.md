@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.5（编码内核、数据安全加固、大文件分级只读预览、文件监听、跨文件 grep、Markdown 分屏预览/导出/大纲/图片粘贴/Shiki 高亮），下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付；v0.1.5 已发布（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki）；标题栏、主题、按文件预览、Mermaid/KaTeX 已合入，等待 v0.1.6 发版；下一步 M3 AI 层**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -35,7 +35,7 @@
 
 | 层 | 选型 |
 |---|---|
-| 桌面运行时 | Tauri 2（系统 WebView，安装包 1.5–2 MB） |
+| 桌面运行时 | Tauri 2（系统 WebView，安装包约 4–5 MB，含 KaTeX/Mermaid 按需资源） |
 | 前端 | React 19 + TypeScript + Vite 6 |
 | 编辑器 | CodeMirror 6（多选、折叠、搜索面板、Markdown 高亮） |
 | Markdown 预览 | markdown-it 15（分屏 + 滚动同步）；KaTeX / Mermaid 按需加载 |
@@ -88,14 +88,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 77/77（store + 格式化 + 大文件窗口几何 + markdown 渲染/图片路径 + 大纲 + 滚动同步 + HTML 导出 + 语言别名 + 分屏比例） |
-| 前端打包 | `pnpm build` | ✅ 主包 947 KB / gzip 325 KB（+ 按需 Shiki chunk，总计 2.3 MB） |
-| Rust 单测 | `cargo test --lib` | ✅ 52 passed / 0 failed（+4 ignored 性能探针；编码 + 文件命令 + 大文件索引/区间 + 文件监听 + grep + 图片落盘 + fixture 语料） |
+| 前端单测 | `pnpm test` | ✅ 102/102（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、标题栏与预览状态） |
+| 前端打包 | `pnpm build` | ✅ 主包 961 KB / gzip 330 KB（+ 按需 Shiki/KaTeX/Mermaid chunk，dist 总计 8.6 MB） |
+| Rust 单测 | `cargo test --lib` | ✅ 53 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
-| 安装包 | `pnpm tauri build` | ✅ MSI 2.75 MB / NSIS 2.09 MB |
+| 安装包 | `pnpm tauri build` | ✅ MSI 4.95 MB / NSIS 4.24 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 59/59（大文件预览 / 混合换行 / 会话失效 / 外部修改重载 / 脏冲突三选一 / 跨文件搜索跳转 / 查找替换 / Markdown 分屏预览 / 导出 HTML / 大纲跳转 / 图片粘贴 / Shiki 高亮 / 分屏拖拽 / 最近删除） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 59/59（第 0 步先清空会话；大文件预览、混合换行、会话失效、外部修改、脏冲突、grep 跳转、查找替换、Markdown 预览、导出、大纲、图片粘贴、Shiki、分屏拖拽、最近删除） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
@@ -134,6 +134,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 - [x] 大纲面板：标题自动锚点 + 「大纲（N）」浮层，点击跳转到预览对应位置
 - [x] 图片粘贴：编辑器内粘贴图片自动存到 `assets/` 并插入 Markdown 引用，预览经 data URI 显示
 - [x] Mermaid 图表与 KaTeX 公式：预览里按需渲染；图表失败留在代码块，公式无法解析时仍显示原文
+- [x] 自定义标题栏：文件菜单（新建 / 新窗口 / 打开文件 / 打开文件夹 / 打开最近 / 保存 / 另存为 / 保存全部）与视图菜单（浅色 / 深色 / 跟随系统），窗口按钮与应用图标
+- [x] 主题：浅色 / 深色 / 跟随系统，写入 `localStorage`（`ainative.theme`），编辑器与预览跟随
+- [x] 按文件预览：每个标签独立记住预览开关，重新打开文件回到编辑模式
+- [x] 打开文件夹（`list_text_files`，一次最多 40 个文本文件）与新建窗口（空白会话，只有主窗口恢复/保存会话）
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
 
 ## 尚未实现（按路线图 M1 → M4）
@@ -147,8 +151,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 src/                  React 前端
   editor/             CM6 封装、扩展、活动视图 registry（唯一可 import @codemirror/*）
-  features/           标签栏 / 状态栏 / 欢迎页 / 弹窗 / 大文件只读查看器 / 跨文件搜索面板 / Markdown 分屏预览、导出、大纲与图片粘贴
-  ipc/                所有 Tauri command 与事件的类型化封装（唯一可 import @tauri-apps/*）
+  features/           标题栏菜单 / 主题 / 标签栏 / 状态栏 / 欢迎页 / 弹窗 / 大文件查看器 / grep / Markdown 预览、导出、大纲、图片粘贴、Mermaid 与 KaTeX
+  ipc/                所有 Tauri command 与事件的类型化封装（唯一可 import @tauri-apps/*；含窗口会话归属）
   stores/             zustand 状态
   lib/                纯工具函数
 src-tauri/            Rust 核心层
@@ -171,6 +175,8 @@ docs/                 项目梳理、待办清单、性能实测、发布验收�
 - 切换 Markdown 预览会重挂编辑器，同样会重置该标签的撤销历史。
 - 预览高亮只覆盖 10 种常用语言，其他语言显示为纯文本。
 - 图片粘贴默认存到源文件同目录的 `assets/`；预览/导出通过 Rust 命令读取并内联为 data URI（单张上限 32 MB）。
+- 浅色主题下代码高亮（Shiki）与 Mermaid 图仍使用深色配色，待 T53 统一。
+- 自定义标题栏目前只在 Windows 做过验证，macOS / Linux 的窗口按钮与拖拽区域待适配。
 - 导出 HTML 默认写到源文件同目录的同名 `.html`，再次导出会覆盖该文件。
 - 脏标记只增不减：撤销回到保存点后仍显示未保存。
 - 混合换行文件保存时会统一为主导 EOL（保存前会弹窗确认）。
