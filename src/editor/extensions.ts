@@ -8,7 +8,7 @@ import {
   syntaxHighlighting,
 } from "@codemirror/language";
 import { highlightSelectionMatches, searchKeymap } from "@codemirror/search";
-import { EditorState, type Extension } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import {
   crosshairCursor,
   drawSelection,
@@ -21,55 +21,61 @@ import {
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
+import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
 
-/** Dark editor theme driven by the app's CSS variables. */
-const editorTheme = EditorView.theme(
-  {
-    "&": {
-      height: "100%",
-      fontSize: "14px",
-      backgroundColor: "var(--bg-editor)",
-      color: "var(--fg)",
+/** Swapped when the appearance changes, without recreating the editor. */
+export const themeCompartment = new Compartment();
+
+/** Editor chrome driven by the app's CSS variables. `dark` only flips CodeMirror's own panels. */
+export function editorChrome(resolved: ResolvedTheme): Extension {
+  return EditorView.theme(
+    {
+      "&": {
+        height: "100%",
+        fontSize: "14px",
+        backgroundColor: "var(--bg-editor)",
+        color: "var(--fg)",
+      },
+      ".cm-scroller": {
+        fontFamily: "var(--font-mono)",
+        lineHeight: "1.65",
+        overflow: "auto",
+      },
+      ".cm-content": {
+        padding: "14px 0",
+        caretColor: "var(--accent)",
+      },
+      ".cm-gutters": {
+        backgroundColor: "var(--bg-editor)",
+        color: "var(--fg-dim)",
+        border: "none",
+        paddingRight: "6px",
+      },
+      ".cm-activeLine": { backgroundColor: "var(--bg-active-line)" },
+      ".cm-activeLineGutter": {
+        backgroundColor: "var(--bg-active-line)",
+        color: "var(--fg)",
+      },
+      "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+        backgroundColor: "var(--selection) !important",
+      },
+      ".cm-cursor, .cm-dropCursor": {
+        borderLeftColor: "var(--accent)",
+        borderLeftWidth: "2px",
+      },
+      ".cm-foldPlaceholder": {
+        backgroundColor: "transparent",
+        border: "none",
+        color: "var(--fg-dim)",
+      },
+      ".cm-searchMatch": { backgroundColor: "rgba(255, 200, 0, 0.25)" },
+      ".cm-searchMatch.cm-searchMatch-selected": {
+        backgroundColor: "rgba(255, 200, 0, 0.45)",
+      },
     },
-    ".cm-scroller": {
-      fontFamily: "var(--font-mono)",
-      lineHeight: "1.65",
-      overflow: "auto",
-    },
-    ".cm-content": {
-      padding: "14px 0",
-      caretColor: "var(--accent)",
-    },
-    ".cm-gutters": {
-      backgroundColor: "var(--bg-editor)",
-      color: "var(--fg-dim)",
-      border: "none",
-      paddingRight: "6px",
-    },
-    ".cm-activeLine": { backgroundColor: "var(--bg-active-line)" },
-    ".cm-activeLineGutter": {
-      backgroundColor: "var(--bg-active-line)",
-      color: "var(--fg)",
-    },
-    "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-      backgroundColor: "var(--selection) !important",
-    },
-    ".cm-cursor, .cm-dropCursor": {
-      borderLeftColor: "var(--accent)",
-      borderLeftWidth: "2px",
-    },
-    ".cm-foldPlaceholder": {
-      backgroundColor: "transparent",
-      border: "none",
-      color: "var(--fg-dim)",
-    },
-    ".cm-searchMatch": { backgroundColor: "rgba(255, 200, 0, 0.25)" },
-    ".cm-searchMatch.cm-searchMatch-selected": {
-      backgroundColor: "rgba(255, 200, 0, 0.45)",
-    },
-  },
-  { dark: true }
-);
+    { dark: resolved === "dark" }
+  );
+}
 
 /** Chinese labels for the CodeMirror search panel (T16). */
 const chinesePhrases = EditorState.phrases.of({
@@ -142,7 +148,7 @@ export function buildExtensions(
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
     chinesePhrases,
     languageFor(filename),
-    editorTheme,
+    themeCompartment.of(editorChrome(getResolvedTheme())),
     EditorView.domEventHandlers({
       paste: (event, view) => {
         const handler = options.onPasteImage;

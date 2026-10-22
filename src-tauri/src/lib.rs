@@ -29,6 +29,7 @@ pub fn run() {
             commands::grep_files,
             commands::save_asset,
             commands::read_binary_base64,
+            commands::list_text_files,
             commands::watch_file,
             commands::unwatch_file
         ])

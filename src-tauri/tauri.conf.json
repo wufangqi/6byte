@@ -20,6 +20,8 @@
         "minWidth": 640,
         "minHeight": 420,
         "resizable": true,
+        "decorations": false,
+        "shadow": true,
         "dragDropEnabled": true,
         "center": true
       }

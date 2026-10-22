@@ -24,6 +24,8 @@ export interface Tab {
   chars: number;
   /** Bumped when the buffer is replaced from disk, which remounts the editor. */
   version: number;
+  /** Markdown split preview for this tab only. New and reopened files start closed. */
+  preview: boolean;
 }
 
 interface WorkspaceState {
@@ -54,6 +56,8 @@ interface WorkspaceState {
   setRecent(paths: string[]): void;
   /** Remove one entry from the recent list (e.g. deleted/moved file). */
   removeRecent(path: string): void;
+  /** Turn Markdown preview on or off for one tab. Other tabs stay as they are. */
+  setPreview(id: string, on: boolean): void;
 }
 
 export const countLines = (content: string): number =>
@@ -87,6 +91,7 @@ export const tabFromFile = (file: OpenedFile): Tab => ({
   lines: countLines(file.content),
   chars: file.content.length,
   version: 0,
+  preview: false,
 });
 
 /** Read-only tab backed by `read_range`; the whole file never reaches the frontend. */
@@ -103,6 +108,7 @@ export const tabFromLarge = (info: LargeFileInfo): Tab => ({
   lines: info.lineCount,
   chars: 0,
   version: 0,
+  preview: false,
 });
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
@@ -131,6 +137,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
           lines: 1,
           chars: 0,
           version: 0,
+          preview: false,
         },
       ],
       activeId: id,
@@ -245,6 +252,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
   setRecent: (paths) => set({ recent: dedupe(paths) }),
   removeRecent: (path) =>
     set((state) => ({ recent: state.recent.filter((item) => item !== path) })),
+
+  setPreview: (id, on) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id && tab.mode === "text" ? { ...tab, preview: on } : tab
+      ),
+    })),
 }));
 
 export const selectActiveTab = (state: WorkspaceState): Tab | null =>

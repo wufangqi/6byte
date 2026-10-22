@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { buildExtensions } from "./extensions";
+import { buildExtensions, editorChrome, themeCompartment } from "./extensions";
+import { getResolvedTheme, subscribeTheme } from "../features/theme";
 import { registerView, unregisterView, notifyDocChanged } from "./registry";
 
 interface Props {
@@ -71,8 +72,14 @@ export default function CodeEditor({
     });
     registerView(tabId, view);
     view.focus();
+    const unsubscribeTheme = subscribeTheme(() => {
+      view.dispatch({
+        effects: themeCompartment.reconfigure(editorChrome(getResolvedTheme())),
+      });
+    });
 
     return () => {
+      unsubscribeTheme();
       // Preserve edits made in this tab before the view is destroyed. The version
       // guard keeps a stale view from overwriting a freshly reloaded buffer.
       onFlushRef.current(tabId, view.state.doc.toString(), version);

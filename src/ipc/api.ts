@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { windowOwnsSession } from "./sessionOwner";
 import type {
   FileChangeEvent,
   FileMeta,
@@ -16,6 +17,13 @@ import type {
 
 /** True when running inside the Tauri webview (false for plain `pnpm dev`). */
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+export { windowOwnsSession } from "./sessionOwner";
+
+export function currentWindowOwnsSession(): boolean {
+  if (!isTauri) return true;
+  return windowOwnsSession(getCurrentWindow().label);
+}
 
 const TEXT_FILTERS = [
   {
@@ -152,6 +160,37 @@ export async function pickSavePath(suggestedName: string): Promise<string | null
     filters: TEXT_FILTERS,
   });
   return path ?? null;
+}
+
+/** Text files sitting directly in a folder (nested folders are not opened). */
+export async function listTextFiles(path: string): Promise<string[]> {
+  requireTauri("打开文件夹");
+  return invoke<string[]>("list_text_files", { path });
+}
+
+/** Open a fresh editor window. It does not reopen the files in this window. */
+export async function openNewWindow(): Promise<void> {
+  requireTauri("新建窗口");
+  const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  const created = new WebviewWindow(`editor-${Date.now()}`, {
+    url: "/",
+    title: "6byte",
+    width: 1280,
+    height: 800,
+    minWidth: 640,
+    minHeight: 420,
+    center: true,
+    resizable: true,
+    decorations: false,
+    shadow: true,
+    dragDropEnabled: true,
+  });
+  await new Promise<void>((resolve, reject) => {
+    void created.once("tauri://created", () => resolve());
+    void created.once("tauri://error", (event) => {
+      reject(new Error(typeof event.payload === "string" ? event.payload : "无法新建窗口"));
+    });
+  });
 }
 
 /** Pick a folder (used as the cross-file search root). */

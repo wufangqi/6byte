@@ -10,13 +10,7 @@ export default function TabBar({ onClose }: Props) {
   const setActive = useWorkspace((s) => s.setActive);
   const newTab = useWorkspace((s) => s.newTab);
 
-  if (tabs.length === 0) {
-    return (
-      <div className="tabbar tabbar--empty">
-        <span className="tabbar__brand">6byte</span>
-      </div>
-    );
-  }
+  if (tabs.length === 0) return null;
 
   return (
     <div className="tabbar">
