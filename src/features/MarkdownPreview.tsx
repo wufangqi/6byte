@@ -4,6 +4,7 @@ import { getDocText, getScrollElement, subscribeDocChanges } from "../editor/reg
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { renderKatexHtml, renderMermaidSvg } from "./diagrams";
+import { useI18n } from "../i18n";
 import { useResolvedTheme } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { highlightCode } from "./highlight";
@@ -34,6 +35,7 @@ const renderAll = (tabId: string, baseDir: string | null) => {
  */
 export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Props) {
   const resolvedTheme = useResolvedTheme();
+  const { t } = useI18n();
   const [rendered, setRendered] = useState(() => renderAll(tabId, baseDir));
   const [outlineOpen, setOutlineOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -202,7 +204,7 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
       return;
     }
     event.preventDefault();
-    useWorkspace.getState().setError("预览暂不支持在应用内打开外部链接（M2 后续接入系统浏览器）。");
+    useWorkspace.getState().setError(t("preview.externalLink"));
   };
 
   const jumpTo = (slug: string) => {
@@ -230,13 +232,15 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
           type="button"
           className={`markdown-preview__outline-toggle ${outlineOpen ? "is-on" : ""}`}
           disabled={headings.length === 0}
-          title="显示 / 隐藏大纲"
+          title={t("preview.outlineToggle")}
           onClick={() => setOutlineOpen((open) => !open)}
         >
-          大纲{headings.length > 0 ? `（${headings.length}）` : ""}
+          {headings.length > 0
+            ? t("preview.outlineCount", { count: headings.length })
+            : t("preview.outline")}
         </button>
         <button type="button" className="markdown-preview__export" onClick={onExport}>
-          导出 HTML
+          {t("preview.export")}
         </button>
       </div>
       <div className="markdown-preview__scroll" ref={scrollerRef} onClick={onPreviewClick}>
@@ -247,18 +251,22 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
             dangerouslySetInnerHTML={{ __html: html }}
           />
         ) : (
-          <p className="markdown-preview__empty">没有可预览的内容。</p>
+          <p className="markdown-preview__empty">{t("preview.empty")}</p>
         )}
       </div>
       {outlineOpen && headings.length > 0 && (
-        <div className="markdown-preview__outline" role="navigation" aria-label="大纲">
+        <div
+          className="markdown-preview__outline"
+          role="navigation"
+          aria-label={t("preview.outlineLabel")}
+        >
           {headings.map((heading: OutlineItem) => (
             <button
               key={`${heading.slug}:${heading.line}`}
               type="button"
               className="markdown-preview__outline-item"
               style={{ paddingLeft: `${10 + (heading.level - 1) * 12}px` }}
-              title={`第 ${heading.line} 行`}
+              title={t("preview.line", { line: heading.line })}
               onClick={() => jumpTo(heading.slug)}
             >
               {heading.text}

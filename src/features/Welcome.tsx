@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import { useWorkspace } from "../stores/workspace";
 import { isTauri } from "../ipc/api";
 
@@ -13,43 +14,44 @@ export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
   const recent = useWorkspace((s) => s.recent);
   const removeRecent = useWorkspace((s) => s.removeRecent);
   const setRecent = useWorkspace((s) => s.setRecent);
+  const { t } = useI18n();
 
   return (
     <div className="welcome">
       <div className="welcome__inner">
         <h1 className="welcome__title">6byte</h1>
-        <p className="welcome__sub">
-          打开 md / txt / log，随时让 AI 帮你改写。数据留在本机，默认不上传。
-        </p>
+        <p className="welcome__sub">{t("welcome.sub")}</p>
 
         <div className="welcome__actions">
           <button className="btn btn--primary" onClick={onOpen} disabled={!isTauri}>
-            打开文件
+            {t("welcome.open")}
             <kbd>Ctrl+O</kbd>
           </button>
           <button className="btn" onClick={onNew}>
-            新建
+            {t("welcome.new")}
             <kbd>Ctrl+N</kbd>
           </button>
         </div>
 
         {!isTauri && (
           <p className="welcome__hint">
-            当前是浏览器预览模式：文件读写需要运行 <code>pnpm tauri dev</code>。
+            {t("welcome.browserBefore")}
+            <code>pnpm tauri dev</code>
+            {t("welcome.browserAfter")}
           </p>
         )}
 
         {recent.length > 0 && (
           <div className="welcome__recent">
             <div className="welcome__recent-head">
-              <h2>最近打开</h2>
+              <h2>{t("welcome.recent")}</h2>
               <button
                 type="button"
                 className="welcome__recent-clear"
-                title="清空最近打开列表"
+                title={t("welcome.clearTitle")}
                 onClick={() => setRecent([])}
               >
-                清空
+                {t("welcome.clear")}
               </button>
             </div>
             <ul>
@@ -62,8 +64,8 @@ export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
                   <button
                     type="button"
                     className="welcome__recent-remove"
-                    title="从最近打开中移除"
-                    aria-label={`从最近打开中移除 ${fileName(path)}`}
+                    title={t("welcome.removeTitle")}
+                    aria-label={t("welcome.removeLabel", { name: fileName(path) })}
                     onClick={(event) => {
                       event.stopPropagation();
                       removeRecent(path);

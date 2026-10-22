@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { localizeError } from "../i18n";
+import { useI18n } from "../i18n";
 import { grepFiles, pickDirectory } from "../ipc/api";
 import type { GrepResponse } from "../ipc/types";
 
@@ -9,9 +11,6 @@ interface Props {
   onOpenMatch(path: string, line: number): void;
 }
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
-
 /** Cross-file search panel (Ctrl+Shift+F), backed by Rust `regex`. */
 export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) {
   const [root, setRoot] = useState<string | null>(defaultRoot);
@@ -21,6 +20,7 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { t, tp } = useI18n();
 
   useEffect(() => {
     inputRef.current?.focus();
@@ -42,17 +42,17 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
       const directory = await pickDirectory();
       if (directory) setRoot(directory);
     } catch (e) {
-      setError(errorMessage(e));
+      setError(localizeError(e));
     }
   };
 
   const run = async () => {
     if (!root) {
-      setError("请先选择要搜索的文件夹。");
+      setError(t("grep.needRoot"));
       return;
     }
     if (!pattern.trim()) {
-      setError("搜索内容不能为空。");
+      setError(t("grep.needPattern"));
       return;
     }
 
@@ -62,11 +62,20 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
       setResult(await grepFiles(root, pattern, caseSensitive));
     } catch (e) {
       setResult(null);
-      setError(errorMessage(e));
+      setError(localizeError(e));
     } finally {
       setRunning(false);
     }
   };
+
+  const stats = result
+    ? t("grep.stats", {
+        files: tp("grep.files", result.filesMatched, { count: result.filesMatched }),
+        matches: tp("grep.matches", result.matches.length, { count: result.matches.length }),
+        scanned: tp("grep.scanned", result.filesScanned, { count: result.filesScanned }),
+        ms: result.elapsedMs,
+      })
+    : "";
 
   return (
     <div className="grep-backdrop" role="presentation" onMouseDown={onClose}>
@@ -74,20 +83,25 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
         className="grep"
         role="dialog"
         aria-modal="true"
-        aria-label="跨文件搜索"
+        aria-label={t("grep.title")}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className="grep__header">
-          <span className="grep__title">跨文件搜索</span>
+          <span className="grep__title">{t("grep.title")}</span>
           <button
             type="button"
             className="grep__root"
-            title="点击更换搜索目录"
+            title={t("grep.chooseRootTitle")}
             onClick={() => void chooseRoot()}
           >
-            {root ?? "选择文件夹…"}
+            {root ?? t("grep.chooseRoot")}
           </button>
-          <button type="button" className="grep__close" aria-label="关闭" onClick={onClose}>
+          <button
+            type="button"
+            className="grep__close"
+            aria-label={t("grep.close")}
+            onClick={onClose}
+          >
             ×
           </button>
         </div>
@@ -103,8 +117,8 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
             ref={inputRef}
             className="grep__input"
             value={pattern}
-            placeholder="正则表达式，例如 TODO|FIXME"
-            aria-label="搜索内容"
+            placeholder={t("grep.placeholder")}
+            aria-label={t("grep.inputLabel")}
             onChange={(event) => setPattern(event.target.value)}
           />
           <label className="grep__case">
@@ -113,10 +127,10 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
               checked={caseSensitive}
               onChange={(event) => setCaseSensitive(event.target.checked)}
             />
-            区分大小写
+            {t("grep.case")}
           </label>
           <button type="submit" className="btn btn--primary" disabled={running}>
-            {running ? "搜索中…" : "搜索"}
+            {running ? t("grep.searching") : t("grep.search")}
           </button>
         </form>
 
@@ -125,9 +139,8 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
         {result && (
           <>
             <div className="grep__stats">
-              {result.filesMatched} 个文件 · {result.matches.length} 处匹配 · 扫描{" "}
-              {result.filesScanned} 个文件 · {result.elapsedMs} ms
-              {result.truncated ? " · 结果已截断" : ""}
+              {stats}
+              {result.truncated ? t("grep.truncated") : ""}
             </div>
             <ul className="grep__results">
               {result.matches.map((match) => (
@@ -146,7 +159,7 @@ export default function GrepPanel({ defaultRoot, onClose, onOpenMatch }: Props) 
                   </button>
                 </li>
               ))}
-              {result.matches.length === 0 && <li className="grep__empty">没有匹配</li>}
+              {result.matches.length === 0 && <li className="grep__empty">{t("grep.empty")}</li>}
             </ul>
           </>
         )}

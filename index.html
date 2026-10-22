@@ -12,6 +12,10 @@
             stored === "light" || stored === "dark" || stored === "system" ? stored : "dark";
           var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
           var resolved = preference === "system" ? (systemDark ? "dark" : "light") : preference;
+          var storedLocale = localStorage.getItem("ainative.locale");
+          var locale = storedLocale === "en" ? "en" : "zh";
+          document.documentElement.setAttribute("lang", locale === "zh" ? "zh-CN" : "en");
+          document.documentElement.setAttribute("data-locale", locale);
           document.documentElement.setAttribute("data-theme", preference);
           document.documentElement.setAttribute("data-resolved", resolved);
         } catch (e) {}

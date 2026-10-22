@@ -1,0 +1,438 @@
+/**
+ * UI copy for every user-visible string (M-10).
+ *
+ * Keys are flat and namespaced with dots. `{name}` placeholders are filled by
+ * `translate()`. Plural keys: Chinese uses the base key, English defines the
+ * `_one` / `_other` variants and `tp()` picks one.
+ */
+import type { Locale } from "./locale";
+
+export type MessageCatalog = Record<string, string>;
+
+export const zh: MessageCatalog = {
+  // App shell
+  "app.ready": "就绪",
+  "app.close": "关闭",
+  "app.dropOverlay": "松开以打开文件",
+  "app.fileMissing": "文件不存在或已被移动",
+  "app.failures.session": "上次会话中的 {count} 个文件已无法打开，已跳过",
+  "app.failures.open": "无法打开 {count} 个文件",
+  "app.failures.more": "…共 {count} 个文件",
+  "app.failures.body": "{intro}：\n{detail}{more}",
+  "app.split.label": "拖拽调整编辑器与预览宽度",
+  "app.split.title": "拖拽调整宽度，双击恢复 50/50，方向键微调",
+  "app.folder.empty": "该文件夹里没有可打开的文本文件。",
+  "app.folder.limit": "已打开该文件夹中的前 40 个文本文件。",
+  "app.large.jump": "大文件为只读预览，暂不支持跳转到指定行。",
+  "app.large.save": "大文件为只读预览，暂不支持编辑保存（M1 后续版本会提供区间编辑）。",
+  "app.paste.needPath": "请先保存文件，再粘贴图片（图片会存到文件同目录的 assets/）。",
+  "app.paste.noDir": "无法定位文件所在目录。",
+  "app.paste.saved": "已保存图片：{path}",
+  "app.paste.alt": "图片",
+  "app.export.done": "已导出 HTML：{path}",
+  "app.export.untitled": "未命名文档",
+  "app.duplicate": "「{name}」已在另一个标签中打开，已切换到该标签。",
+  "app.deleted": "「{name}」已在编辑器之外被删除或移动。",
+
+  // Dialogs
+  "dialog.external.title": "文件已在外部修改",
+  "dialog.external.message":
+    "「{name}」在编辑器之外被改动过。\n磁盘：{diskSize} · {diskTime}\n编辑器打开时：{openSize} · {openTime}",
+  "dialog.cancel": "取消",
+  "dialog.reload": "加载磁盘版本",
+  "dialog.overwrite": "仍然覆盖",
+  "dialog.lossy.title": "编码有损，保存会改写原数据",
+  "dialog.lossy.message":
+    "「{name}」在打开时包含无法解码的字节，它们已被替换字符替代。\n继续保存会用替换字符覆盖磁盘上的原始字节，且不可撤销。",
+  "dialog.lossy.save": "仍然保存",
+  "dialog.mixed.title": "文件包含混合换行符",
+  "dialog.mixed.message":
+    "「{name}」同时包含多种换行符。\n保存会把全文统一为 {eol}，此操作不可撤销。",
+  "dialog.mixed.save": "统一为 {eol} 并保存",
+  "dialog.unsaved.title": "未保存的修改",
+  "dialog.unsaved.message": "「{name}」有未保存的修改。",
+  "dialog.discard": "不保存",
+  "dialog.save": "保存",
+  "dialog.closeAll.title": "关闭前还有未保存的修改",
+  "dialog.conflict.message":
+    "「{name}」在编辑器之外被改动过，而当前还有未保存的修改。\n磁盘：{diskSize} · {diskTime}",
+  "dialog.keepMine": "保留我的修改",
+  "dialog.later": "稍后处理",
+
+  // Menu bar
+  "menu.file": "文件",
+  "menu.view": "视图",
+  "menu.new": "新建",
+  "menu.newWindow": "新建窗口",
+  "menu.openFile": "打开文件…",
+  "menu.openFolder": "打开文件夹…",
+  "menu.openRecent": "打开最近",
+  "menu.recentEmpty": "没有最近打开的文件",
+  "menu.recent": "最近打开",
+  "menu.save": "保存",
+  "menu.saveAs": "另存为…",
+  "menu.saveAll": "全部保存",
+  "menu.theme": "主题",
+  "menu.light": "浅色",
+  "menu.dark": "深色",
+  "menu.system": "跟随系统",
+  "menu.language": "语言",
+  "menu.langZh": "中文",
+  "menu.langEn": "English",
+  "menu.minimize": "最小化",
+  "menu.maximize": "最大化",
+  "menu.restore": "还原",
+  "menu.close": "关闭",
+
+  // Tabs
+  "tab.untitled": "未命名 {n}",
+  "tab.unsaved": "未保存",
+  "tab.close": "关闭",
+  "tab.new": "新建 (Ctrl+N)",
+
+  // Welcome screen
+  "welcome.sub": "打开 md / txt / log，随时让 AI 帮你改写。数据留在本机，默认不上传。",
+  "welcome.open": "打开文件",
+  "welcome.new": "新建",
+  "welcome.browserBefore": "当前是浏览器预览模式：文件读写需要运行 ",
+  "welcome.browserAfter": "。",
+  "welcome.recent": "最近打开",
+  "welcome.clear": "清空",
+  "welcome.clearTitle": "清空最近打开列表",
+  "welcome.removeTitle": "从最近打开中移除",
+  "welcome.removeLabel": "从最近打开中移除 {name}",
+
+  // Status bar
+  "status.ready": "就绪",
+  "status.unsavedFile": "未保存的新文件",
+  "status.large": "只读",
+  "status.large.title": "大文件只读预览（按区间加载，不加载全文）",
+  "status.lossy": "编码有损",
+  "status.lossy.title": "文件包含无法解码的字节，保存会被要求确认",
+  "status.mixed": "混合换行",
+  "status.mixed.title": "文件混合了多种换行符，保存时会统一为主导换行符",
+  "status.preview": "预览",
+  "status.preview.title": "切换 Markdown 分屏预览（Ctrl+Shift+M）",
+  "status.lines": "{count} 行",
+  "status.chars": "{count} 字符",
+  "status.charset.title": "当前编码",
+  "status.eol.mixedTitle": "混合换行，保存后统一为该换行符",
+  "status.eol.title": "当前换行符",
+  "status.readonly": "只读预览",
+  "status.readonly.title": "大文件以只读方式打开，不写回磁盘",
+  "status.dirty": "未保存",
+  "status.saved": "已保存",
+
+  // Cross-file search
+  "grep.title": "跨文件搜索",
+  "grep.close": "关闭",
+  "grep.chooseRoot": "选择文件夹…",
+  "grep.chooseRootTitle": "点击更换搜索目录",
+  "grep.placeholder": "正则表达式，例如 TODO|FIXME",
+  "grep.inputLabel": "搜索内容",
+  "grep.case": "区分大小写",
+  "grep.search": "搜索",
+  "grep.searching": "搜索中…",
+  "grep.needRoot": "请先选择要搜索的文件夹。",
+  "grep.needPattern": "搜索内容不能为空。",
+  "grep.files": "{count} 个文件",
+  "grep.matches": "{count} 处匹配",
+  "grep.scanned": "扫描 {count} 个文件",
+  "grep.stats": "{files} · {matches} · {scanned} · {ms} ms",
+  "grep.truncated": " · 结果已截断",
+  "grep.empty": "没有匹配",
+
+  // Large-file viewer
+  "viewer.badge": "只读",
+  "viewer.notice": "大文件预览（不加载全文）· {size} · {lines}",
+  "viewer.lines": "{count} 行",
+  "viewer.loading": "加载中…",
+
+  // Markdown preview
+  "preview.outline": "大纲",
+  "preview.outlineCount": "大纲（{count}）",
+  "preview.outlineToggle": "显示 / 隐藏大纲",
+  "preview.outlineLabel": "大纲",
+  "preview.line": "第 {line} 行",
+  "preview.export": "导出 HTML",
+  "preview.empty": "没有可预览的内容。",
+  "preview.externalLink": "预览暂不支持在应用内打开外部链接（M2 后续接入系统浏览器）。",
+
+  // CodeMirror search panel
+  "editor.search.find": "查找",
+  "editor.search.replace": "替换",
+  "editor.search.next": "下一个",
+  "editor.search.previous": "上一个",
+  "editor.search.all": "全部选中",
+  "editor.search.replaceOne": "替换",
+  "editor.search.replaceAll": "全部替换",
+  "editor.search.close": "关闭",
+  "editor.search.matchCase": "区分大小写",
+  "editor.search.regexp": "正则",
+  "editor.search.byWord": "全词匹配",
+  "editor.search.currentMatch": "当前匹配",
+  "editor.search.onLine": "行",
+  "editor.search.go": "跳转",
+  "editor.search.goToLine": "跳转到行",
+  "editor.search.replacedLine": "已替换第 {line} 行的匹配",
+  "editor.search.replacedCount": "已替换 {count} 处匹配",
+
+  // Export / IPC
+  "export.untitled": "未命名文档",
+  "export.htmlLang": "zh-CN",
+  "ipc.requireTauri": "{action}需要 Tauri 运行时（请使用 pnpm tauri dev 或安装版）",
+  "ipc.read": "文件读取",
+  "ipc.save": "文件保存",
+  "ipc.stat": "文件状态读取",
+  "ipc.watch": "文件监听",
+  "ipc.grep": "跨文件搜索",
+  "ipc.imageSave": "图片保存",
+  "ipc.imageRead": "图片读取",
+  "ipc.folder": "打开文件夹",
+  "ipc.newWindow": "新建窗口",
+  "ipc.newWindowFailed": "无法新建窗口",
+  "dialog.filter.text": "文本文件",
+  "dialog.filter.all": "所有文件",
+
+  "format.unknownTime": "未知",
+};
+
+export const en: MessageCatalog = {
+  // App shell
+  "app.ready": "Ready",
+  "app.close": "Close",
+  "app.dropOverlay": "Drop to open files",
+  "app.fileMissing": "File not found or moved",
+  "app.failures.session_one": "Skipped {count} file from the last session that could not be opened",
+  "app.failures.session_other":
+    "Skipped {count} files from the last session that could not be opened",
+  "app.failures.open_one": "Could not open {count} file",
+  "app.failures.open_other": "Could not open {count} files",
+  "app.failures.more_one": "…{count} file in total",
+  "app.failures.more_other": "…{count} files in total",
+  "app.failures.body": "{intro}:\n{detail}{more}",
+  "app.split.label": "Drag to resize the editor and preview",
+  "app.split.title": "Drag to resize, double-click for 50/50, arrow keys to fine-tune",
+  "app.folder.empty": "No text files to open in that folder.",
+  "app.folder.limit": "Opened the first 40 text files in that folder.",
+  "app.large.jump": "Large files are read-only; jumping to a line is not supported.",
+  "app.large.save": "Large files are read-only; saving edits is not supported yet.",
+  "app.paste.needPath": "Save the file before pasting images (they go into assets/ next to it).",
+  "app.paste.noDir": "Could not determine the file's folder.",
+  "app.paste.saved": "Image saved: {path}",
+  "app.paste.alt": "image",
+  "app.export.done": "Exported HTML: {path}",
+  "app.export.untitled": "Untitled document",
+  "app.duplicate": "“{name}” is already open in another tab; switched to it.",
+  "app.deleted": "“{name}” was deleted or moved outside the editor.",
+
+  // Dialogs
+  "dialog.external.title": "File changed on disk",
+  "dialog.external.message":
+    "“{name}” was changed outside the editor.\nOn disk: {diskSize} · {diskTime}\nWhen opened: {openSize} · {openTime}",
+  "dialog.cancel": "Cancel",
+  "dialog.reload": "Load from disk",
+  "dialog.overwrite": "Overwrite",
+  "dialog.lossy.title": "Lossy encoding: saving will rewrite the original bytes",
+  "dialog.lossy.message":
+    "“{name}” contained bytes that could not be decoded; they were replaced with replacement characters.\nSaving will overwrite the original bytes on disk and cannot be undone.",
+  "dialog.lossy.save": "Save anyway",
+  "dialog.mixed.title": "File contains mixed line endings",
+  "dialog.mixed.message":
+    "“{name}” mixes several line endings.\nSaving will normalize the whole file to {eol}; this cannot be undone.",
+  "dialog.mixed.save": "Normalize to {eol} and save",
+  "dialog.unsaved.title": "Unsaved changes",
+  "dialog.unsaved.message": "“{name}” has unsaved changes.",
+  "dialog.discard": "Don't save",
+  "dialog.save": "Save",
+  "dialog.closeAll.title": "Unsaved changes before closing",
+  "dialog.conflict.message":
+    "“{name}” was changed outside the editor and has unsaved changes.\nOn disk: {diskSize} · {diskTime}",
+  "dialog.keepMine": "Keep mine",
+  "dialog.later": "Decide later",
+
+  // Menu bar
+  "menu.file": "File",
+  "menu.view": "View",
+  "menu.new": "New",
+  "menu.newWindow": "New window",
+  "menu.openFile": "Open file…",
+  "menu.openFolder": "Open folder…",
+  "menu.openRecent": "Open recent",
+  "menu.recentEmpty": "No recent files",
+  "menu.recent": "Recent files",
+  "menu.save": "Save",
+  "menu.saveAs": "Save as…",
+  "menu.saveAll": "Save all",
+  "menu.theme": "Theme",
+  "menu.light": "Light",
+  "menu.dark": "Dark",
+  "menu.system": "System",
+  "menu.language": "Language",
+  "menu.langZh": "中文",
+  "menu.langEn": "English",
+  "menu.minimize": "Minimize",
+  "menu.maximize": "Maximize",
+  "menu.restore": "Restore",
+  "menu.close": "Close",
+
+  // Tabs
+  "tab.untitled": "Untitled {n}",
+  "tab.unsaved": "Unsaved",
+  "tab.close": "Close",
+  "tab.new": "New (Ctrl+N)",
+
+  // Welcome screen
+  "welcome.sub":
+    "Open md / txt / log and let AI rewrite it. Your data stays on this machine by default.",
+  "welcome.open": "Open file",
+  "welcome.new": "New",
+  "welcome.browserBefore": "Browser preview mode: file access needs ",
+  "welcome.browserAfter": ".",
+  "welcome.recent": "Recent",
+  "welcome.clear": "Clear",
+  "welcome.clearTitle": "Clear the recent files list",
+  "welcome.removeTitle": "Remove from recent files",
+  "welcome.removeLabel": "Remove {name} from recent files",
+
+  // Status bar
+  "status.ready": "Ready",
+  "status.unsavedFile": "Unsaved new file",
+  "status.large": "Read-only",
+  "status.large.title": "Read-only large-file preview (loads by range, not the whole file)",
+  "status.lossy": "Lossy encoding",
+  "status.lossy.title": "File contains undecodable bytes; saving asks for confirmation",
+  "status.mixed": "Mixed EOL",
+  "status.mixed.title": "File mixes line endings; saving normalizes to the dominant one",
+  "status.preview": "Preview",
+  "status.preview.title": "Toggle Markdown split preview (Ctrl+Shift+M)",
+  "status.lines_one": "{count} line",
+  "status.lines_other": "{count} lines",
+  "status.chars": "{count} chars",
+  "status.charset.title": "Current encoding",
+  "status.eol.mixedTitle": "Mixed line endings; saving uses this one",
+  "status.eol.title": "Current line ending",
+  "status.readonly": "Read-only preview",
+  "status.readonly.title": "Large file opened read-only; never written back to disk",
+  "status.dirty": "Unsaved",
+  "status.saved": "Saved",
+
+  // Cross-file search
+  "grep.title": "Search across files",
+  "grep.close": "Close",
+  "grep.chooseRoot": "Choose folder…",
+  "grep.chooseRootTitle": "Click to change the search folder",
+  "grep.placeholder": "Regular expression, e.g. TODO|FIXME",
+  "grep.inputLabel": "Search pattern",
+  "grep.case": "Match case",
+  "grep.search": "Search",
+  "grep.searching": "Searching…",
+  "grep.needRoot": "Choose a folder to search first.",
+  "grep.needPattern": "The search pattern cannot be empty.",
+  "grep.files_one": "{count} file",
+  "grep.files_other": "{count} files",
+  "grep.matches_one": "{count} match",
+  "grep.matches_other": "{count} matches",
+  "grep.scanned_one": "{count} file scanned",
+  "grep.scanned_other": "{count} files scanned",
+  "grep.stats": "{files} · {matches} · {scanned} · {ms} ms",
+  "grep.truncated": " · results truncated",
+  "grep.empty": "No matches",
+
+  // Large-file viewer
+  "viewer.badge": "Read-only",
+  "viewer.notice": "Large-file preview (not fully loaded) · {size} · {lines}",
+  "viewer.lines_one": "{count} line",
+  "viewer.lines_other": "{count} lines",
+  "viewer.loading": "Loading…",
+
+  // Markdown preview
+  "preview.outline": "Outline",
+  "preview.outlineCount": "Outline ({count})",
+  "preview.outlineToggle": "Show / hide outline",
+  "preview.outlineLabel": "Outline",
+  "preview.line": "Line {line}",
+  "preview.export": "Export HTML",
+  "preview.empty": "Nothing to preview.",
+  "preview.externalLink": "Opening external links inside the app is not supported yet.",
+
+  // CodeMirror search panel
+  "editor.search.find": "Find",
+  "editor.search.replace": "Replace",
+  "editor.search.next": "next",
+  "editor.search.previous": "previous",
+  "editor.search.all": "select all",
+  "editor.search.replaceOne": "replace",
+  "editor.search.replaceAll": "replace all",
+  "editor.search.close": "close",
+  "editor.search.matchCase": "match case",
+  "editor.search.regexp": "regexp",
+  "editor.search.byWord": "by word",
+  "editor.search.currentMatch": "current match",
+  "editor.search.onLine": "on line",
+  "editor.search.go": "go",
+  "editor.search.goToLine": "Go to line",
+  "editor.search.replacedLine": "replaced match on line {line}",
+  "editor.search.replacedCount": "replaced {count} matches",
+
+  // Export / IPC
+  "export.untitled": "Untitled document",
+  "export.htmlLang": "en",
+  "ipc.requireTauri":
+    "{action} requires the Tauri runtime (run pnpm tauri dev or use the installed app)",
+  "ipc.read": "File read",
+  "ipc.save": "File save",
+  "ipc.stat": "File status read",
+  "ipc.watch": "File watching",
+  "ipc.grep": "Cross-file search",
+  "ipc.imageSave": "Image save",
+  "ipc.imageRead": "Image read",
+  "ipc.folder": "Open folder",
+  "ipc.newWindow": "New window",
+  "ipc.newWindowFailed": "Could not create a new window",
+  "dialog.filter.text": "Text files",
+  "dialog.filter.all": "All files",
+
+  "format.unknownTime": "Unknown",
+};
+
+export const CATALOGS: Record<Locale, MessageCatalog> = { zh, en };
+
+/** Fill `{name}` placeholders in one message. */
+export function interpolate(template: string, params?: Record<string, string | number>): string {
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => {
+    const value = params[name];
+    return value === undefined ? match : String(value);
+  });
+}
+
+export function translate(
+  locale: Locale,
+  key: string,
+  params?: Record<string, string | number>
+): string {
+  const template = CATALOGS[locale][key] ?? CATALOGS.zh[key] ?? key;
+  return interpolate(template, params);
+}
+
+export type Translate = (key: string, params?: Record<string, string | number>) => string;
+export type TranslatePlural = (
+  key: string,
+  count: number,
+  params?: Record<string, string | number>
+) => string;
+
+/** Pick `_one` / `_other` for English; Chinese uses the base key. */
+export function translatePlural(
+  locale: Locale,
+  key: string,
+  count: number,
+  params?: Record<string, string | number>
+): string {
+  if (locale === "zh") return translate(locale, key, { count, ...params });
+  const suffix = count === 1 ? "_one" : "_other";
+  const template = CATALOGS.en[key + suffix] ?? CATALOGS.en[key];
+  if (!template) return translate(locale, key, { count, ...params });
+  return interpolate(template, { count, ...params });
+}

@@ -1,7 +1,14 @@
 import { useEffect, useRef } from "react";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { buildExtensions, editorChrome, themeCompartment } from "./extensions";
+import {
+  buildExtensions,
+  editorChrome,
+  localeCompartment,
+  searchPhrases,
+  themeCompartment,
+} from "./extensions";
+import { getLocale, subscribeLocale } from "../i18n/locale";
 import { getResolvedTheme, subscribeTheme } from "../features/theme";
 import { registerView, unregisterView, notifyDocChanged } from "./registry";
 
@@ -77,9 +84,15 @@ export default function CodeEditor({
         effects: themeCompartment.reconfigure(editorChrome(getResolvedTheme())),
       });
     });
+    const unsubscribeLocale = subscribeLocale(() => {
+      view.dispatch({
+        effects: localeCompartment.reconfigure(searchPhrases(getLocale())),
+      });
+    });
 
     return () => {
       unsubscribeTheme();
+      unsubscribeLocale();
       // Preserve edits made in this tab before the view is destroyed. The version
       // guard keeps a stale view from overwriting a freshly reloaded buffer.
       onFlushRef.current(tabId, view.state.doc.toString(), version);

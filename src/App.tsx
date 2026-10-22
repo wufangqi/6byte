@@ -39,6 +39,7 @@ import {
 } from "./ipc/api";
 import { getDocText, revealLine } from "./editor/registry";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
+import { localizeError, t as tr, useI18n } from "./i18n";
 import { formatSize, formatTime } from "./lib/format";
 import { samePath } from "./lib/paths";
 import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
@@ -68,7 +69,9 @@ interface OpenFailure {
 /** Missing files are expected after a session restore; say so in plain language. */
 const friendlyReason = (error: unknown): string => {
   const message = errorMessage(error);
-  return /os error 2|找不到|not found/i.test(message) ? "文件不存在或已被移动" : message;
+  return /os error 2|找不到|not found/i.test(message)
+    ? tr("app.fileMissing")
+    : localizeError(error);
 };
 
 const EOL_LABEL: Record<string, string> = { lf: "LF", crlf: "CRLF", cr: "CR" };
@@ -78,6 +81,7 @@ export default function App() {
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
   const previewOn = Boolean(active?.mode === "text" && active.preview);
+  const { t } = useI18n();
 
   const togglePreview = useCallback(() => {
     const tab = selectActiveTab(useWorkspace.getState());
@@ -170,11 +174,12 @@ export default function App() {
           .slice(0, 3)
           .map((failure) => `• ${failure.path}\n  ${failure.reason}`)
           .join("\n");
-        const more = failures.length > 3 ? `\n…共 ${failures.length} 个文件` : "";
+        const more =
+          failures.length > 3 ? `\n${tr("app.failures.more", { count: failures.length })}` : "";
         const intro = fromSession
-          ? `上次会话中的 ${failures.length} 个文件已无法打开，已跳过`
-          : `无法打开 ${failures.length} 个文件`;
-        store.setError(`${intro}：\n${detail}${more}`);
+          ? tr("app.failures.session", { count: failures.length })
+          : tr("app.failures.open", { count: failures.length });
+        store.setError(tr("app.failures.body", { intro, detail, more }));
       }
 
       return failures;
@@ -187,7 +192,7 @@ export default function App() {
       const paths = await pickOpenPaths();
       if (paths.length > 0) await openPaths(paths);
     } catch (e) {
-      useWorkspace.getState().setError(errorMessage(e));
+      useWorkspace.getState().setError(localizeError(e));
     }
   }, [openPaths]);
 
@@ -198,13 +203,13 @@ export default function App() {
       if (!directory) return;
       const files = await listTextFiles(directory);
       if (files.length === 0) {
-        store.setNotice("该文件夹里没有可打开的文本文件。");
+        store.setNotice(tr("app.folder.empty"));
         return;
       }
       await openPaths(files);
-      if (files.length >= 40) store.setNotice("已打开该文件夹中的前 40 个文本文件。");
+      if (files.length >= 40) store.setNotice(tr("app.folder.limit"));
     } catch (e) {
-      useWorkspace.getState().setError(errorMessage(e));
+      useWorkspace.getState().setError(localizeError(e));
     }
   }, [openPaths]);
 
@@ -219,7 +224,7 @@ export default function App() {
     try {
       await openNewWindow();
     } catch (e) {
-      useWorkspace.getState().setError(errorMessage(e));
+      useWorkspace.getState().setError(localizeError(e));
     }
   }, []);
 
@@ -236,7 +241,7 @@ export default function App() {
       useWorkspace.getState().setActive(tab.id);
 
       if (tab.mode === "large") {
-        useWorkspace.getState().setError("大文件为只读预览，暂不支持跳转到指定行。");
+        useWorkspace.getState().setError(tr("app.large.jump"));
         return;
       }
 
@@ -260,13 +265,13 @@ export default function App() {
     const store = useWorkspace.getState();
     const tab = store.tabs.find((t) => t.id === store.activeId);
     if (!tab?.path || tab.mode !== "text") {
-      store.setError("请先保存文件，再粘贴图片（图片会存到文件同目录的 assets/）。");
+      store.setError(tr("app.paste.needPath"));
       return null;
     }
 
     const separator = Math.max(tab.path.lastIndexOf("/"), tab.path.lastIndexOf("\\"));
     if (separator <= 0) {
-      store.setError("无法定位文件所在目录。");
+      store.setError(tr("app.paste.noDir"));
       return null;
     }
     const dir = tab.path.slice(0, separator);
@@ -283,10 +288,10 @@ export default function App() {
     try {
       const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
       const relative = await saveAsset(dir, filename, bytes);
-      store.setNotice(`已保存图片：${relative}`);
-      return `![图片](${relative})`;
+      store.setNotice(tr("app.paste.saved", { path: relative }));
+      return `![${tr("app.paste.alt")}](${relative})`;
     } catch (e) {
-      store.setError(errorMessage(e));
+      store.setError(localizeError(e));
       return null;
     }
   }, []);
@@ -298,7 +303,7 @@ export default function App() {
       if (!tab || tab.mode !== "text") return;
 
       const content = getDocText(tab.id) ?? tab.content;
-      const title = tab.name.replace(/\.(md|markdown|mdx)$/i, "") || "未命名文档";
+      const title = tab.name.replace(/\.(md|markdown|mdx)$/i, "") || tr("app.export.untitled");
       const separator = tab.path
         ? Math.max(tab.path.lastIndexOf("/"), tab.path.lastIndexOf("\\"))
         : -1;
@@ -311,9 +316,9 @@ export default function App() {
         const html = buildHtmlDocument(title, content, { baseDir, theme: getResolvedTheme() });
         const portable = await inlineLocalImages(html, loadImageDataUrl);
         await writeFile(target, portable, { ...DEFAULT_META });
-        store.setNotice(`已导出 HTML：${target}`);
+        store.setNotice(tr("app.export.done", { path: target }));
       } catch (e) {
-        store.setError(errorMessage(e));
+        store.setError(localizeError(e));
       }
     }, []);
 
@@ -327,7 +332,7 @@ export default function App() {
       if (document.mode === "large") store.reloadLargeTab(tabId, document.info);
       else store.reloadTab(tabId, document.file);
     } catch (e) {
-      store.setError(errorMessage(e));
+      store.setError(localizeError(e));
     }
   }, []);
 
@@ -338,7 +343,7 @@ export default function App() {
       if (!tab) return true;
 
       if (tab.mode === "large") {
-        store.setError("大文件为只读预览，暂不支持编辑保存（M1 后续版本会提供区间编辑）。");
+        store.setError(tr("app.large.save"));
         return false;
       }
 
@@ -351,7 +356,7 @@ export default function App() {
         try {
           path = await pickSavePath(suggested);
         } catch (e) {
-          store.setError(errorMessage(e));
+          store.setError(localizeError(e));
           return false;
         }
         if (!path) return false;
@@ -364,7 +369,7 @@ export default function App() {
           (candidate) => candidate.id !== tab.id && candidate.path && samePath(candidate.path, path)
         );
         if (duplicate) {
-          store.setError(`「${duplicate.name}」已在另一个标签中打开，已切换到该标签。`);
+          store.setError(tr("app.duplicate", { name: duplicate.name }));
           store.setActive(duplicate.id);
           return false;
         }
@@ -375,16 +380,18 @@ export default function App() {
           const disk = await statFile(path);
           if (disk.mtimeMs !== tab.mtimeMs || disk.size !== tab.size) {
             const choice = await ask({
-              title: "文件已在外部修改",
-              message: `「${tab.name}」在编辑器之外被改动过。\n磁盘：${formatSize(
-                disk.size
-              )} · ${formatTime(disk.mtimeMs)}\n编辑器打开时：${formatSize(
-                tab.size
-              )} · ${formatTime(tab.mtimeMs)}`,
+              title: tr("dialog.external.title"),
+              message: tr("dialog.external.message", {
+                name: tab.name,
+                diskSize: formatSize(disk.size),
+                diskTime: formatTime(disk.mtimeMs),
+                openSize: formatSize(tab.size),
+                openTime: formatTime(tab.mtimeMs),
+              }),
               buttons: [
-                { label: "取消", value: "cancel" },
-                { label: "加载磁盘版本", value: "reload", variant: "ghost" },
-                { label: "仍然覆盖", value: "overwrite", variant: "danger" },
+                { label: tr("dialog.cancel"), value: "cancel" },
+                { label: tr("dialog.reload"), value: "reload", variant: "ghost" },
+                { label: tr("dialog.overwrite"), value: "overwrite", variant: "danger" },
               ],
             });
             if (choice === "reload") {
@@ -401,11 +408,11 @@ export default function App() {
       // A lossily decoded buffer must never overwrite the original bytes silently.
       if (tab.meta.lossy) {
         const choice = await ask({
-          title: "编码有损，保存会改写原数据",
-          message: `「${tab.name}」在打开时包含无法解码的字节，它们已被替换字符替代。\n继续保存会用替换字符覆盖磁盘上的原始字节，且不可撤销。`,
+          title: tr("dialog.lossy.title"),
+          message: tr("dialog.lossy.message", { name: tab.name }),
           buttons: [
-            { label: "取消", value: "cancel" },
-            { label: "仍然保存", value: "save", variant: "danger" },
+            { label: tr("dialog.cancel"), value: "cancel" },
+            { label: tr("dialog.lossy.save"), value: "save", variant: "danger" },
           ],
         });
         if (choice !== "save") return false;
@@ -415,11 +422,11 @@ export default function App() {
       if (tab.meta.mixedEol) {
         const target = EOL_LABEL[tab.meta.eol] ?? tab.meta.eol.toUpperCase();
         const choice = await ask({
-          title: "文件包含混合换行符",
-          message: `「${tab.name}」同时包含多种换行符。\n保存会把全文统一为 ${target}，此操作不可撤销。`,
+          title: tr("dialog.mixed.title"),
+          message: tr("dialog.mixed.message", { name: tab.name, eol: target }),
           buttons: [
-            { label: "取消", value: "cancel" },
-            { label: `统一为 ${target} 并保存`, value: "save", variant: "primary" },
+            { label: tr("dialog.cancel"), value: "cancel" },
+            { label: tr("dialog.mixed.save", { eol: target }), value: "save", variant: "primary" },
           ],
         });
         if (choice !== "save") return false;
@@ -437,7 +444,7 @@ export default function App() {
         });
         return true;
       } catch (e) {
-        store.setError(errorMessage(e));
+        store.setError(localizeError(e));
         return false;
       }
     },
@@ -460,12 +467,12 @@ export default function App() {
 
       if (tab.dirty) {
         const choice = await ask({
-          title: "未保存的修改",
-          message: `「${tab.name}」有未保存的修改。`,
+          title: tr("dialog.unsaved.title"),
+          message: tr("dialog.unsaved.message", { name: tab.name }),
           buttons: [
-            { label: "取消", value: "cancel" },
-            { label: "不保存", value: "discard", variant: "ghost" },
-            { label: "保存", value: "save", variant: "primary" },
+            { label: tr("dialog.cancel"), value: "cancel" },
+            { label: tr("dialog.discard"), value: "discard", variant: "ghost" },
+            { label: tr("dialog.save"), value: "save", variant: "primary" },
           ],
         });
         if (choice === null || choice === "cancel") return;
@@ -482,12 +489,12 @@ export default function App() {
     for (const tab of [...store.tabs]) {
       if (!tab.dirty) continue;
       const choice = await ask({
-        title: "关闭前还有未保存的修改",
-        message: `「${tab.name}」有未保存的修改。`,
+        title: tr("dialog.closeAll.title"),
+        message: tr("dialog.unsaved.message", { name: tab.name }),
         buttons: [
-          { label: "取消", value: "cancel" },
-          { label: "不保存", value: "discard", variant: "ghost" },
-          { label: "保存", value: "save", variant: "primary" },
+          { label: tr("dialog.cancel"), value: "cancel" },
+          { label: tr("dialog.discard"), value: "discard", variant: "ghost" },
+          { label: tr("dialog.save"), value: "save", variant: "primary" },
         ],
       });
       if (choice === null || choice === "cancel") return false;
@@ -508,7 +515,7 @@ export default function App() {
         return;
       }
       if (event.size === 0 && event.mtimeMs === 0) {
-        store.setError(`「${tab.name}」已在编辑器之外被删除或移动。`);
+        store.setError(tr("app.deleted", { name: tab.name }));
         return;
       }
 
@@ -518,14 +525,16 @@ export default function App() {
       }
 
       const choice = await ask({
-        title: "文件已在外部修改",
-        message: `「${tab.name}」在编辑器之外被改动过，而当前还有未保存的修改。\n磁盘：${formatSize(
-          event.size
-        )} · ${formatTime(event.mtimeMs)}`,
+        title: tr("dialog.external.title"),
+        message: tr("dialog.conflict.message", {
+          name: tab.name,
+          diskSize: formatSize(event.size),
+          diskTime: formatTime(event.mtimeMs),
+        }),
         buttons: [
-          { label: "保留我的修改", value: "keep", variant: "primary" },
-          { label: "加载磁盘版本", value: "reload", variant: "ghost" },
-          { label: "稍后处理", value: "later" },
+          { label: tr("dialog.keepMine"), value: "keep", variant: "primary" },
+          { label: tr("dialog.reload"), value: "reload", variant: "ghost" },
+          { label: tr("dialog.later"), value: "later" },
         ],
       });
       if (choice === "reload") await reloadFromDisk(tab.id);
@@ -757,7 +766,7 @@ export default function App() {
           <span className="banner__text">{error ?? notice}</span>
           <button
             className="banner__close"
-            aria-label="关闭"
+            aria-label={t("app.close")}
             onClick={() => {
               useWorkspace.getState().setError(null);
               useWorkspace.getState().setNotice(null);
@@ -793,12 +802,12 @@ export default function App() {
                 className="split__divider"
                 role="separator"
                 aria-orientation="vertical"
-                aria-label="拖拽调整编辑器与预览宽度"
+                aria-label={t("app.split.label")}
                 aria-valuemin={MIN_SPLIT_PERCENT}
                 aria-valuemax={MAX_SPLIT_PERCENT}
                 aria-valuenow={Math.round(splitPercent)}
                 tabIndex={0}
-                title="拖拽调整宽度，双击恢复 50/50，方向键微调"
+                title={t("app.split.title")}
                 onPointerDown={startSplitDrag}
                 onDoubleClick={() => setSplitPercent(50)}
                 onKeyDown={(event) => {
@@ -861,7 +870,7 @@ export default function App() {
 
       {dragging && (
         <div className="drop-overlay">
-          <div className="drop-overlay__box">松开以打开文件</div>
+          <div className="drop-overlay__box">{t("app.dropOverlay")}</div>
         </div>
       )}
 

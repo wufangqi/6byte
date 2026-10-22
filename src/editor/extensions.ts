@@ -21,10 +21,14 @@ import {
   lineNumbers,
   rectangularSelection,
 } from "@codemirror/view";
+import { getLocale, type Locale } from "../i18n/locale";
+import { translate } from "../i18n/messages";
 import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
 
 /** Swapped when the appearance changes, without recreating the editor. */
 export const themeCompartment = new Compartment();
+/** Swapped when the UI language changes (CodeMirror's own panel strings). */
+export const localeCompartment = new Compartment();
 
 /** Editor chrome driven by the app's CSS variables. `dark` only flips CodeMirror's own panels. */
 export function editorChrome(resolved: ResolvedTheme): Extension {
@@ -77,26 +81,31 @@ export function editorChrome(resolved: ResolvedTheme): Extension {
   );
 }
 
-/** Chinese labels for the CodeMirror search panel (T16). */
-const chinesePhrases = EditorState.phrases.of({
-  Find: "查找",
-  Replace: "替换",
-  next: "下一个",
-  previous: "上一个",
-  all: "全部选中",
-  replace: "替换",
-  "replace all": "全部替换",
-  close: "关闭",
-  "match case": "区分大小写",
-  regexp: "正则",
-  "by word": "全词匹配",
-  "current match": "当前匹配",
-  "on line": "行",
-  go: "跳转",
-  "Go to line": "跳转到行",
-  "replaced match on line $": "已替换第 $ 行的匹配",
-  "replaced $ matches": "已替换 $ 处匹配",
-});
+/** CodeMirror search panel strings for one language (T16 / M-10). */
+export function searchPhrases(locale: Locale): Extension {
+  // CodeMirror uses `$` placeholders inside these two phrases.
+  const replacedLine = translate(locale, "editor.search.replacedLine").replace("{line}", "$");
+  const replacedCount = translate(locale, "editor.search.replacedCount").replace("{count}", "$");
+  return EditorState.phrases.of({
+    Find: translate(locale, "editor.search.find"),
+    Replace: translate(locale, "editor.search.replace"),
+    next: translate(locale, "editor.search.next"),
+    previous: translate(locale, "editor.search.previous"),
+    all: translate(locale, "editor.search.all"),
+    replace: translate(locale, "editor.search.replaceOne"),
+    "replace all": translate(locale, "editor.search.replaceAll"),
+    close: translate(locale, "editor.search.close"),
+    "match case": translate(locale, "editor.search.matchCase"),
+    regexp: translate(locale, "editor.search.regexp"),
+    "by word": translate(locale, "editor.search.byWord"),
+    "current match": translate(locale, "editor.search.currentMatch"),
+    "on line": translate(locale, "editor.search.onLine"),
+    go: translate(locale, "editor.search.go"),
+    "Go to line": translate(locale, "editor.search.goToLine"),
+    "replaced match on line $": replacedLine,
+    "replaced $ matches": replacedCount,
+  });
+}
 
 function languageFor(filename: string): Extension {
   if (/\.(md|markdown|mdx)$/i.test(filename)) return markdown();
@@ -146,7 +155,7 @@ export function buildExtensions(
     rectangularSelection(),
     crosshairCursor(),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
-    chinesePhrases,
+    localeCompartment.of(searchPhrases(getLocale())),
     languageFor(filename),
     themeCompartment.of(editorChrome(getResolvedTheme())),
     EditorView.domEventHandlers({

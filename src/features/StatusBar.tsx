@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
 import { formatSize } from "../lib/format";
 
@@ -19,11 +20,12 @@ export default function StatusBar({
   onTogglePreview,
 }: Props) {
   const tab = useWorkspace(selectActiveTab);
+  const { t, tp } = useI18n();
 
   if (!tab) {
     return (
       <footer className="statusbar">
-        <span className="statusbar__item">就绪</span>
+        <span className="statusbar__item">{t("status.ready")}</span>
       </footer>
     );
   }
@@ -31,24 +33,24 @@ export default function StatusBar({
   return (
     <footer className="statusbar">
       <span className="statusbar__item statusbar__path" title={tab.path ?? undefined}>
-        {tab.path ?? "未保存的新文件"}
+        {tab.path ?? t("status.unsavedFile")}
       </span>
 
       {tab.mode === "large" && (
-        <span className="statusbar__warn" title="大文件只读预览（按区间加载，不加载全文）">
-          只读
+        <span className="statusbar__warn" title={t("status.large.title")}>
+          {t("status.large")}
         </span>
       )}
 
       {tab.meta.lossy && (
-        <span className="statusbar__warn" title="文件包含无法解码的字节，保存会被要求确认">
-          编码有损
+        <span className="statusbar__warn" title={t("status.lossy.title")}>
+          {t("status.lossy")}
         </span>
       )}
 
       {tab.meta.mixedEol && (
-        <span className="statusbar__warn" title="文件混合了多种换行符，保存时会统一为主导换行符">
-          混合换行
+        <span className="statusbar__warn" title={t("status.mixed.title")}>
+          {t("status.mixed")}
         </span>
       )}
 
@@ -58,33 +60,35 @@ export default function StatusBar({
         <button
           type="button"
           className={`statusbar__action ${previewOn ? "statusbar__action--on" : ""}`}
-          title="切换 Markdown 分屏预览（Ctrl+Shift+M）"
+          title={t("status.preview.title")}
           onClick={onTogglePreview}
         >
-          预览
+          {t("status.preview")}
         </button>
       )}
 
-      <span className="statusbar__item">{tab.lines} 行</span>
-      <span className="statusbar__item">{tab.mode === "large" ? "—" : `${tab.chars} 字符`}</span>
+      <span className="statusbar__item">{tp("status.lines", tab.lines, { count: tab.lines })}</span>
+      <span className="statusbar__item">
+        {tab.mode === "large" ? "—" : t("status.chars", { count: tab.chars })}
+      </span>
       <span className="statusbar__item">{formatSize(tab.size)}</span>
-      <span className="statusbar__item" title="当前编码">
+      <span className="statusbar__item" title={t("status.charset.title")}>
         {tab.meta.charset}
         {tab.meta.bom ? " BOM" : ""}
       </span>
       <span
         className={`statusbar__item ${tab.meta.mixedEol ? "statusbar__item--mixed" : ""}`}
-        title={tab.meta.mixedEol ? "混合换行，保存后统一为该换行符" : "当前换行符"}
+        title={tab.meta.mixedEol ? t("status.eol.mixedTitle") : t("status.eol.title")}
       >
         {EOL_LABEL[tab.meta.eol] ?? tab.meta.eol}
       </span>
       {tab.mode === "large" ? (
-        <span className="statusbar__item" title="大文件以只读方式打开，不写回磁盘">
-          只读预览
+        <span className="statusbar__item" title={t("status.readonly.title")}>
+          {t("status.readonly")}
         </span>
       ) : (
         <span className={`statusbar__item ${tab.dirty ? "statusbar__item--dirty" : ""}`}>
-          {tab.dirty ? "未保存" : "已保存"}
+          {tab.dirty ? t("status.dirty") : t("status.saved")}
         </span>
       )}
     </footer>
