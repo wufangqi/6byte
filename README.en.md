@@ -81,6 +81,18 @@ Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 
+One-command pull request (local checks → commit → push → open PR → wait for 6 checks → squash merge):
+
+```powershell
+scripts\ship.ps1 -Title "feat: ..." -Body "description"
+```
+
+Releasing: pushing a `vX.Y.Z` tag triggers the `Release` workflow
+(`.github/workflows/release.yml`), which builds the MSI/NSIS on Windows and attaches
+them to a GitHub Release. Tag pushes create a **draft** by default; a manual
+`workflow_dispatch` run with `publish: true` publishes directly. The workflow verifies
+the tag against the three version manifests and takes the release notes from `CHANGELOG.md`.
+
 > **Windows note**: `pnpm-workspace.yaml` sets `nodeLinker: hoisted`. Under the current Windows
 > setup Node's ESM resolution does not follow pnpm's junction links, and the default isolated
 > layout makes Vite fail with `Cannot find package 'picomatch'`. A flat `node_modules` avoids the
@@ -101,6 +113,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
 | E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 84/84 across 21 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence) |
 | Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
+| Release automation | tag push → `Release` workflow | ✅ dry run on `v0.1.6-rc1`: Windows MSI/NSIS → draft release; `check-version` guards the manifests |
 
 ## Performance (honest numbers, details in [docs/perf.md](./docs/perf.md))
 

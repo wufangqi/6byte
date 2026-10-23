@@ -78,6 +78,17 @@ Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 
+一键提 PR（本地检查 → 提交 → push → 开 PR → 等 6 项检查 → squash 合并）：
+
+```powershell
+scripts\ship.ps1 -Title "feat: ..." -Body "说明"
+```
+
+发布：推送 `vX.Y.Z` tag 会触发 `Release` workflow（`.github/workflows/release.yml`），
+在 Windows 上构建 MSI/NSIS 并附到 GitHub Release。tag 推送默认创建 **draft**，核对资产后发布；
+`workflow_dispatch` 传 `publish: true` 可直接发布。workflow 会校验 tag 与三处版本号一致，
+Release Notes 从 `CHANGELOG.md` 对应章节抽取。
+
 > **Windows 注意**：`pnpm-workspace.yaml` 设置了 `nodeLinker: hoisted`。原因是当前 Windows
 > 环境下 Node 的 ESM 解析不穿透 pnpm 的 junction 链接，默认 isolated 布局会让 vite 报
 > `Cannot find package 'picomatch'`。改用扁平 node_modules 可规避，代价是依赖隔离性弱一些。
@@ -96,7 +107,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | 安装包 | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
 | 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 84/84（21 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化） |
-| 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust，run 39599120518） |
+| 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust） |
+| 发布自动化 | tag 推送 `Release` workflow | ✅ `v0.1.6-rc1` 演练通过：Windows 构建 MSI/NSIS → draft Release；`check-version` 校验版本号 |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
 

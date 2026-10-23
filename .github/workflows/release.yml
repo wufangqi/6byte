@@ -1,0 +1,76 @@
+name: Release
+
+# Triggered by pushing a version tag (v0.1.7, v0.2.0-rc1, ...) or manually with
+# a tag that already exists. Builds the Windows installers and attaches them to
+# a GitHub Release. Tag pushes create a draft so the assets can be checked
+# before publishing; a manual run with `publish: true` publishes directly.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build and release (e.g. v0.1.7)"
+        required: true
+      publish:
+        description: "Publish the release immediately instead of leaving a draft"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Windows installers
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Verify version matches the tag
+        run: node scripts/check-version.mjs "${{ inputs.tag || github.ref_name }}"
+
+      - name: Generate release notes from CHANGELOG.md
+        id: notes
+        run: node scripts/release-notes.mjs "${{ inputs.tag || github.ref_name }}"
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Build and attach MSI / NSIS to the release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ inputs.tag || github.ref_name }}
+          releaseName: "6byte ${{ inputs.tag || github.ref_name }}"
+          releaseBody: ${{ steps.notes.outputs.body }}
+          releaseDraft: ${{ github.event_name == 'push' || !inputs.publish }}
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
+
+      - name: Release summary
+        run: |
+          echo "### 6byte ${{ inputs.tag || github.ref_name }}" >> $env:GITHUB_STEP_SUMMARY
+          echo "" >> $env:GITHUB_STEP_SUMMARY
+          echo "Assets: MSI + NSIS from \`src-tauri/target/release/bundle/\`." >> $env:GITHUB_STEP_SUMMARY
+          echo "Draft: ${{ github.event_name == 'push' || !inputs.publish }}" >> $env:GITHUB_STEP_SUMMARY
