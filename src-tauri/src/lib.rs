@@ -1,7 +1,9 @@
+mod ai;
 mod bigfile;
 mod codec;
 mod commands;
 mod grep;
+mod secrets;
 mod watcher;
 
 use std::sync::Arc;
@@ -13,6 +15,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(bigfile::LargeFileCache::default())
+        .manage(ai::AiHub::default())
+        .manage(secrets::AiSecrets::system())
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(watcher::FileWatcher::new(Arc::new(move |event| {
@@ -31,7 +35,13 @@ pub fn run() {
             commands::read_binary_base64,
             commands::list_text_files,
             commands::watch_file,
-            commands::unwatch_file
+            commands::unwatch_file,
+            ai::ai_start,
+            ai::ai_cancel,
+            ai::ai_set_key,
+            ai::ai_clear_key,
+            ai::ai_has_key,
+            ai::ai_probe,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

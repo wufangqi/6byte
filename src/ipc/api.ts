@@ -9,6 +9,10 @@ import type {
   FileChangeEvent,
   FileMeta,
   FileStat,
+  AiDoneEvent,
+  AiErrorEvent,
+  AiStartRequest,
+  AiTokenEvent,
   GrepResponse,
   LineRange,
   OpenDocument,
@@ -120,6 +124,78 @@ export async function onFileChanged(
 ): Promise<() => void> {
   if (!isTauri) return () => {};
   return listen<FileChangeEvent>("file-changed", (event) => handler(event.payload));
+}
+
+/**
+ * Start a streaming chat completion. Resolves with a `streamId` immediately;
+ * tokens arrive on `ai-token`, then `ai-done` or `ai-error`. The document
+ * changes only after the caller writes the rewrite.
+ */
+export async function aiStart(request: AiStartRequest): Promise<string> {
+  requireTauri("ipc.ai");
+  return invoke<string>("ai_start", {
+    providerId: request.providerId,
+    baseUrl: request.baseUrl,
+    apiKey: request.apiKey,
+    model: request.model,
+    messages: request.messages,
+    maxTokens: request.maxTokens,
+    temperature: request.temperature,
+    profileId: request.profileId,
+  });
+}
+
+/** Store the API key in the OS keychain. It is not written to app settings. */
+export async function aiSetKey(apiKey: string, profileId?: string): Promise<void> {
+  requireTauri("ipc.ai");
+  return invoke<void>("ai_set_key", { apiKey, profileId });
+}
+
+/** Forget the stored API key for one model. */
+export async function aiClearKey(profileId?: string): Promise<void> {
+  requireTauri("ipc.ai");
+  return invoke<void>("ai_clear_key", { profileId });
+}
+
+/** Whether a key is already in the keychain. The key itself is not returned. */
+export async function aiHasKey(profileId?: string): Promise<boolean> {
+  requireTauri("ipc.ai");
+  return invoke<boolean>("ai_has_key", { profileId });
+}
+
+/**
+ * Send a one-token probe. A non-empty `apiKey` is used for this call only;
+ * otherwise Rust reads the keychain. Returns the model's short reply, or "".
+ */
+export async function aiProbe(
+  baseUrl: string,
+  model: string,
+  apiKey?: string,
+  profileId?: string
+): Promise<string> {
+  requireTauri("ipc.ai");
+  return invoke<string>("ai_probe", { baseUrl, model, apiKey, profileId });
+}
+
+/** Abort an in-flight model request. A finished id is ignored. */
+export async function aiCancel(streamId: string): Promise<void> {
+  requireTauri("ipc.ai");
+  return invoke<void>("ai_cancel", { streamId });
+}
+
+export async function onAiToken(handler: (event: AiTokenEvent) => void): Promise<() => void> {
+  if (!isTauri) return () => {};
+  return listen<AiTokenEvent>("ai-token", (event) => handler(event.payload));
+}
+
+export async function onAiDone(handler: (event: AiDoneEvent) => void): Promise<() => void> {
+  if (!isTauri) return () => {};
+  return listen<AiDoneEvent>("ai-done", (event) => handler(event.payload));
+}
+
+export async function onAiError(handler: (event: AiErrorEvent) => void): Promise<() => void> {
+  if (!isTauri) return () => {};
+  return listen<AiErrorEvent>("ai-error", (event) => handler(event.payload));
 }
 
 /** Search a directory tree with a Rust regex (binary files are skipped). */

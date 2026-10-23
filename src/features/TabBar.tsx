@@ -16,10 +16,12 @@ export default function TabBar({ onClose }: Props) {
 
   return (
     <div className="tabbar">
-      <div className="tabbar__tabs">
+      <div className="tabbar__tabs" role="tablist">
         {tabs.map((tab) => (
           <div
             key={tab.id}
+            role="tab"
+            aria-selected={tab.id === activeId}
             className={`tab ${tab.id === activeId ? "tab--active" : ""}`}
             title={tab.path ?? tab.name}
             onClick={() => setActive(tab.id)}
@@ -33,6 +35,7 @@ export default function TabBar({ onClose }: Props) {
             <span className="tab__name">{tab.name}</span>
             {tab.dirty && <span className="tab__dot" aria-label={t("tab.unsaved")} />}
             <button
+              type="button"
               className="tab__close"
               aria-label={t("tab.close")}
               onClick={(e) => {
@@ -45,7 +48,7 @@ export default function TabBar({ onClose }: Props) {
           </div>
         ))}
       </div>
-      <button className="tabbar__new" title={t("tab.new")} onClick={newTab}>
+      <button type="button" className="tabbar__new" title={t("tab.new")} onClick={newTab}>
         +
       </button>
     </div>

@@ -13,6 +13,9 @@ import {
 } from "./features/splitPane";
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
+import AiSettingsDialog from "./features/AiSettingsDialog";
+import AiStreamPanel from "./features/AiStreamPanel";
+import { activeModel, loadAiSettings } from "./features/aiSettings";
 import MenuBar from "./features/MenuBar";
 import StatusBar from "./features/StatusBar";
 import TabBar from "./features/TabBar";
@@ -81,6 +84,8 @@ export default function App() {
   const active = useWorkspace(selectActiveTab);
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
+  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [streamOpen, setStreamOpen] = useState(false);
   const previewOn = Boolean(active?.mode === "text" && active.preview);
   const { t } = useI18n();
 
@@ -767,6 +772,17 @@ export default function App() {
           if (tab) void saveTab(tab.id, true);
         }}
         onSaveAll={() => void saveAll()}
+        onOpenModelSettings={() => setModelSettingsOpen(true)}
+        canAsk={active?.mode === "text"}
+        asking={streamOpen}
+        onAsk={() => {
+          const settings = activeModel(loadAiSettings());
+          if (!settings?.baseUrl.trim() || !settings.model.trim()) {
+            setModelSettingsOpen(true);
+            return;
+          }
+          setStreamOpen((open) => !open);
+        }}
       />
       <TabBar onClose={(id) => void requestCloseTab(id)} />
 
@@ -774,6 +790,7 @@ export default function App() {
         <div className={`banner ${notice && !error ? "banner--ok" : ""}`} role="status">
           <span className="banner__text">{error ?? notice}</span>
           <button
+            type="button"
             className="banner__close"
             aria-label={t("app.close")}
             onClick={() => {
@@ -848,6 +865,17 @@ export default function App() {
         )}
       </main>
 
+      {streamOpen && active?.mode === "text" && (
+        <AiStreamPanel
+          tabId={active.id}
+          onClose={() => setStreamOpen(false)}
+          onNeedSettings={() => {
+            setStreamOpen(false);
+            setModelSettingsOpen(true);
+          }}
+        />
+      )}
+
       <StatusBar
         previewOn={previewOn}
         onTogglePreview={togglePreview}
@@ -868,6 +896,7 @@ export default function App() {
         </div>
       )}
 
+      {modelSettingsOpen && <AiSettingsDialog onClose={() => setModelSettingsOpen(false)} />}
       <DialogHost />
     </div>
   );

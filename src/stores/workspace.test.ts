@@ -60,6 +60,19 @@ describe("markEdited", () => {
     expect(updated?.lines).toBe(7);
     expect(updated?.chars).toBe(42);
   });
+
+  it("noteDocStats updates the counts and leaves a clean tab clean", () => {
+    const tab = tabFromFile(makeFile("D:/tmp/a.md", "hello"));
+    useWorkspace.getState().addTab(tab);
+
+    useWorkspace.getState().noteDocStats(tab.id, { lines: 3, chars: 9 });
+
+    const updated = selectActiveTab(useWorkspace.getState());
+    expect(updated?.dirty).toBe(false);
+    expect(updated?.lines).toBe(3);
+    expect(updated?.chars).toBe(9);
+    expect(updated?.content).toBe("hello");
+  });
 });
 
 describe("markSaved", () => {

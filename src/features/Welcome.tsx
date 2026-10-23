@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n";
+import { fileName } from "../lib/paths";
 import { useWorkspace } from "../stores/workspace";
 import { isTauri } from "../ipc/api";
 
@@ -7,8 +8,6 @@ interface Props {
   onNew: () => void;
   onOpenPath: (path: string) => void;
 }
-
-const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
 
 export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
   const recent = useWorkspace((s) => s.recent);
@@ -23,11 +22,11 @@ export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
         <p className="welcome__sub">{t("welcome.sub")}</p>
 
         <div className="welcome__actions">
-          <button className="btn btn--primary" onClick={onOpen} disabled={!isTauri}>
+          <button type="button" className="btn btn--primary" onClick={onOpen} disabled={!isTauri}>
             {t("welcome.open")}
             <kbd>Ctrl+O</kbd>
           </button>
-          <button className="btn" onClick={onNew}>
+          <button type="button" className="btn" onClick={onNew}>
             {t("welcome.new")}
             <kbd>Ctrl+N</kbd>
           </button>

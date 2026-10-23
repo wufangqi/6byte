@@ -66,9 +66,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 | `src-tauri/src/bigfile.rs` | 大文件分级、行偏移索引、区间读取 | 行索引按 `path + mtime` 缓存，不能整文件进内存 |
 | `src-tauri/src/watcher.rs` | 文件监听与外部修改事件 | 监听父目录（不可退回监听单文件，否则原子保存后失效）；事件必须去重 |
 | `src-tauri/src/grep.rs` | 跨文件搜索 | 必须跳过二进制/依赖目录并限制结果数，避免一次查询打爆 UI |
+| `src-tauri/src/ai.rs` | 模型 Provider 与流式请求 | 取消必须断开连接；流式阶段不写文档；CI 不访问外网 |
+| `src-tauri/src/secrets.rs` | API Key 的系统钥匙串 | 密钥不得写入配置文件；命令不得把密钥读回前端 |
 | `src-tauri/src/commands.rs` | 文件读写、stat、原子保存、`open_document` / `read_range` / `grep_files` / `watch_file` | 保存必须保持原编码 |
 
 编辑器的活性文本由 `src/editor/registry.ts` 持有；store 中的 `content` 只是快照。
+
+界面改动的约定（颜色、圆角、字号、控件尺寸、焦点态）见 [`docs/ui-guidelines.md`](./docs/ui-guidelines.md)：先查变量与公共类，不要在新组件里写死颜色。
 新增涉及“当前缓冲区”的功能时，请用 `getDocText(tabId)` 读取，而不是 `tab.content`。
 
 ## 测试

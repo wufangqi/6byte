@@ -6,3 +6,9 @@ export function samePath(a: string, b: string): boolean {
   if (!windowsStyle) return false;
   return a.replace(/\//g, "\\").toLowerCase() === b.replace(/\//g, "\\").toLowerCase();
 }
+
+/** Last path segment, used for tab titles and recent-file entries. */
+export function fileName(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] ?? path;
+}

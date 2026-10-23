@@ -8,11 +8,12 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.6（编码内核、数据安全、大文件只读、监听、grep、Markdown 预览/导出/大纲/图片/Shiki/Mermaid/KaTeX、标题栏与主题、按文件预览、中英双语界面）；下一步 M3 AI 层**
+**当前阶段：M0–M2 已交付并发布 v0.1.6；M3 模型服务、选区改写（编辑框内接受）、自动补全、txt 自动换行与标题栏右上角入口已实现，待提交与发版 v0.1.7**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
 待办与进度：[docs/待办清单.md](./docs/待办清单.md) ·
+UI 规范：[docs/ui-guidelines.md](./docs/ui-guidelines.md) ·
 性能实测：[docs/perf.md](./docs/perf.md) ·
 发布验收：[docs/release-checklist.md](./docs/release-checklist.md) ·
 变更记录：[CHANGELOG.md](./CHANGELOG.md)
@@ -99,12 +100,12 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 116/116（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、i18n 文案/复数/Rust 错误映射、标题栏与预览状态、每标签编辑状态与撤销历史） |
-| 前端打包 | `pnpm build` | ✅ 主包 961 KB / gzip 330 KB（+ 按需 Shiki/KaTeX/Mermaid chunk，dist 总计 8.6 MB） |
-| Rust 单测 | `cargo test --lib` | ✅ 53 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料） |
+| 前端单测 | `pnpm test` | ✅ 144/144（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、i18n、标题栏与预览状态、每标签撤销历史、模型目录不含密钥、选区流式、编辑框内高亮接受/取消、路径文件名） |
+| 前端打包 | `pnpm build` | ✅ 主包 996 KB / gzip 338 KB（+ 按需 Shiki/KaTeX/Mermaid chunk，dist 总计 8.57 MB） |
+| Rust 单测 | `cargo test --lib` | ✅ 75 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料、OpenAI 兼容流式、钥匙串与连通性探测、编辑路径超时与重试、思考内容；共 79 用例） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
-| 安装包 | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB（含 KaTeX/Mermaid 资源） |
+| 安装包 | `pnpm tauri build` | ✅ MSI 5.70 MB / NSIS 4.88 MB（含 KaTeX/Mermaid 资源与模型客户端） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
 | 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 91/91（22 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化、撤销历史跨标签/预览） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust） |
@@ -121,7 +122,7 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 | 35 MB 打开到首屏（只读预览） | ≤ 1 s | **458 ms**（含应用启动，CDP 实测） |
 | 输入延迟 P95 | ≤ 16 ms | **5.6 ms**（1000 行 L0）；L1：10 MB **3.0 ms**、19 MB **2.7 ms** |
 | 3 文件内存 | ≤ 260 MB（空载基线 ≤230 MB） | ⚠️ 空载私有 **220 MB**（WebView2 基线）；关 GPU 可降至 159 MB（见 perf.md） |
-| 安装包 | ≤ 20 MB | ✅ 4.25 MB（NSIS，当前构建） |
+| 安装包 | ≤ 20 MB | ✅ 4.88 MB（NSIS，当前构建） |
 
 ## 已实现
 
@@ -151,13 +152,17 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 - [x] 按文件预览：每个标签独立记住预览开关，重新打开文件回到编辑模式
 - [x] 界面中英双语：菜单、状态栏、搜索、预览与对话框全部双语；视图 → 语言切换，写入 `localStorage`（`ainative.locale`），重启后保持
 - [x] 撤销历史按标签保留（M-06）：所有标签共享同一个 `EditorView`，每个标签保留自己的 `EditorState`；切换标签、开关预览不再重置撤销历史，切回时恢复撤销栈、光标与滚动位置
+- [x] 模型服务分两级：服务商（地址与 API Key）下再管理模型。密钥按服务商进钥匙串。标题栏右上角「模型服务」
+- [x] 选区改写：状态栏「模型」。左边写要求，右边思考过程可收起。正文流式写进当前编辑框并高亮。接受替换原文且不保存文件，取消恢复原文。15 秒无首字则取消；429/5xx 重试 2 次
+- [x] 自动补全：默认关闭，模型与改写分开配置。停笔约半秒后建议出现在光标后，Tab 接受、Esc 取消，不自动保存。补全、模型、模型服务入口在标题栏右上角
+- [x] `.txt` 与未命名笔记自动换行（只改显示，不改文件）；markdown / log / json 仍按原行显示
 - [x] 打开文件夹（`list_text_files`，一次最多 40 个文本文件）与新建窗口（空白会话，只有主窗口恢复/保存会话）
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
 
 ## 尚未实现（按路线图 M1 → M4）
 
 - [ ] 跨文件 grep 的增量/正则缓存优化（M2 视需要）
-- [ ] AI 层：Ctrl+K 内联 diff、Provider 抽象、请求可撤销（M3）
+- [ ] AI 改写：Ctrl+K 内联 diff 与 Tab 接受（M3）。改写已在编辑框内落地，只差快捷键
 - [ ] 便携版、winget、自动更新、右键菜单（M4）
 
 ## 目录结构
@@ -174,6 +179,8 @@ src-tauri/            Rust 核心层
   src/bigfile.rs      大文件分级、行偏移索引、区间读取（含单测）
   src/watcher.rs      文件监听（notify，父目录监听 + 事件去重，含单测）
   src/grep.rs         跨文件搜索（regex，跳过二进制/依赖目录，含单测）
+  src/ai.rs           模型 Provider、OpenAI 兼容流式、取消、连通性探测（含单测）
+  src/secrets.rs      API Key 的系统钥匙串（测试用内存替身，不写配置文件）
   src/commands.rs     文件读写、stat、原子保存、open_document、grep_files、watch_file、大文件/二进制防护
   capabilities/       Tauri 权限（最小集）
 scripts/

@@ -1,0 +1,101 @@
+import { loadAiSettings, type ActiveEndpoint, type AiCatalog } from "./aiSettings";
+
+/** Separate from the rewrite catalog so the completion model can differ. */
+export const COMPLETION_KEY = "ainative.complete";
+
+export interface CompletionSettings {
+  /** Master switch. Off means the editor never asks the model to complete. */
+  enabled: boolean;
+  providerId: string;
+  modelId: string;
+}
+
+export const COMPLETION_OFF: CompletionSettings = {
+  enabled: false,
+  providerId: "",
+  modelId: "",
+};
+
+const listeners = new Set<() => void>();
+
+export function subscribeCompletion(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function parseCompletionSettings(raw: string | null | undefined): CompletionSettings {
+  if (!raw) return COMPLETION_OFF;
+  try {
+    const value = JSON.parse(raw) as {
+      enabled?: unknown;
+      providerId?: unknown;
+      modelId?: unknown;
+    };
+    return {
+      enabled: value.enabled === true,
+      providerId: typeof value.providerId === "string" ? value.providerId : "",
+      modelId: typeof value.modelId === "string" ? value.modelId : "",
+    };
+  } catch {
+    return COMPLETION_OFF;
+  }
+}
+
+export function loadCompletionSettings(): CompletionSettings {
+  try {
+    return parseCompletionSettings(localStorage.getItem(COMPLETION_KEY));
+  } catch {
+    return COMPLETION_OFF;
+  }
+}
+
+export function saveCompletionSettings(settings: CompletionSettings): void {
+  localStorage.setItem(
+    COMPLETION_KEY,
+    JSON.stringify({
+      enabled: settings.enabled,
+      providerId: settings.providerId,
+      modelId: settings.modelId,
+    })
+  );
+  listeners.forEach((listener) => listener());
+}
+
+export interface CompletionChoice {
+  providerId: string;
+  modelId: string;
+  label: string;
+}
+
+/** Every configured model, labeled with its provider so the completion pick is independent. */
+export function completionChoices(catalog: AiCatalog): CompletionChoice[] {
+  const choices: CompletionChoice[] = [];
+  for (const provider of catalog.providers) {
+    for (const model of provider.models) {
+      if (!provider.baseUrl.trim() || !model.model.trim()) continue;
+      const modelLabel = model.name.trim() || model.model.trim();
+      const providerLabel = provider.name.trim() || provider.baseUrl.trim();
+      choices.push({
+        providerId: provider.id,
+        modelId: model.id,
+        label: `${providerLabel} / ${modelLabel}`,
+      });
+    }
+  }
+  return choices;
+}
+
+/** The completion model, or null when it is missing or no longer in the catalog. */
+export function completionEndpoint(
+  catalog: AiCatalog,
+  settings: CompletionSettings
+): ActiveEndpoint | null {
+  const provider = catalog.providers.find((item) => item.id === settings.providerId);
+  const model = provider?.models.find((item) => item.id === settings.modelId);
+  if (!provider?.baseUrl.trim() || !model?.model.trim()) return null;
+  return { id: provider.id, baseUrl: provider.baseUrl.trim(), model: model.model.trim() };
+}
+
+export function loadCompletionEndpoint(): ActiveEndpoint | null {
+  return completionEndpoint(loadAiSettings(), loadCompletionSettings());
+}

@@ -75,6 +75,49 @@ export interface GrepResponse {
   elapsedMs: number;
 }
 
+/** One turn sent to an OpenAI-compatible provider. */
+export interface AiMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+
+export interface AiStartRequest {
+  /** Currently only `openai-compatible`. */
+  providerId: string;
+  /** API root, for example `https://api.openai.com/v1` or `http://127.0.0.1:11434/v1`. */
+  baseUrl: string;
+  apiKey?: string;
+  model: string;
+  messages: AiMessage[];
+  maxTokens?: number;
+  temperature?: number;
+  /** Keychain slot. The legacy install uses `default`. */
+  profileId?: string;
+}
+
+export interface AiTokenEvent {
+  streamId: string;
+  delta: string;
+  /** `reasoning` is the thinking trace. Anything else is the rewrite. */
+  kind?: string;
+}
+
+export interface AiUsage {
+  promptTokens: number;
+  completionTokens: number;
+}
+
+export interface AiDoneEvent {
+  streamId: string;
+  usage?: AiUsage;
+}
+
+export interface AiErrorEvent {
+  streamId: string;
+  code: string;
+  message: string;
+}
+
 export const DEFAULT_META: FileMeta = {
   charset: "UTF-8",
   bom: false,

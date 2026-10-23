@@ -24,6 +24,21 @@ notify = "8.2.0"
 regex = "1.13.1"
 memmap2 = "0.9.12"
 base64 = "0.23.1"
+async-trait = "0.1"
+eventsource-stream = "0.2"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+tokio = { version = "1", features = ["macros", "rt", "sync", "time"] }
+tokio-util = "0.7"
+
+[target.'cfg(windows)'.dependencies]
+keyring = { version = "3", features = ["windows-native"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "freebsd", target_os = "openbsd"))'.dependencies]
+keyring = { version = "3", features = ["linux-native"] }
 
 [profile.release]
 panic = "abort"

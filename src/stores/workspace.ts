@@ -44,6 +44,8 @@ interface WorkspaceState {
   closeTab(id: string): void;
   setContent(id: string, content: string, version?: number): void;
   markEdited(id: string, stats: { lines: number; chars: number }): void;
+  /** Line and character counts for a preview insert. Does not mark the file dirty. */
+  noteDocStats(id: string, stats: { lines: number; chars: number }): void;
   markSaved(
     id: string,
     patch: { path: string; content: string; meta: FileMeta; size: number; mtimeMs: number }
@@ -185,6 +187,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === id ? { ...t, dirty: true, lines: stats.lines, chars: stats.chars } : t
+      ),
+    })),
+
+  noteDocStats: (id, stats) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, lines: stats.lines, chars: stats.chars } : t
       ),
     })),
 
