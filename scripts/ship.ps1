@@ -214,9 +214,17 @@ if (-not $merged.merged) { Fail "GitHub did not merge the pull request" }
 Write-Host "ship: merged as $($merged.sha.Substring(0, 7))" -ForegroundColor Green
 
 # ---------------------------------------------------------------- cleanup
+# The merge already succeeded, so cleanup problems are warnings, not failures.
 Step "back to $Base and cleaning up"
-Invoke-Git @('checkout', $Base)
-Invoke-Git @('pull', '--ff-only')
+& git checkout $Base
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "ship: merged, but could not switch back to $Base; run it manually." -ForegroundColor Yellow
+} else {
+  & git pull --ff-only
+  if ($LASTEXITCODE -ne 0) {
+    Write-Host "ship: merged, but the local fast-forward failed; run 'git fetch origin $Base; git reset --hard origin/$Base'." -ForegroundColor Yellow
+  }
+}
 try { & git branch -D $Branch 2>$null } catch { }
 try { & git push origin --delete $Branch 2>$null } catch { }
 Write-Host "ship: done. Next: tag a release (git tag -a vX.Y.Z -m vX.Y.Z; git push origin vX.Y.Z)." -ForegroundColor Green
