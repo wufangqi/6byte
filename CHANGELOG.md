@@ -13,11 +13,13 @@
 - Rust 返回的中文错误在英文界面下映射为英文（未知错误保留原文）；CodeMirror 查找/替换面板随语言切换。
 - 发布自动化（M-08）：推送 `v*` tag 触发 `Release` workflow，在 Windows 上构建 MSI/NSIS 并附加到 GitHub Release（tag 推送默认 draft；`workflow_dispatch` 可指定 `publish: true`）。版本号与三处清单自动校验，Release Notes 从 CHANGELOG 抽取。
 - 一键提 PR（M-11）：`scripts/ship.ps1` 本地检查 → 提交 → push → 开/复用 PR → 轮询六项 checks → squash 合并 → 清理分支。
+- 撤销历史按标签保留（M-06）：所有标签共享同一个 CodeMirror `EditorView`，每个标签各留一份 `EditorState`；切换标签、开关 Markdown 预览不再重置撤销历史，切回标签时恢复撤销栈、光标与滚动位置。磁盘重载仍按预期清空该标签历史。
 
 ### Tests
 
 - 新增 `src/i18n/i18n.test.ts`：中英文案键对齐、插值与复数、语言持久化、Rust 错误映射；前端单测增至 **110** 例。
-- E2E 扩到 **21 步 / 84 条断言**：新增「切英文 → 状态栏/预览/标签栏文案 → 重载保持 → 切回中文」覆盖。
+- 新增 `src/editor/docStates.test.ts`：状态复用、撤销栈保留、磁盘重载重建、标签独立与关闭清理、滚动位置、主题/语言重配置；前端单测增至 **116** 例。
+- E2E 扩到 **22 步 / 91 条断言**：新增「切英文 → 状态栏/预览/标签栏文案 → 重载保持 → 切回中文」与「切标签 / 开预览后 Ctrl+Z 仍可撤销」覆盖。
 
 ## [0.1.6] - 2026-10-22
 

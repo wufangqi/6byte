@@ -104,14 +104,14 @@ the tag against the three version manifests and takes the release notes from `CH
 |---|---|---|
 | Frontend type check | `pnpm exec tsc --noEmit` | ✅ 0 errors |
 | Lint / formatting | `pnpm lint`, `pnpm format:check` | ✅ pass |
-| Frontend unit tests | `pnpm test` | ✅ 110/110 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n catalogs/plurals/Rust error mapping, title bar and preview state) |
+| Frontend unit tests | `pnpm test` | ✅ 116/116 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n catalogs/plurals/Rust error mapping, title bar and preview state, per-tab editor state and undo history) |
 | Frontend bundle | `pnpm build` | ✅ ~961 KB main / ~330 KB gzip (+ lazy Shiki, KaTeX and Mermaid chunks) |
 | Rust unit tests | `cargo test --lib` | ✅ 53 passed / 0 failed (+4 ignored perf probes; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus) |
 | Rust formatting | `cargo fmt --all -- --check` | ✅ pass |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ pass (locally needs `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`, see docs/perf.md) |
 | Installers | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB |
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
-| E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 84/84 across 21 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence) |
+| E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 91/91 across 22 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence, undo history across tab switches and preview toggles) |
 | Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
 | Release automation | tag push → `Release` workflow | ✅ dry run on `v0.1.6-rc1`: Windows MSI/NSIS → draft release; `check-version` guards the manifests |
 
@@ -158,6 +158,7 @@ the tag against the three version manifests and takes the release notes from `CH
 - [x] Open folder (up to 40 text files at once) and new windows with an empty session
 - [x] Mermaid diagrams and KaTeX math in the preview, loaded on demand
 - [x] Bilingual UI (Chinese / English): menus, status bar, search, preview and dialogs; switch under View → Language, persisted in `localStorage` (`ainative.locale`)
+- [x] Undo history kept per tab (M-06): all tabs share one `EditorView` while each tab keeps its own `EditorState`; switching tabs or toggling the preview no longer resets undo history, and switching back restores the undo stack, caret and scroll position
 
 ## Not implemented yet (M2 → M4)
 
@@ -170,7 +171,7 @@ the tag against the three version manifests and takes the release notes from `CH
 
 ```
 src/                  React frontend
-  editor/             CodeMirror wrapper, extensions, live view registry (only place importing @codemirror/*)
+  editor/             CodeMirror wrapper, extensions, one shared view + per-tab EditorState (only place importing @codemirror/*)
   features/           title bar menus / theme / tab bar / status bar / welcome / dialogs / large-file viewer / grep panel / Markdown preview, export, outline, image paste, diagrams
   i18n/               message catalogs (zh/en), locale state, Rust error localisation
   ipc/                typed wrappers for every Tauri command and event (only place importing @tauri-apps/*)
@@ -193,8 +194,6 @@ docs/                 project review, backlog, performance, release checklist
 
 ## Known limitations
 
-- Switching tabs resets that tab's undo history (M0 trade-off: one `EditorView` per tab; a shared multi-document view is planned).
-- Toggling the Markdown preview remounts the editor, which also resets that tab's undo history.
 - Preview highlighting covers 10 common languages; other languages fall back to plain text.
 - Pasted images are stored in `assets/` next to the source file; previews read them through the Tauri asset protocol (read-only).
 - HTML export defaults to a same-named `.html` next to the source file and overwrites it on re-export.
