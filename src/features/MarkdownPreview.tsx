@@ -45,15 +45,18 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
   // Re-render after edits, debounced so typing does not reparse on each keystroke.
   useEffect(() => {
     let debounce: number | undefined;
-    const render = () => setRendered(renderAll(tabId, baseDir));
+    const render = () => {
+      setRendered(renderAll(tabId, baseDir));
+    };
 
     // The initial state runs during render, before CodeEditor registers its view,
     // so pull the real buffer once after mount (deferred to satisfy the effect rule).
     const initial = window.setTimeout(render, 0);
-    const unsubscribe = subscribeDocChanges(tabId, () => {
+    const schedule = () => {
       window.clearTimeout(debounce);
       debounce = window.setTimeout(render, 120);
-    });
+    };
+    const unsubscribe = subscribeDocChanges(tabId, schedule);
 
     return () => {
       window.clearTimeout(initial);

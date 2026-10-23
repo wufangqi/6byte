@@ -24,6 +24,9 @@ import {
 import { getLocale, type Locale } from "../i18n/locale";
 import { translate } from "../i18n/messages";
 import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
+import { completionExtension } from "./completion";
+import { aiPreview, inlineInsertField } from "./inlineInsert";
+import { rewritePreviewField } from "./rewritePreview";
 
 /** Swapped when the appearance changes, without recreating the editor. */
 export const themeCompartment = new Compartment();
@@ -76,6 +79,16 @@ export function editorChrome(resolved: ResolvedTheme): Extension {
       ".cm-searchMatch.cm-searchMatch-selected": {
         backgroundColor: "rgba(255, 200, 0, 0.45)",
       },
+      ".cm-ai-inserted": {
+        backgroundColor: "var(--selection)",
+        borderRadius: "2px",
+      },
+      ".cm-ghost-text": {
+        color: "var(--fg-dim)",
+        fontStyle: "italic",
+        borderBottom: "1px dashed var(--fg-dim)",
+        opacity: "0.8",
+      },
     },
     { dark: resolved === "dark" }
   );
@@ -113,6 +126,12 @@ function languageFor(filename: string): Extension {
   return [];
 }
 
+/** Soft-wrap prose. `.txt` and extensionless notes (saved as `.txt`) wrap; code-like names do not. */
+export function wrapsPlainText(filename: string): boolean {
+  if (/\.txt$/i.test(filename)) return true;
+  return !/\.[A-Za-z0-9]{1,12}$/.test(filename);
+}
+
 export interface ExtensionOptions {
   /** L1 large files (5–20 MB) drop folding/bracket/selection decorations to stay responsive. */
   simplified?: boolean;
@@ -132,7 +151,7 @@ export interface ExtensionOptions {
 
 export function buildExtensions(
   filename: string,
-  onStats: (stats: { lines: number; chars: number }) => void,
+  onStats: (stats: { lines: number; chars: number; preview?: boolean }) => void,
   options: ExtensionOptions = {}
 ): Extension[] {
   const simplified = options.simplified ?? false;
@@ -162,6 +181,8 @@ export function buildExtensions(
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
     localeCompartment.of(searchPhrases(getLocale())),
     languageFor(filename),
+    wrapsPlainText(filename) ? EditorView.lineWrapping : [],
+    completionExtension(),
     themeCompartment.of(editorChrome(getResolvedTheme())),
     EditorView.domEventHandlers({
       paste: (event, view) => {
@@ -186,14 +207,20 @@ export function buildExtensions(
         return true;
       },
     }),
+    rewritePreviewField,
+    inlineInsertField,
     EditorView.updateListener.of((update) => {
       // Keep the per-tab state cache fresh for saves, exports and inactive previews.
       options.onStateChanged?.(update.state);
       if (update.docChanged) {
+        const preview = update.transactions.every(
+          (tr) => !tr.docChanged || tr.annotation(aiPreview)
+        );
         // O(1) statistics only: the full text never enters React state per keystroke.
         onStats({
           lines: update.state.doc.lines,
           chars: update.state.doc.length,
+          preview,
         });
         options.onDocChanged?.();
       }

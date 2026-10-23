@@ -89,6 +89,23 @@ describe("Rust error localisation", () => {
       localizeRustMessage("该文件包含二进制内容（NUL 字节），已拒绝以文本方式打开。", "en")
     ).toBe("The file contains binary data (NUL byte); it cannot be opened as text.");
     expect(localizeRustMessage("不支持的编码：GBK", "en")).toBe("Unsupported encoding: GBK");
+    expect(localizeRustMessage("服务返回 401：bad key", "en")).toBe(
+      "The model service returned 401: bad key"
+    );
+    expect(localizeRustMessage("已取消。", "en")).toBe("Cancelled.");
+    expect(localizeRustMessage("等待模型响应超时。", "en")).toBe(
+      "Timed out waiting for the model."
+    );
+    expect(localizeRustMessage("密钥无效或没有权限。", "en")).toBe(
+      "The API key was rejected or is not allowed."
+    );
+    expect(
+      localizeRustMessage("15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。", "en")
+    ).toBe(
+      "No reply arrived within 15 seconds, so the request was cancelled. A local model may respond sooner."
+    );
+    expect(localizeRustMessage("密钥不能为空。", "en")).toBe("The API key cannot be empty.");
+    expect(localizeRustMessage("模型标识无效。", "en")).toBe("The model id is invalid.");
     expect(localizeRustMessage("搜索内容不能为空。", "en")).toBe(
       "The search pattern cannot be empty."
     );

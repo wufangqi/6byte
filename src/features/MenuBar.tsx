@@ -1,8 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { dismissActiveCompletion } from "../editor/completion";
 import { setLocale, useI18n, type Locale } from "../i18n";
 import { isTauri } from "../ipc/api";
+import { fileName } from "../lib/paths";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
+import { loadAiSettings } from "./aiSettings";
+import {
+  completionEndpoint,
+  loadCompletionSettings,
+  saveCompletionSettings,
+  subscribeCompletion,
+} from "./completionSettings";
 import { setThemePreference, useThemePreference, type ThemePreference } from "./theme";
 
 interface Props {
@@ -14,11 +23,13 @@ interface Props {
   onSave(): void;
   onSaveAs(): void;
   onSaveAll(): void;
+  onOpenModelSettings(): void;
+  canAsk?: boolean;
+  asking?: boolean;
+  onAsk?: () => void;
 }
 
-const fileName = (path: string) => path.split(/[\\/]/).pop() || path;
-
-/** Window caption: File and View live on the top row, beside the window buttons. */
+/** Window caption: File and View on the left. Model controls sit at the top-right. */
 export default function MenuBar({
   onNew,
   onNewWindow,
@@ -28,6 +39,10 @@ export default function MenuBar({
   onSave,
   onSaveAs,
   onSaveAll,
+  onOpenModelSettings,
+  canAsk = false,
+  asking = false,
+  onAsk,
 }: Props) {
   const preference = useThemePreference();
   const active = useWorkspace(selectActiveTab);
@@ -41,6 +56,19 @@ export default function MenuBar({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canSave = active?.mode === "text";
   const { t, locale } = useI18n();
+  const [completion, setCompletion] = useState(loadCompletionSettings);
+  useEffect(() => subscribeCompletion(() => setCompletion(loadCompletionSettings())), []);
+
+  const toggleCompletion = () => {
+    const current = loadCompletionSettings();
+    if (!current.enabled && !completionEndpoint(loadAiSettings(), current)) {
+      onOpenModelSettings();
+      return;
+    }
+    const next = { ...current, enabled: !current.enabled };
+    saveCompletionSettings(next);
+    if (!next.enabled) dismissActiveCompletion();
+  };
 
   const themes: { id: ThemePreference; label: string }[] = [
     { id: "light", label: t("menu.light") },
@@ -252,6 +280,47 @@ export default function MenuBar({
         </div>
       </div>
       <div className="titlebar__drag" data-tauri-drag-region />
+      <div className="titlebar__actions">
+        {canAsk && (
+          <button
+            type="button"
+            className={`titlebar__chip ${completion.enabled ? "titlebar__chip--on" : ""}`}
+            title={t("status.complete.title")}
+            aria-pressed={completion.enabled}
+            onClick={() => {
+              setMenu(null);
+              toggleCompletion();
+            }}
+          >
+            {t("status.complete")}
+          </button>
+        )}
+        {canAsk && onAsk && (
+          <button
+            type="button"
+            className={`titlebar__chip ${asking ? "titlebar__chip--on" : ""}`}
+            title={t("status.model.title")}
+            aria-pressed={asking}
+            onClick={() => {
+              setMenu(null);
+              onAsk();
+            }}
+          >
+            {t("status.model")}
+          </button>
+        )}
+        <button
+          type="button"
+          className="titlebar__chip titlebar__chip--outline"
+          onClick={() => {
+            setRecentOpen(false);
+            setMenu(null);
+            onOpenModelSettings();
+          }}
+        >
+          {t("menu.model")}
+        </button>
+      </div>
       {isTauri && (
         <div className="titlebar__controls">
           <button

@@ -93,6 +93,56 @@ const RULES: Rule[] = [
     params: (m) => ({ detail: m[1] }),
   },
   { pattern: /^读取区间超出文件大小。$/, key: "rangeOutOfBounds" },
+  {
+    pattern: /^不支持的模型服务：([\s\S]+)$/,
+    key: "aiProviderUnsupported",
+    params: (m) => ({ id: m[1] }),
+  },
+  { pattern: /^服务地址无效。$/, key: "aiBaseUrlInvalid" },
+  { pattern: /^服务地址只支持 http 或 https。$/, key: "aiBaseUrlScheme" },
+  { pattern: /^模型名称不能为空。$/, key: "aiModelEmpty" },
+  { pattern: /^消息不能为空。$/, key: "aiMessagesEmpty" },
+  {
+    pattern: /^不支持的消息角色：([\s\S]+)$/,
+    key: "aiRoleUnsupported",
+    params: (m) => ({ role: m[1] }),
+  },
+  { pattern: /^温度必须在 0 到 2 之间。$/, key: "aiTemperature" },
+  { pattern: /^生成长度必须大于 0。$/, key: "aiMaxTokens" },
+  { pattern: /^已取消。$/, key: "aiCancelled" },
+  {
+    pattern: /^服务返回 (\d+)：([\s\S]+)$/,
+    key: "aiHttp",
+    params: (m) => ({ status: m[1], detail: m[2] }),
+  },
+  {
+    pattern: /^无法连接模型服务：([\s\S]+)$/,
+    key: "aiNetwork",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^模型响应无法解析：([\s\S]+)$/,
+    key: "aiProtocol",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^模型服务错误：([\s\S]+)$/,
+    key: "aiUpstream",
+    params: (m) => ({ detail: m[1] }),
+  },
+  { pattern: /^等待模型响应超时。$/, key: "aiTimeout" },
+  { pattern: /^密钥无效或没有权限。$/, key: "aiUnauthorized" },
+  {
+    pattern: /^15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。$/,
+    key: "aiFirstToken",
+  },
+  { pattern: /^密钥不能为空。$/, key: "aiKeyEmpty" },
+  { pattern: /^模型标识无效。$/, key: "aiProfileId" },
+  {
+    pattern: /^钥匙串操作失败：([\s\S]+)$/,
+    key: "aiKeyring",
+    params: (m) => ({ detail: m[1] }),
+  },
 ];
 
 const EN: Record<string, string> = {
@@ -126,6 +176,26 @@ const EN: Record<string, string> = {
   rangeInvalid: "Invalid line range.",
   mmapFailed: "Memory mapping failed: {detail}",
   rangeOutOfBounds: "The line range is beyond the end of the file.",
+  aiProviderUnsupported: "Unsupported model provider: {id}",
+  aiBaseUrlInvalid: "The model service address is invalid.",
+  aiBaseUrlScheme: "The model service address must use http or https.",
+  aiModelEmpty: "The model name cannot be empty.",
+  aiMessagesEmpty: "The message list cannot be empty.",
+  aiRoleUnsupported: "Unsupported message role: {role}",
+  aiTemperature: "Temperature must be between 0 and 2.",
+  aiMaxTokens: "The generation length must be greater than 0.",
+  aiCancelled: "Cancelled.",
+  aiHttp: "The model service returned {status}: {detail}",
+  aiNetwork: "Could not reach the model service: {detail}",
+  aiProtocol: "Could not parse the model response: {detail}",
+  aiUpstream: "The model service reported an error: {detail}",
+  aiTimeout: "Timed out waiting for the model.",
+  aiUnauthorized: "The API key was rejected or is not allowed.",
+  aiFirstToken:
+    "No reply arrived within 15 seconds, so the request was cancelled. A local model may respond sooner.",
+  aiKeyEmpty: "The API key cannot be empty.",
+  aiProfileId: "The model id is invalid.",
+  aiKeyring: "Keychain operation failed: {detail}",
 };
 
 /** Map a Chinese Rust error onto the current language; unknown errors pass through. */

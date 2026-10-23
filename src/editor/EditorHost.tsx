@@ -47,7 +47,11 @@ export default function EditorHost({ tab, simplified, onPasteImage }: Props) {
     filename: target.name,
     version: target.version,
     simplified: simplifiedRef.current,
-    onStats: (stats) => useWorkspace.getState().markEdited(target.id, stats),
+    onStats: (stats) => {
+      const store = useWorkspace.getState();
+      if (stats.preview) store.noteDocStats(target.id, stats);
+      else store.markEdited(target.id, stats);
+    },
     onDocChanged: () => notifyDocChanged(target.id),
     onStateChanged: (state) => saveDocState(target.id, state),
     onPasteImage: pasteRef.current ? (file) => pasteRef.current!(file) : undefined,

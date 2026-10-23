@@ -32,6 +32,32 @@ export function getDocText(tabId: string): string | null {
   return cachedDocText(tabId);
 }
 
+/**
+ * Text of the main selection in the tab currently shown.
+ * `null` when that tab is not on screen, `""` when the caret has no range.
+ */
+export function getSelectionText(tabId: string): string | null {
+  if (!view || activeTabId !== tabId) return null;
+  const { from, to } = view.state.selection.main;
+  if (from === to) return "";
+  return view.state.sliceDoc(from, to);
+}
+
+/** The shared view while it is showing `tabId`. */
+export function getEditorView(tabId: string): EditorView | null {
+  if (!view || activeTabId !== tabId) return null;
+  return view;
+}
+
+/** Main selection span of the tab on screen, or `null` when the caret is collapsed. */
+export function getSelectionSpan(tabId: string): { from: number; to: number; text: string } | null {
+  const editor = getEditorView(tabId);
+  if (!editor) return null;
+  const { from, to } = editor.state.selection.main;
+  if (from === to) return null;
+  return { from, to, text: editor.state.sliceDoc(from, to) };
+}
+
 type DocListener = () => void;
 const docListeners = new Map<string, Set<DocListener>>();
 

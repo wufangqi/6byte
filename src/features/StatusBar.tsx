@@ -1,6 +1,6 @@
 import { useI18n } from "../i18n";
-import { selectActiveTab, useWorkspace } from "../stores/workspace";
 import { formatSize } from "../lib/format";
+import { selectActiveTab, useWorkspace } from "../stores/workspace";
 
 const EOL_LABEL: Record<string, string> = {
   lf: "LF",

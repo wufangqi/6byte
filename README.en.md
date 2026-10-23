@@ -8,7 +8,7 @@
 
 [中文](./README.md) · **English**
 
-**Current stage: M0–M2 shipped in v0.1.6 — encoding core, data-safety hardening, staged large-file read-only preview, file watching, cross-file grep, Markdown split preview / export / outline / image paste / Shiki / Mermaid / KaTeX, custom title bar, themes, per-file preview and a bilingual (Chinese / English) UI. Next: M3 (AI layer).**
+**Current stage: M0–M2 shipped in v0.1.6; M3 model services, in-editor selection rewrite, autocomplete, .txt visual wrapping and top-right title-bar entries are implemented in the working tree, pending commit and v0.1.7.**
 
 > The application UI is available in **Chinese and English** (switch under **View → Language**); the choice is remembered.
 > The detailed docs under `docs/` are written in Chinese.
@@ -16,6 +16,7 @@
 Roadmap & design notes: [技术选型与路线图.md](./技术选型与路线图.md) ·
 Project review: [docs/项目梳理.md](./docs/项目梳理.md) ·
 Backlog & progress: [docs/待办清单.md](./docs/待办清单.md) ·
+UI guidelines: [docs/ui-guidelines.md](./docs/ui-guidelines.md) ·
 Performance: [docs/perf.md](./docs/perf.md) ·
 Release checklist: [docs/release-checklist.md](./docs/release-checklist.md) ·
 Changelog: [CHANGELOG.md](./CHANGELOG.md)
@@ -104,12 +105,12 @@ the tag against the three version manifests and takes the release notes from `CH
 |---|---|---|
 | Frontend type check | `pnpm exec tsc --noEmit` | ✅ 0 errors |
 | Lint / formatting | `pnpm lint`, `pnpm format:check` | ✅ pass |
-| Frontend unit tests | `pnpm test` | ✅ 116/116 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n catalogs/plurals/Rust error mapping, title bar and preview state, per-tab editor state and undo history) |
-| Frontend bundle | `pnpm build` | ✅ ~961 KB main / ~330 KB gzip (+ lazy Shiki, KaTeX and Mermaid chunks) |
-| Rust unit tests | `cargo test --lib` | ✅ 53 passed / 0 failed (+4 ignored perf probes; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus) |
+| Frontend unit tests | `pnpm test` | ✅ 144/144 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n, title bar and preview state, per-tab undo history, model catalog without API keys, selection streaming, in-editor highlight accept/cancel, file names) |
+| Frontend bundle | `pnpm build` | ✅ ~996 KB main / ~338 KB gzip (+ lazy Shiki, KaTeX and Mermaid chunks) |
+| Rust unit tests | `cargo test --lib` | ✅ 75 passed / 0 failed (+4 ignored perf probes; 79 tests total; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus, OpenAI-compatible streaming, keychain and connectivity probe, edit-path timeout and retry, thinking text) |
 | Rust formatting | `cargo fmt --all -- --check` | ✅ pass |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ pass (locally needs `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`, see docs/perf.md) |
-| Installers | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB |
+| Installers | `pnpm tauri build` | ✅ MSI 5.70 MB / NSIS 4.88 MB (with KaTeX / Mermaid assets and the model client) |
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
 | E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 91/91 across 22 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence, undo history across tab switches and preview toggles) |
 | Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
@@ -126,7 +127,7 @@ the tag against the three version manifests and takes the release notes from `CH
 | 35 MB open to first paint (read-only) | ≤ 1 s | **458 ms** (including app startup, measured via CDP) |
 | Input latency P95 | ≤ 16 ms | **5.6 ms** (1000-line L0); L1: 10 MB **3.0 ms**, 19 MB **2.7 ms** |
 | Memory with 3 files | ≤ 260 MB (idle baseline ≤ 230 MB) | ⚠️ idle private memory **220 MB** (WebView2 baseline); down to 159 MB with GPU disabled (see perf.md) |
-| Installer | ≤ 20 MB | ✅ 4.25 MB (NSIS, current build) |
+| Installer | ≤ 20 MB | ✅ 4.88 MB (NSIS, current build) |
 
 ## Implemented
 
@@ -159,12 +160,17 @@ the tag against the three version manifests and takes the release notes from `CH
 - [x] Mermaid diagrams and KaTeX math in the preview, loaded on demand
 - [x] Bilingual UI (Chinese / English): menus, status bar, search, preview and dialogs; switch under View → Language, persisted in `localStorage` (`ainative.locale`)
 - [x] Undo history kept per tab (M-06): all tabs share one `EditorView` while each tab keeps its own `EditorState`; switching tabs or toggling the preview no longer resets undo history, and switching back restores the undo stack, caret and scroll position
+- [x] Model service has two levels: providers (address and API key), then models under a provider. The key is stored per provider. Top-right title bar **Model**
+- [x] Selection rewrite: status-bar **Model**. Instruction on the left, collapsible thinking on the right. The reply streams into the current editor and is highlighted. Accept replaces the original and does not save the file; Cancel restores it. Cancels if no event arrives within 15 seconds; retries 429/5xx twice
+- [x] Autocomplete: off by default, its model is configured separately from rewrite. A suggestion appears after a short pause; Tab accepts, Esc cancels, nothing is saved. Completion, model and model-service entries live in the top-right title bar
+- [x] `.txt` files and untitled notes wrap visually (display only, no newline is written); markdown / log / json keep their original lines
+- [x] Open folder (up to 40 text files at once) and new windows with an empty session
+- [x] Cross-file search panel (Ctrl+Shift+F, regex + case toggle + click-to-jump)
 
 ## Not implemented yet (M2 → M4)
 
 - [ ] Incremental / cached cross-file grep (if needed for M2)
-- [ ] memmap range reads for files >100 MB (currently rejected)
-- [ ] AI layer: Ctrl+K inline diff, provider abstraction, undoable requests (M3)
+- [ ] AI editing: Ctrl+K inline diff and Tab accept (M3). Inline rewrite works in the editor; only the shortcut is missing
 - [ ] Portable build, winget, auto-update, Explorer context menu (M4)
 
 ## Project layout
@@ -182,6 +188,8 @@ src-tauri/            Rust core
   src/bigfile.rs      large-file staging, line index, range reads (with unit tests)
   src/watcher.rs      file watching (notify, parent-directory watch + event dedupe, with unit tests)
   src/grep.rs         cross-file search (regex, skips binaries and dependency folders, with unit tests)
+  src/ai.rs           model provider, OpenAI-compatible streaming, cancellation, connectivity probe (unit tests)
+  src/secrets.rs      API key in the OS keychain (in-memory stand-in for tests; nothing is written to a config file)
   src/commands.rs     file read/write, stat, atomic save, open_document, grep_files, watch_file, asset save, large-file/binary guards
   capabilities/       Tauri permissions (minimal set)
 scripts/
