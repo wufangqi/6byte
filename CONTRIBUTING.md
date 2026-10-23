@@ -85,6 +85,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 > **`master` 是受保护分支**：禁止 force push 与删除，管理员同样受限，并要求 6 项 CI 检查
 > （Windows/macOS/Ubuntu × 前端/Rust）。因为 required checks 会拦截直推，**所有改动都走 PR**：
 > 从 `master` 拉分支 → push 分支 → 开 PR → CI 全绿后合并。
+>
+> 便捷方式：`scripts/ship.ps1 -Title "feat: ..."` 一条命令完成分支 → 本地检查 → 提交 → push → 开 PR → 等 6 项 checks → squash 合并。
 
 - 提交信息使用 Conventional Commits：`feat:` / `fix:` / `refactor:` / `docs:` / `chore:` / `test:`。
 - PR 合并前必须通过：`tsc`、`eslint`、`prettier --check`、`vitest`、`cargo fmt --check`、
@@ -93,10 +95,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 
 ## 发布
 
-1. 更新 `CHANGELOG.md` 与三个版本号（`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`）。
-2. `pnpm tauri build`，确认 `src-tauri/target/release/bundle/` 下 MSI 与 NSIS 产物。
-3. 在干净机器（无管理员权限）验证安装、打开 / 编辑 / 保存、卸载。
-4. 打 tag `vX.Y.Z` 并附 CHANGELOG 摘要。
+1. 更新 `CHANGELOG.md`（把 `[Unreleased]` 归档为本次版本）与三个版本号
+   （`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`），本地验证：
+   `node scripts/check-version.mjs vX.Y.Z`。
+2. （可选）本地 `pnpm tauri build` + 安装验证；CI 也会在 tag 上重新构建。
+3. 打 tag 并推送：`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`。
+   这会触发 `Release` workflow，在 Windows 上构建 MSI/NSIS 并创建 **draft** Release
+   （版本号不匹配会直接失败；含 `-` 的 tag 标记为 prerelease）。
+4. 核对 draft 资产与 Release Notes，然后发布：
+   `gh release edit vX.Y.Z --draft=false`，
+   或在 Actions 里手动运行 `Release` 并勾选 `publish: true`。
 
 ## 不做的事
 

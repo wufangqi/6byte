@@ -12,6 +12,7 @@
 - [ ] `scripts/e2e-smoke.ps1` 在安装版上全绿（需 WebView2 远程调试端口）
 - [ ] 版本号三处一致：`package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`
 - [ ] `CHANGELOG.md` 的 `[Unreleased]` 已归档为本次版本
+- [ ] `node scripts/check-version.mjs vX.Y.Z` 通过（Release workflow 也会校验，不一致直接失败）
 
 ## 1. 数据安全（最高优先级）
 
@@ -85,9 +86,12 @@
 - 预览/导出通过 Rust 命令读取本地图片并内联为 data URI（单张 ≤32 MB），不再使用 asset 协议
 - 无自动更新、无便携版（M4）
 
-## 7. 发布动作
+## 7. 发布动作（自动化，M-08）
 
-1. 归档 CHANGELOG、更新三处版本号、提交 `chore: release v0.1.0`
-2. `pnpm tauri build`，记录产物 SHA256
-3. 打 tag `v0.1.0`，Release Notes 按 CHANGELOG 摘要 + 已知限制
-4. 上传 MSI/NSIS，分别在 win10 / win11 各装一次做最终验证
+1. 归档 CHANGELOG、更新三处版本号、提交 `chore: release vX.Y.Z`，并走 `scripts/ship.ps1` 合入 `master`。
+2. 打 tag 并推送：`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
+   → `Release` workflow 在 Windows 上构建 MSI/NSIS，自动创建 **draft** Release 并附加资产，
+   Release Notes 取自 CHANGELOG 对应章节。
+3. 核对 draft：资产齐全（MSI + NSIS）、体积在预算内、Notes 正确；必要时本机安装一次做最终验证。
+4. 发布：`gh release edit vX.Y.Z --draft=false`（或在 Actions 手动运行 `Release` 且 `publish: true`）。
+   事后记录产物 SHA256（`gh release view vX.Y.Z --json assets` 或 `Get-FileHash`）。

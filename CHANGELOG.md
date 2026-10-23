@@ -11,6 +11,8 @@
 
 - 界面中英双语（M-10）：标题栏菜单、状态栏、欢迎页、跨文件搜索、Markdown 预览/大纲、对话框与错误提示全部双语；视图 → 语言切换，偏好写入 `localStorage`（`ainative.locale`），重启后保持。
 - Rust 返回的中文错误在英文界面下映射为英文（未知错误保留原文）；CodeMirror 查找/替换面板随语言切换。
+- 发布自动化（M-08）：推送 `v*` tag 触发 `Release` workflow，在 Windows 上构建 MSI/NSIS 并附加到 GitHub Release（tag 推送默认 draft；`workflow_dispatch` 可指定 `publish: true`）。版本号与三处清单自动校验，Release Notes 从 CHANGELOG 抽取。
+- 一键提 PR（M-11）：`scripts/ship.ps1` 本地检查 → 提交 → push → 开/复用 PR → 轮询六项 checks → squash 合并 → 清理分支。
 
 ### Tests
 
