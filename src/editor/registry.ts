@@ -1,26 +1,35 @@
 import type { EditorView } from "@codemirror/view";
+import { getDocText as cachedDocText } from "./docStates";
 
 /**
- * Registry of live EditorViews, one per open tab.
+ * Registry for the single shared EditorView (M-06).
  *
- * The store only keeps a snapshot of each buffer; the authoritative text of the
- * active tab lives here and is read on save, so keystrokes never copy the whole
- * document through React state.
+ * The store only keeps a snapshot of each buffer; the authoritative text lives
+ * in the cached `EditorState` objects, so saving reads it from here.
  */
-const views = new Map<string, EditorView>();
+let view: EditorView | null = null;
+let activeTabId: string | null = null;
 
-export function registerView(tabId: string, view: EditorView): void {
-  views.set(tabId, view);
+/** Bind the shared view to the tab whose state it currently shows. */
+export function attachView(tabId: string, next: EditorView): void {
+  view = next;
+  activeTabId = tabId;
 }
 
-export function unregisterView(tabId: string, view: EditorView): void {
-  if (views.get(tabId) === view) views.delete(tabId);
+export function detachView(next: EditorView): void {
+  if (view !== next) return;
+  view = null;
+  activeTabId = null;
 }
 
-/** Live buffer text of a mounted tab, or `null` when the tab is not mounted. */
+/** Update the tab association after the view swaps to another document. */
+export function setActiveTab(tabId: string): void {
+  activeTabId = tabId;
+}
+
+/** Live buffer text of any cached tab, or `null` when the tab is not open. */
 export function getDocText(tabId: string): string | null {
-  const view = views.get(tabId);
-  return view ? view.state.doc.toString() : null;
+  return cachedDocText(tabId);
 }
 
 type DocListener = () => void;
@@ -33,7 +42,7 @@ export function notifyDocChanged(tabId: string): void {
   for (const listener of listeners) listener();
 }
 
-/** Subscribe to buffer changes of a mounted tab. Returns an unsubscribe function. */
+/** Subscribe to buffer changes of a tab. Returns an unsubscribe function. */
 export function subscribeDocChanges(tabId: string, listener: DocListener): () => void {
   let listeners = docListeners.get(tabId);
   if (!listeners) {
@@ -49,18 +58,18 @@ export function subscribeDocChanges(tabId: string, listener: DocListener): () =>
   };
 }
 
-/** Scroll container of a mounted tab (used for preview scroll sync). */
+/** Scroll container of the tab currently shown by the shared view. */
 export function getScrollElement(tabId: string): HTMLElement | null {
-  return views.get(tabId)?.scrollDOM ?? null;
+  if (!view || activeTabId !== tabId) return null;
+  return view.scrollDOM;
 }
 
 /**
  * Move the caret to a 1-based line and scroll it into view. Returns `false` when
- * the tab is not mounted yet (the caller can retry after the editor mounts).
+ * the tab is not the one currently shown (the caller can retry after a swap).
  */
 export function revealLine(tabId: string, line: number): boolean {
-  const view = views.get(tabId);
-  if (!view) return false;
+  if (!view || activeTabId !== tabId) return false;
   const target = Math.max(1, Math.min(line, view.state.doc.lines));
   const info = view.state.doc.line(target);
   view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true });

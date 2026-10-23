@@ -99,14 +99,14 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 |---|---|---|
 | 前端类型检查 | `pnpm exec tsc --noEmit` | ✅ 0 error |
 | Lint / 格式化 | `pnpm lint`、`pnpm format:check` | ✅ 通过 |
-| 前端单测 | `pnpm test` | ✅ 110/110（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、i18n 文案/复数/Rust 错误映射、标题栏与预览状态） |
+| 前端单测 | `pnpm test` | ✅ 116/116（store、格式化、大文件窗口几何、markdown 渲染/图片路径、大纲、滚动同步、HTML 导出、分屏比例、主题、图表、i18n 文案/复数/Rust 错误映射、标题栏与预览状态、每标签编辑状态与撤销历史） |
 | 前端打包 | `pnpm build` | ✅ 主包 961 KB / gzip 330 KB（+ 按需 Shiki/KaTeX/Mermaid chunk，dist 总计 8.6 MB） |
 | Rust 单测 | `cargo test --lib` | ✅ 53 passed / 0 failed（+4 ignored 性能探针；编码、文件命令、大文件索引/区间、监听、grep、图片落盘、`list_text_files`、fixture 语料） |
 | Rust 格式 | `cargo fmt --all -- --check` | ✅ 通过 |
 | Rust Clippy | `cargo clippy --all-targets -- -D warnings` | ✅ 通过（本机需 `RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-msvc`，见 docs/perf.md） |
 | 安装包 | `pnpm tauri build` | ✅ MSI 4.96 MB / NSIS 4.25 MB（含 KaTeX/Mermaid 资源） |
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
-| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 84/84（21 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化） |
+| 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 91/91（22 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化、撤销历史跨标签/预览） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust） |
 | 发布自动化 | tag 推送 `Release` workflow | ✅ `v0.1.6-rc1` 演练通过：Windows 构建 MSI/NSIS → draft Release；`check-version` 校验版本号 |
 
@@ -150,6 +150,7 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 - [x] 主题：浅色 / 深色 / 跟随系统，写入 `localStorage`（`ainative.theme`）；编辑器、预览、Shiki 代码高亮、Mermaid 图表与导出 HTML 都跟随主题
 - [x] 按文件预览：每个标签独立记住预览开关，重新打开文件回到编辑模式
 - [x] 界面中英双语：菜单、状态栏、搜索、预览与对话框全部双语；视图 → 语言切换，写入 `localStorage`（`ainative.locale`），重启后保持
+- [x] 撤销历史按标签保留（M-06）：所有标签共享同一个 `EditorView`，每个标签保留自己的 `EditorState`；切换标签、开关预览不再重置撤销历史，切回时恢复撤销栈、光标与滚动位置
 - [x] 打开文件夹（`list_text_files`，一次最多 40 个文本文件）与新建窗口（空白会话，只有主窗口恢复/保存会话）
 - [x] 跨文件搜索面板（Ctrl+Shift+F，正则 + 大小写开关 + 点击跳转）
 
@@ -163,7 +164,7 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 
 ```
 src/                  React 前端
-  editor/             CM6 封装、扩展、活动视图 registry（唯一可 import @codemirror/*）
+  editor/             CM6 封装、扩展、单视图 + 每标签 EditorState（唯一可 import @codemirror/*）
   features/           标题栏菜单 / 主题 / 标签栏 / 状态栏 / 欢迎页 / 弹窗 / 大文件查看器 / grep / Markdown 预览、导出、大纲、图片粘贴、Mermaid 与 KaTeX
   ipc/                所有 Tauri command 与事件的类型化封装（唯一可 import @tauri-apps/*；含窗口会话归属）
   stores/             zustand 状态
@@ -176,7 +177,7 @@ src-tauri/            Rust 核心层
   src/commands.rs     文件读写、stat、原子保存、open_document、grep_files、watch_file、大文件/二进制防护
   capabilities/       Tauri 权限（最小集）
 scripts/
-  e2e-smoke.ps1       CDP 驱动的端到端冒烟（大文件预览 / 混合换行 / 会话失效）
+  e2e-smoke.ps1       CDP 驱动的端到端冒烟（22 步：编辑、预览、主题、语言、撤销历史等）
   gen_icons.py        生成应用图标
 .github/workflows/    CI（三平台前端检查 + Rust fmt/clippy/test）
 docs/                 项目梳理、待办清单、性能实测、发布验收清单
@@ -184,8 +185,6 @@ docs/                 项目梳理、待办清单、性能实测、发布验收�
 
 ## 已知限制
 
-- 切换标签会重置该标签的撤销历史（M0 取舍：每个标签一个 `EditorView`；后续改多文档共享视图）。
-- 切换 Markdown 预览会重挂编辑器，同样会重置该标签的撤销历史。
 - 预览高亮只覆盖 10 种常用语言，其他语言显示为纯文本。
 - 图片粘贴默认存到源文件同目录的 `assets/`；预览/导出通过 Rust 命令读取并内联为 data URI（单张上限 32 MB）。
 - 自定义标题栏目前只在 Windows 做过验证，macOS / Linux 的窗口按钮与拖拽区域待适配。

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import CodeEditor from "./editor/CodeEditor";
+import EditorHost from "./editor/EditorHost";
 import GrepPanel from "./features/GrepPanel";
 import {
   DEFAULT_SPLIT_PERCENT,
@@ -38,6 +38,7 @@ import {
   writeFile,
 } from "./ipc/api";
 import { getDocText, revealLine } from "./editor/registry";
+import { dropDocStatesExcept } from "./editor/docStates";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { localizeError, t as tr, useI18n } from "./i18n";
 import { formatSize, formatTime } from "./lib/format";
@@ -647,6 +648,14 @@ export default function App() {
     return unsubscribe;
   }, []);
 
+  // Forget the cached EditorState of closed tabs (M-06).
+  useEffect(() => {
+    const unsubscribe = useWorkspace.subscribe((state) => {
+      dropDocStatesExcept(new Set(state.tabs.map((tab) => tab.id)));
+    });
+    return unsubscribe;
+  }, []);
+
   // Native drag & drop (Tauri).
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -781,69 +790,54 @@ export default function App() {
         {active ? (
           active.mode === "large" ? (
             <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
-          ) : previewOn ? (
+          ) : (
             <div className="split" ref={splitRef}>
-              <div className="split__pane" style={{ width: `${splitPercent}%` }}>
-                <CodeEditor
-                  key={`${active.id}:${active.version}`}
-                  tabId={active.id}
-                  content={active.content}
-                  filename={active.name}
-                  version={active.version}
+              <div
+                className="split__pane"
+                style={{ width: previewOn ? `${splitPercent}%` : "100%" }}
+              >
+                <EditorHost
+                  tab={active}
                   simplified={active.size > 5 * 1024 * 1024}
-                  onStats={(id, stats) => useWorkspace.getState().markEdited(id, stats)}
-                  onFlush={(id, content, version) =>
-                    useWorkspace.getState().setContent(id, content, version)
-                  }
                   onPasteImage={handlePasteImage}
                 />
               </div>
-              <div
-                className="split__divider"
-                role="separator"
-                aria-orientation="vertical"
-                aria-label={t("app.split.label")}
-                aria-valuemin={MIN_SPLIT_PERCENT}
-                aria-valuemax={MAX_SPLIT_PERCENT}
-                aria-valuenow={Math.round(splitPercent)}
-                tabIndex={0}
-                title={t("app.split.title")}
-                onPointerDown={startSplitDrag}
-                onDoubleClick={() => setSplitPercent(50)}
-                onKeyDown={(event) => {
-                  if (event.key === "ArrowLeft") {
-                    event.preventDefault();
-                    setSplitPercent((value) => adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP));
-                  } else if (event.key === "ArrowRight") {
-                    event.preventDefault();
-                    setSplitPercent((value) => adjustSplitPercent(value, SPLIT_KEYBOARD_STEP));
-                  }
-                }}
-              />
-              <div className="split__pane split__pane--preview">
-                <MarkdownPreview
-                  key={active.id}
-                  tabId={active.id}
-                  name={active.name}
-                  baseDir={grepRoot}
-                  onExport={() => void exportActiveAsHtml()}
-                />
-              </div>
+              {previewOn && (
+                <>
+                  <div
+                    className="split__divider"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={t("app.split.label")}
+                    aria-valuemin={MIN_SPLIT_PERCENT}
+                    aria-valuemax={MAX_SPLIT_PERCENT}
+                    aria-valuenow={Math.round(splitPercent)}
+                    tabIndex={0}
+                    title={t("app.split.title")}
+                    onPointerDown={startSplitDrag}
+                    onDoubleClick={() => setSplitPercent(50)}
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowLeft") {
+                        event.preventDefault();
+                        setSplitPercent((value) => adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP));
+                      } else if (event.key === "ArrowRight") {
+                        event.preventDefault();
+                        setSplitPercent((value) => adjustSplitPercent(value, SPLIT_KEYBOARD_STEP));
+                      }
+                    }}
+                  />
+                  <div className="split__pane split__pane--preview">
+                    <MarkdownPreview
+                      key={active.id}
+                      tabId={active.id}
+                      name={active.name}
+                      baseDir={grepRoot}
+                      onExport={() => void exportActiveAsHtml()}
+                    />
+                  </div>
+                </>
+              )}
             </div>
-          ) : (
-            <CodeEditor
-              key={`${active.id}:${active.version}`}
-              tabId={active.id}
-              content={active.content}
-              filename={active.name}
-              version={active.version}
-              simplified={active.size > 5 * 1024 * 1024}
-              onStats={(id, stats) => useWorkspace.getState().markEdited(id, stats)}
-              onFlush={(id, content, version) =>
-                useWorkspace.getState().setContent(id, content, version)
-              }
-              onPasteImage={handlePasteImage}
-            />
           )
         ) : (
           <Welcome

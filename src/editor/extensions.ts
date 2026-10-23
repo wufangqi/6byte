@@ -119,6 +119,11 @@ export interface ExtensionOptions {
   /** Called on every document change (O(1)); used by the markdown preview. */
   onDocChanged?: () => void;
   /**
+   * Called with the new state on every update so the per-tab state cache stays
+   * current (save/export/preview in inactive tabs read it).
+   */
+  onStateChanged?: (state: EditorState) => void;
+  /**
    * Saves a pasted image and returns the Markdown snippet to insert, or `null`
    * to leave the paste alone. Provided by the app (needs the document directory).
    */
@@ -182,6 +187,8 @@ export function buildExtensions(
       },
     }),
     EditorView.updateListener.of((update) => {
+      // Keep the per-tab state cache fresh for saves, exports and inactive previews.
+      options.onStateChanged?.(update.state);
       if (update.docChanged) {
         // O(1) statistics only: the full text never enters React state per keystroke.
         onStats({
