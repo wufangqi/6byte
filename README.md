@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.6；M3 模型服务、选区改写（编辑框内接受）、自动补全、txt 自动换行与标题栏右上角入口已实现，待提交与发版 v0.1.7**
+**当前阶段：M0–M2 已交付并发布 v0.1.6；M3（模型服务、编辑框内改写、自动补全、txt 自动换行、标题栏右上角入口、UI 统一）随 v0.1.7 发布**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -46,10 +46,10 @@ UI 规范：[docs/ui-guidelines.md](./docs/ui-guidelines.md) ·
 
 ## 安装（终端用户）
 
-从 [Releases v0.1.6](https://github.com/wufangqi/6byte/releases/tag/v0.1.6) 下载：
+从 [Releases v0.1.7](https://github.com/wufangqi/6byte/releases/tag/v0.1.7) 下载：
 
-- `6byte_0.1.6_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
-- `6byte_0.1.6_x64_en-US.msi`（企业部署 / 静默安装）
+- `6byte_0.1.7_x64-setup.exe`（NSIS，单用户安装，无需管理员权限，推荐）
+- `6byte_0.1.7_x64_en-US.msi`（企业部署 / 静默安装）
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 

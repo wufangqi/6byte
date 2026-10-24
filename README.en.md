@@ -8,7 +8,7 @@
 
 [中文](./README.md) · **English**
 
-**Current stage: M0–M2 shipped in v0.1.6; M3 model services, in-editor selection rewrite, autocomplete, .txt visual wrapping and top-right title-bar entries are implemented in the working tree, pending commit and v0.1.7.**
+**Current stage: M0–M2 shipped in v0.1.6; M3 (model services, in-editor rewrite, autocomplete, .txt visual wrapping, top-right title-bar entries, UI consistency) ships with v0.1.7.**
 
 > The application UI is available in **Chinese and English** (switch under **View → Language**); the choice is remembered.
 > The detailed docs under `docs/` are written in Chinese.
@@ -49,10 +49,10 @@ Changelog: [CHANGELOG.md](./CHANGELOG.md)
 
 ## Install (end users)
 
-Download from [Releases v0.1.4](https://github.com/wufangqi/6byte/releases/tag/v0.1.4):
+Download from [Releases v0.1.7](https://github.com/wufangqi/6byte/releases/tag/v0.1.7):
 
-- `6byte_0.1.4_x64-setup.exe` — NSIS, per-user install, no admin rights required (recommended)
-- `6byte_0.1.4_x64_en-US.msi` — MSI, for enterprise deployment / silent install
+- `6byte_0.1.7_x64-setup.exe` — NSIS, per-user install, no admin rights required (recommended)
+- `6byte_0.1.7_x64_en-US.msi` — MSI, for enterprise deployment / silent install
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 

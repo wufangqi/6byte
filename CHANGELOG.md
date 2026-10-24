@@ -3,9 +3,7 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与
 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
-
-> 计划随 **v0.1.7** 发布；当前版本号仍为 0.1.6。
+## [0.1.7] - 2026-10-25
 
 ### Added
 
