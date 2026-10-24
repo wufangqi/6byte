@@ -145,6 +145,15 @@ export const zh: MessageCatalog = {
   "ai.stream.thinking": "思考过程",
   "ai.stream.thinkingEmpty": "还没有思考过程。",
   "ai.stream.cancelled": "已取消。原文已恢复。",
+  "ai.stream.actions": "一键动作",
+  "ai.stream.action.polish": "润色",
+  "ai.stream.action.translate": "翻译",
+  "ai.stream.action.summarize": "总结",
+  "ai.stream.prompt.polish":
+    "润色选中的文字：保持原意和 Markdown 结构，让表达更清楚。只输出润色后的正文。",
+  "ai.stream.prompt.translate":
+    "把选中的文字翻译成对应语言（中文译成英文，英文译成中文）。只输出译文，不要解释。",
+  "ai.stream.prompt.summarize": "用两三句话总结选中的文字。只输出总结，不要解释。",
 
   // Tabs
   "tab.untitled": "未命名 {n}",
@@ -404,6 +413,16 @@ export const en: MessageCatalog = {
   "ai.stream.thinking": "Thinking",
   "ai.stream.thinkingEmpty": "No thinking yet.",
   "ai.stream.cancelled": "Cancelled. The original text is back.",
+  "ai.stream.actions": "Quick actions",
+  "ai.stream.action.polish": "Polish",
+  "ai.stream.action.translate": "Translate",
+  "ai.stream.action.summarize": "Summarize",
+  "ai.stream.prompt.polish":
+    "Polish the selected text: keep the meaning and Markdown structure, make it clearer. Output only the polished text.",
+  "ai.stream.prompt.translate":
+    "Translate the selected text (Chinese to English, English to Chinese). Output only the translation, no explanation.",
+  "ai.stream.prompt.summarize":
+    "Summarize the selected text in two or three sentences. Output only the summary, no explanation.",
 
   // Tabs
   "tab.untitled": "Untitled {n}",

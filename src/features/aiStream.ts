@@ -3,7 +3,7 @@ import type { AiMessage } from "../ipc/types";
 /** Selection is never truncated. Above this, the request is refused. */
 export const SELECTION_CHAR_LIMIT = 12_000;
 
-const STREAM_SYSTEM = "改写用户选中的文字，只输出改写结果。";
+const STREAM_SYSTEM = "按用户要求处理用户选中的文字，只输出处理后的正文，不要解释。";
 
 export function modelHost(baseUrl: string): string {
   const trimmed = baseUrl.trim();
@@ -24,6 +24,31 @@ export function streamMessages(selection: string, instruction: string): AiMessag
     { role: "system", content: STREAM_SYSTEM },
     { role: "user", content: `选区：\n${selection}\n\n要求：\n${instruction.trim()}` },
   ];
+}
+
+/**
+ * One-click actions (T39). Each entry keeps the i18n keys so the panel can
+ * render the label and send the matching prompt without a second lookup table.
+ */
+export const QUICK_ACTIONS = [
+  { id: "polish", labelKey: "ai.stream.action.polish", promptKey: "ai.stream.prompt.polish" },
+  {
+    id: "translate",
+    labelKey: "ai.stream.action.translate",
+    promptKey: "ai.stream.prompt.translate",
+  },
+  {
+    id: "summarize",
+    labelKey: "ai.stream.action.summarize",
+    promptKey: "ai.stream.prompt.summarize",
+  },
+] as const;
+
+export type QuickActionId = (typeof QUICK_ACTIONS)[number]["id"];
+
+/** Quick actions reuse the normal rewrite path; only the instruction differs. */
+export function quickActionMessages(selection: string, prompt: string): AiMessage[] {
+  return streamMessages(selection, prompt);
 }
 
 export function outgoingChars(messages: readonly { content: string }[]): number {

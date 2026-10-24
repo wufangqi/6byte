@@ -1429,6 +1429,31 @@ code {
   line-height: 1.6;
 }
 
+.ai-stream__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ai-stream__preset {
+  padding: 3px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--fg-dim);
+  font-size: var(--text-sm);
+}
+
+.ai-stream__preset:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--fg);
+}
+
+.ai-stream__preset.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
 .ai-stream__field {
   display: flex;
   flex-direction: column;

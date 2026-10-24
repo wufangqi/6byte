@@ -8,9 +8,12 @@ import {
   IDLE_STREAM,
   modelHost,
   outgoingChars,
+  QUICK_ACTIONS,
+  quickActionMessages,
   reduceStream,
   selectionTooLarge,
   streamMessages,
+  type QuickActionId,
   type StreamView,
 } from "./aiStream";
 
@@ -56,6 +59,7 @@ function erase(item: PendingInsert | null): boolean {
 export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props) {
   const { t } = useI18n();
   const [instruction, setInstruction] = useState("");
+  const [action, setAction] = useState<QuickActionId | null>(null);
   const [selection, setSelection] = useState("");
   const [view, setView] = useState<StreamView>(IDLE_STREAM);
   const [thinkingOpen, setThinkingOpen] = useState(true);
@@ -197,6 +201,7 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     streamId.current = null;
     pending.current = null;
     setOffer(false);
+    setAction(null);
     if (item?.text) {
       if (erase(item)) setNote("restored");
       else setNote("stale");
@@ -240,6 +245,7 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     const view = getEditorView(item.tabId);
     pending.current = null;
     setOffer(false);
+    setAction(null);
     if (!view || !same(item)) {
       setNote("stale");
       return;
@@ -248,15 +254,16 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     setNote("accepted");
   };
 
-  const send = async () => {
+  const send = async (prompt?: string) => {
     const span = getSelectionSpan(tabId);
     const current = span?.text ?? "";
+    const request = (prompt ?? instruction).trim();
     setSelection(current);
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
       onNeedSettings();
       return;
     }
-    if (!span || selectionTooLarge(current) || !instruction.trim()) return;
+    if (!span || selectionTooLarge(current) || !request) return;
     if (pending.current) discard();
     pending.current = {
       tabId,
@@ -279,7 +286,7 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
         baseUrl: settings.baseUrl,
         model: settings.model,
         profileId: settings.id,
-        messages: streamMessages(current, instruction),
+        messages: prompt ? quickActionMessages(current, request) : streamMessages(current, request),
       });
       streamId.current = id;
       const queued = early.current.splice(0);
@@ -323,6 +330,25 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
       <div className="ai-stream__columns">
         <div className="ai-stream__input-col">
           <p className="ai-stream__hint">{t("ai.stream.hint")}</p>
+          <div className="ai-stream__presets" role="group" aria-label={t("ai.stream.actions")}>
+            {QUICK_ACTIONS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={`btn ai-stream__preset${action === item.id ? " is-on" : ""}`}
+                title={t(item.promptKey)}
+                disabled={running || !selection || selectionTooLarge(selection)}
+                onClick={() => {
+                  const prompt = t(item.promptKey);
+                  setInstruction(prompt);
+                  setAction(item.id);
+                  void send(prompt);
+                }}
+              >
+                {t(item.labelKey)}
+              </button>
+            ))}
+          </div>
           <label className="ai-stream__field">
             <span>{t("ai.stream.instruction")}</span>
             <textarea
@@ -330,7 +356,10 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
               rows={3}
               value={instruction}
               placeholder={t("ai.stream.placeholder")}
-              onChange={(event) => setInstruction(event.target.value)}
+              onChange={(event) => {
+                setInstruction(event.target.value);
+                if (action) setAction(null);
+              }}
             />
           </label>
           <div className="ai-stream__meta">
@@ -359,7 +388,10 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
                 type="button"
                 className="btn btn--primary"
                 disabled={!selection || selectionTooLarge(selection) || !instruction.trim()}
-                onClick={() => void send()}
+                onClick={() => {
+                  setAction(null);
+                  void send();
+                }}
               >
                 {t("ai.stream.send")}
               </button>

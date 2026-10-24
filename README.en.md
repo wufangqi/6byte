@@ -105,7 +105,7 @@ the tag against the three version manifests and takes the release notes from `CH
 |---|---|---|
 | Frontend type check | `pnpm exec tsc --noEmit` | ✅ 0 errors |
 | Lint / formatting | `pnpm lint`, `pnpm format:check` | ✅ pass |
-| Frontend unit tests | `pnpm test` | ✅ 144/144 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n, title bar and preview state, per-tab undo history, model catalog without API keys, selection streaming, in-editor highlight accept/cancel, file names) |
+| Frontend unit tests | `pnpm test` | ✅ 147/147 (store, format helpers, large-file window geometry, Markdown rendering/image paths, outline, scroll sync, HTML export, split ratio, themes, diagrams, i18n, title bar and preview state, per-tab undo history, model catalog without API keys, selection streaming, in-editor highlight accept/cancel, file names) |
 | Frontend bundle | `pnpm build` | ✅ ~996 KB main / ~338 KB gzip (+ lazy Shiki, KaTeX and Mermaid chunks) |
 | Rust unit tests | `cargo test --lib` | ✅ 75 passed / 0 failed (+4 ignored perf probes; 79 tests total; encoding, file commands, large-file index/range, watcher, grep, assets, folder scan, fixture corpus, OpenAI-compatible streaming, keychain and connectivity probe, edit-path timeout and retry, thinking text) |
 | Rust formatting | `cargo fmt --all -- --check` | ✅ pass |
@@ -162,6 +162,7 @@ the tag against the three version manifests and takes the release notes from `CH
 - [x] Undo history kept per tab (M-06): all tabs share one `EditorView` while each tab keeps its own `EditorState`; switching tabs or toggling the preview no longer resets undo history, and switching back restores the undo stack, caret and scroll position
 - [x] Model service has two levels: providers (address and API key), then models under a provider. The key is stored per provider. Top-right title bar **Model**
 - [x] Selection rewrite: status-bar **Model**. Instruction on the left, collapsible thinking on the right. The reply streams into the current editor and is highlighted. Accept replaces the original and does not save the file; Cancel restores it. Cancels if no event arrives within 15 seconds; retries 429/5xx twice
+- [x] Quick actions: **Polish / Translate / Summarize** at the top of the model panel send immediately for the selection (one undo, nothing saved); the instruction box shows the prompt that was sent
 - [x] Autocomplete: off by default, its model is configured separately from rewrite. A suggestion appears after a short pause; Tab accepts, Esc cancels, nothing is saved. Completion, model and model-service entries live in the top-right title bar
 - [x] `.txt` files and untitled notes wrap visually (display only, no newline is written); markdown / log / json keep their original lines
 - [x] Open folder (up to 40 text files at once) and new windows with an empty session
