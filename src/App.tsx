@@ -708,6 +708,18 @@ export default function App() {
     };
   }, [requestCloseAll]);
 
+  // Ctrl+K and the title-bar chip open the same rewrite panel.
+  const openRewrite = useCallback(() => {
+    const tab = selectActiveTab(useWorkspace.getState());
+    if (!tab || tab.mode !== "text") return;
+    const settings = activeModel(loadAiSettings());
+    if (!settings?.baseUrl.trim() || !settings.model.trim()) {
+      setModelSettingsOpen(true);
+      return;
+    }
+    setStreamOpen(true);
+  }, []);
+
   // Global shortcuts.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -715,7 +727,10 @@ export default function App() {
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
 
-      if (key === "s") {
+      if (key === "k" && !event.shiftKey) {
+        event.preventDefault();
+        openRewrite();
+      } else if (key === "s") {
         event.preventDefault();
         const tab = selectActiveTab(useWorkspace.getState());
         if (tab) void saveTab(tab.id, event.shiftKey);
@@ -747,7 +762,15 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [saveTab, openViaDialog, openPaths, createWindow, requestCloseTab, togglePreview]);
+  }, [
+    saveTab,
+    openViaDialog,
+    openPaths,
+    createWindow,
+    requestCloseTab,
+    togglePreview,
+    openRewrite,
+  ]);
 
   // Default grep root: the directory of the active file.
   const lastSeparator = active?.path

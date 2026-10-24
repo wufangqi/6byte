@@ -161,7 +161,7 @@ the tag against the three version manifests and takes the release notes from `CH
 - [x] Bilingual UI (Chinese / English): menus, status bar, search, preview and dialogs; switch under View → Language, persisted in `localStorage` (`ainative.locale`)
 - [x] Undo history kept per tab (M-06): all tabs share one `EditorView` while each tab keeps its own `EditorState`; switching tabs or toggling the preview no longer resets undo history, and switching back restores the undo stack, caret and scroll position
 - [x] Model service has two levels: providers (address and API key), then models under a provider. The key is stored per provider. Top-right title bar **Model**
-- [x] Selection rewrite: status-bar **Model**. Instruction on the left, collapsible thinking on the right. The reply streams into the current editor and is highlighted. Accept replaces the original and does not save the file; Cancel restores it. Cancels if no event arrives within 15 seconds; retries 429/5xx twice
+- [x] Selection rewrite: status-bar **Model** or **Ctrl+K**. Instruction on the left, collapsible thinking on the right. The reply streams into the current editor and is highlighted. **Tab** accepts, **Esc** cancels; accepting replaces the original and does not save the file. Cancels if no event arrives within 15 seconds; retries 429/5xx twice
 - [x] Quick actions: **Polish / Translate / Summarize** at the top of the model panel send immediately for the selection (one undo, nothing saved); the instruction box shows the prompt that was sent
 - [x] Autocomplete: off by default, its model is configured separately from rewrite. A suggestion appears after a short pause; Tab accepts, Esc cancels, nothing is saved. Completion, model and model-service entries live in the top-right title bar
 - [x] `.txt` files and untitled notes wrap visually (display only, no newline is written); markdown / log / json keep their original lines
@@ -171,7 +171,6 @@ the tag against the three version manifests and takes the release notes from `CH
 ## Not implemented yet (M2 → M4)
 
 - [ ] Incremental / cached cross-file grep (if needed for M2)
-- [ ] AI editing: Ctrl+K inline diff and Tab accept (M3). Inline rewrite works in the editor; only the shortcut is missing
 - [ ] Portable build, winget, auto-update, Explorer context menu (M4)
 
 ## Project layout
