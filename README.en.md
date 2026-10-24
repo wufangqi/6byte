@@ -8,7 +8,7 @@
 
 [中文](./README.md) · **English**
 
-**Current stage: M0–M2 shipped in v0.1.6; M3 (model services, in-editor rewrite, autocomplete, .txt visual wrapping, top-right title-bar entries, UI consistency) ships with v0.1.7.**
+**Current stage: M0–M2 shipped; M3 (model services, in-editor rewrite, autocomplete, .txt visual wrapping, top-right title-bar entries, UI consistency) shipped in v0.1.7.**
 
 > The application UI is available in **Chinese and English** (switch under **View → Language**); the choice is remembered.
 > The detailed docs under `docs/` are written in Chinese.
@@ -114,7 +114,7 @@ the tag against the three version manifests and takes the release notes from `CH
 | Install & launch | installed build (silent NSIS) | ✅ cold start median 0.094 s, close interception works |
 | E2E smoke | `scripts/e2e-smoke.ps1` | ✅ 91/91 across 22 steps (large file, mixed EOL, session failures, external change reload, dirty conflict, grep jump, find & replace, Markdown preview, HTML export, outline jump, image paste, Shiki, draggable split, recent-file delete, title-bar menus, theme switching + persistence, per-file preview, Mermaid/KaTeX, light-theme repaint, Chinese/English switch + persistence, undo history across tab switches and preview toggles) |
 | Three-platform CI | GitHub Actions | ✅ `CI` green (Windows / macOS / Ubuntu × frontend + Rust) |
-| Release automation | tag push → `Release` workflow | ✅ dry run on `v0.1.6-rc1`: Windows MSI/NSIS → draft release; `check-version` guards the manifests |
+| Release automation | tag push → `Release` workflow | ✅ real run for v0.1.7 (run 40111156255): Windows MSI/NSIS → draft release → published after review; `check-version` guards the manifests |
 
 ## Performance (honest numbers, details in [docs/perf.md](./docs/perf.md))
 

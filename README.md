@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.en.md)
 
-**当前阶段：M0–M2 已交付并发布 v0.1.6；M3（模型服务、编辑框内改写、自动补全、txt 自动换行、标题栏右上角入口、UI 统一）随 v0.1.7 发布**
+**当前阶段：M0–M2 已交付；M3（模型服务、编辑框内改写、自动补全、txt 自动换行、标题栏右上角入口、UI 统一）已随 v0.1.7 发布**
 
 路线图与技术选型：[技术选型与路线图.md](./技术选型与路线图.md) ·
 问题盘点：[docs/项目梳理.md](./docs/项目梳理.md) ·
@@ -109,7 +109,7 @@ Release Notes 从 `CHANGELOG.md` 对应章节抽取。
 | 安装与启动 | 安装版（NSIS 静默装） | ✅ 冷启动中位 0.094 s，关窗拦截生效 |
 | 端到端冒烟 | `scripts/e2e-smoke.ps1` | ✅ 91/91（22 步；第 0 步清空会话/主题/语言；大文件、混合换行、会话恢复、外部修改、脏冲突、grep、查找替换、Markdown 预览/导出/大纲、图片粘贴、Shiki、分屏拖拽、最近删除、标题栏菜单、主题切换与持久化、按文件预览、Mermaid/KaTeX、中英切换与重载持久化、撤销历史跨标签/预览） |
 | 三平台 CI | GitHub Actions | ✅ `CI` 全绿（Windows / macOS / Ubuntu × 前端 + Rust） |
-| 发布自动化 | tag 推送 `Release` workflow | ✅ `v0.1.6-rc1` 演练通过：Windows 构建 MSI/NSIS → draft Release；`check-version` 校验版本号 |
+| 发布自动化 | tag 推送 `Release` workflow | ✅ v0.1.7 实跑通过（run 40111156255）：Windows 构建 MSI/NSIS → draft Release → 核对后发布；`check-version` 校验版本号 |
 
 ## 性能（诚实数据，详见 [docs/perf.md](./docs/perf.md)）
 
