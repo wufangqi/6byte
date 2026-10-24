@@ -253,6 +253,27 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     acceptInline(view, item.originalFrom, item.originalTo, item.insertFrom, item.insertTo);
     setNote("accepted");
   };
+  const acceptRef = useRef(accept);
+  useLayoutEffect(() => {
+    acceptRef.current = accept;
+  });
+
+  // Tab accepts the highlighted rewrite while the editor still has focus.
+  // Capture phase so CodeMirror never indents the line first (T37).
+  useEffect(() => {
+    const onTab = (event: KeyboardEvent) => {
+      if (event.key !== "Tab" || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (!pending.current?.text) return;
+      const target = event.target as Node | null;
+      const editor = document.querySelector(".cm-editor");
+      if (!target || !editor?.contains(target)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      acceptRef.current();
+    };
+    window.addEventListener("keydown", onTab, true);
+    return () => window.removeEventListener("keydown", onTab, true);
+  }, []);
 
   const send = async (prompt?: string) => {
     const span = getSelectionSpan(tabId);

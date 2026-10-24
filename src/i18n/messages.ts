@@ -127,7 +127,7 @@ export const zh: MessageCatalog = {
   "ai.stream.title": "模型回复",
   "ai.stream.close": "关闭",
   "ai.stream.hint":
-    "选中文字后写要求。模型会把新文字直接写进当前编辑框，并用颜色标出。接受后替换原文，不会自动保存。取消则删掉新文字。",
+    "选中文字后按 Ctrl+K（或点右上角「模型」）唤起。模型会把新文字直接写进当前编辑框，并用颜色标出。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
   "ai.stream.instruction": "想怎么改",
   "ai.stream.placeholder": "例如：改得更短",
   "ai.stream.selectionEmpty": "请先在文档里选中一段文字。",
@@ -185,7 +185,8 @@ export const zh: MessageCatalog = {
   "status.preview": "预览",
   "status.preview.title": "切换 Markdown 分屏预览（Ctrl+Shift+M）",
   "status.model": "模型",
-  "status.model.title": "用选区向模型提问。接受后替换原文，不会自动保存。",
+  "status.model.title":
+    "Ctrl+K 或点这里：用选区向模型提问。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
   "status.complete": "补全",
   "status.complete.title": "开启或关闭自动补全。未选补全模型时会打开模型服务。",
   "status.lines": "{count} 行",
@@ -394,7 +395,7 @@ export const en: MessageCatalog = {
   "ai.stream.title": "Model reply",
   "ai.stream.close": "Close",
   "ai.stream.hint":
-    "Select text, then write an instruction. The model writes into this editor and highlights it. Accept replaces the original and does not save the file. Cancel removes the new text.",
+    "Press Ctrl+K (or the top-right Model chip) after selecting text. The model writes into this editor and highlights it. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
   "ai.stream.instruction": "How to change it",
   "ai.stream.placeholder": "For example: make it shorter",
   "ai.stream.selectionEmpty": "Select some text in the document first.",
@@ -456,7 +457,7 @@ export const en: MessageCatalog = {
   "status.preview.title": "Toggle Markdown split preview (Ctrl+Shift+M)",
   "status.model": "Model",
   "status.model.title":
-    "Ask the model about the selection. Accept replaces the original and does not save the file.",
+    "Ctrl+K or click here to rewrite the selection. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
   "status.complete": "Complete",
   "status.complete.title":
     "Turn autocomplete on or off. Opens model settings when no completion model is chosen.",
