@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { CATALOGS } from "../i18n/messages";
 import {
   IDLE_STREAM,
   modelHost,
   outgoingChars,
+  QUICK_ACTIONS,
+  quickActionMessages,
   reduceStream,
   selectionTooLarge,
   SELECTION_CHAR_LIMIT,
@@ -28,6 +31,30 @@ describe("model stream request", () => {
   it("refuses a selection above the character limit", () => {
     expect(selectionTooLarge("a".repeat(SELECTION_CHAR_LIMIT))).toBe(false);
     expect(selectionTooLarge("a".repeat(SELECTION_CHAR_LIMIT + 1))).toBe(true);
+  });
+});
+
+describe("quick actions", () => {
+  it("offers polish, translate and summarize with distinct prompts", () => {
+    expect(QUICK_ACTIONS.map((action) => action.id)).toEqual(["polish", "translate", "summarize"]);
+    expect(new Set(QUICK_ACTIONS.map((action) => action.promptKey)).size).toBe(3);
+  });
+
+  it("resolves every label and prompt in both locales", () => {
+    for (const action of QUICK_ACTIONS) {
+      for (const catalog of [CATALOGS.zh, CATALOGS.en]) {
+        expect(catalog[action.labelKey], action.labelKey).toBeTruthy();
+        expect(catalog[action.promptKey], action.promptKey).toBeTruthy();
+      }
+    }
+  });
+
+  it("sends the action prompt together with the selection", () => {
+    const prompt = CATALOGS.zh[QUICK_ACTIONS[0].promptKey];
+    const messages = quickActionMessages("原文", prompt);
+    expect(messages[0].role).toBe("system");
+    expect(messages[1].content).toContain("原文");
+    expect(messages[1].content).toContain(prompt);
   });
 });
 
