@@ -21,7 +21,7 @@ function PanelIcon() {
 interface Props {
   previewOn?: boolean;
   canPreview?: boolean;
-  /** Markdown uses `<>` to reveal source beside the preview. Other files keep the preview label. */
+  /** Markdown uses `</>` to reveal source beside the preview. Other files keep the preview label. */
   sourceToggle?: boolean;
   onTogglePreview?: () => void;
   hasWorkspace?: boolean;
@@ -110,7 +110,7 @@ export default function StatusBar({
           }
           onClick={onTogglePreview}
         >
-          {sourceToggle ? "<>" : t("status.preview")}
+          {sourceToggle ? "</>" : t("status.preview")}
         </button>
       )}
 

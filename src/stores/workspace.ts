@@ -16,8 +16,7 @@ export interface Tab {
   path: string | null;
   /** `text` tabs are edited in CodeMirror; `large` tabs are read-only ranges. */
   mode: DocumentMode;
-  /** Last known buffer text. The live text of the active tab lives in CodeMirror
-   *  and is flushed back here when the editor unmounts or the file is saved. */
+  /** Last opened or saved text. Keystrokes stay in the editor state, not here. */
   content: string;
   meta: FileMeta;
   size: number;
@@ -29,7 +28,7 @@ export interface Tab {
   version: number;
   /** Rendered preview. Markdown files open with this on; other files start closed. */
   preview: boolean;
-  /** Source editor is visible. Markdown files open with this off until `<>` is clicked. */
+  /** Source editor is visible. Markdown files open with this off until `</>` is clicked. */
   source: boolean;
 }
 
@@ -65,7 +64,7 @@ interface WorkspaceState {
   removeRecent(path: string): void;
   /** Turn Markdown preview on or off for one tab. Other tabs stay as they are. */
   setPreview(id: string, on: boolean): void;
-  /** Show or hide the source editor for one tab. Markdown uses this for the `<>` split. */
+  /** Show or hide the source editor for one tab. Markdown uses this for the `</>` split. */
   setSource(id: string, on: boolean): void;
 }
 
@@ -187,8 +186,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       return { tabs, activeId };
     }),
 
-  /** Buffer flushed from the editor (unmount). `version` guards against a stale
-   *  view overwriting a buffer that was just reloaded from disk. */
+  /** Replaces the open/save snapshot. The live text stays in the editor state. */
   setContent: (id, content, version) =>
     set((state) => ({
       tabs: state.tabs.map((t) =>

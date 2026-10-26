@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { watchStorageKey } from "../lib/storageSync";
 
 /** Saved appearance. `system` follows the OS light/dark setting. */
 export type ThemePreference = "light" | "dark" | "system";
@@ -13,6 +14,7 @@ const listeners = new Set<() => void>();
 let preference: ThemePreference | null = null;
 let systemDark = true;
 let media: MediaQueryList | null = null;
+let unwatchStorage: (() => void) | null = null;
 
 /** Unknown or missing values stay on the original dark appearance. */
 export function parseThemePreference(value: string | null | undefined): ThemePreference {
@@ -77,6 +79,10 @@ export function subscribeTheme(listener: () => void): () => void {
 /** Read the saved choice and keep `data-resolved` in sync with the OS. */
 export function installTheme(): void {
   preference = readStored();
+  unwatchStorage ??= watchStorageKey(THEME_KEY, () => {
+    preference = readStored();
+    apply();
+  });
   if (typeof window === "undefined" || !window.matchMedia) {
     apply();
     return;

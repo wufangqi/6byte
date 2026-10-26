@@ -96,6 +96,18 @@ describe("Rust error localisation", () => {
     expect(localizeRustMessage("等待模型响应超时。", "en")).toBe(
       "Timed out waiting for the model."
     );
+    expect(localizeRustMessage("模型中途停止输出，已取消。", "en")).toBe(
+      "The model stopped sending text, so the request was cancelled."
+    );
+    expect(localizeRustMessage("模型响应超过 4 分钟，已停止。", "en")).toBe(
+      "The model ran longer than 4 minutes, so the request was stopped."
+    );
+    expect(localizeRustMessage("模型响应中途断开，结果不完整。", "en")).toBe(
+      "The model response ended early, so the result is incomplete."
+    );
+    expect(localizeRustMessage("输出达到长度上限，结果不完整。", "en")).toBe(
+      "The reply hit the length limit and is incomplete."
+    );
     expect(localizeRustMessage("密钥无效或没有权限。", "en")).toBe(
       "The API key was rejected or is not allowed."
     );
@@ -117,6 +129,17 @@ describe("Rust error localisation", () => {
       "No reply arrived within 15 seconds, so the request was cancelled. A local model may respond sooner."
     );
     expect(localizeRustMessage("密钥不能为空。", "en")).toBe("The API key cannot be empty.");
+    expect(localizeRustMessage("非本机地址只支持 https。", "en")).toBe(
+      "Remote addresses only support https."
+    );
+    expect(
+      localizeRustMessage("密钥只发给保存时的服务地址。更换地址需要重新输入密钥。", "en")
+    ).toBe(
+      "The key is only sent to the address it was saved with. Enter it again after changing the address."
+    );
+    expect(localizeRustMessage("密钥还没有绑定服务地址，请在模型服务里重新保存。", "en")).toBe(
+      "This key is not bound to a service address yet. Save it again in Model service."
+    );
     expect(localizeRustMessage("不是文件夹。", "en")).toBe("That path is not a folder.");
     expect(localizeRustMessage("没有权限。", "en")).toBe("Permission denied.");
     expect(localizeRustMessage("模型标识无效。", "en")).toBe("The model id is invalid.");

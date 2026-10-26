@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { watchStorageKey } from "../lib/storageSync";
 import { type Translate, type TranslatePlural, translate, translatePlural } from "./messages";
 
 /** UI language. Persisted as-is; defaults to Chinese, matching the app's origin. */
@@ -14,6 +15,7 @@ export function localeName(locale: Locale): string {
 const listeners = new Set<() => void>();
 
 let locale: Locale | null = null;
+let unwatchStorage: (() => void) | null = null;
 
 /** Unknown or missing values fall back to Chinese. */
 export function parseLocale(value: string | null | undefined): Locale {
@@ -67,6 +69,10 @@ export function subscribeLocale(listener: () => void): () => void {
 /** Read the stored language once at startup and mirror it onto `<html>`. */
 export function installLocale(): void {
   locale = readStored();
+  unwatchStorage ??= watchStorageKey(LOCALE_KEY, () => {
+    locale = readStored();
+    apply();
+  });
   apply();
 }
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CATALOGS } from "../i18n/messages";
 import {
   IDLE_STREAM,
+  endpointOrigin,
   modelHost,
   outgoingChars,
   QUICK_ACTIONS,
@@ -17,6 +18,13 @@ describe("model stream request", () => {
     expect(modelHost("http://127.0.0.1:11434/v1")).toBe("127.0.0.1:11434");
     expect(modelHost("https://api.openai.com/v1/")).toBe("api.openai.com");
     expect(modelHost("not a url")).toBe("not a url");
+  });
+
+  it("binds a stored key to the origin, omitting the default port", () => {
+    expect(endpointOrigin("https://api.openai.com/v1")).toBe("https://api.openai.com");
+    expect(endpointOrigin("http://127.0.0.1:11434/v1")).toBe("http://127.0.0.1:11434");
+    expect(endpointOrigin("http://[::1]:11434/v1")).toBe("http://[::1]:11434");
+    expect(endpointOrigin("not a url")).toBeNull();
   });
 
   it("sends the selection and the instruction, not a surrounding document", () => {

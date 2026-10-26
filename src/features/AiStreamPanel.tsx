@@ -1,21 +1,46 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { acceptInline, cancelInline, paintInline } from "../editor/inlineInsert";
-import { getEditorView, getSelectionSpan, getSelectionText } from "../editor/registry";
+import {
+  getEditorView,
+  getSelectionSpan,
+  readBuffer,
+  subscribeDocChanges,
+} from "../editor/registry";
+import { armRewriteGate, disarmRewriteGate } from "../editor/rewriteGate";
+import { clearRewritePreview, commitRewrite, showRewritePreview } from "../editor/rewritePreview";
 import { localizeError, useI18n } from "../i18n";
-import { aiCancel, aiStart, onAiDone, onAiError, onAiToken } from "../ipc/api";
+import { aiCancel, aiStart, listDirChildren, readFile } from "../ipc/api";
+import { abandonAiStream, claimAiStream, type AiStreamClaim } from "../ipc/aiStreamBus";
+import type { AiUsage } from "../ipc/types";
+import { useFileTree } from "../stores/fileTree";
+import { useWorkspace } from "../stores/workspace";
 import { activeModel, loadAiSettings } from "./aiSettings";
 import {
   IDLE_STREAM,
   modelHost,
   outgoingChars,
   QUICK_ACTIONS,
-  quickActionMessages,
   reduceStream,
+  REWRITE_MAX_TOKENS,
   selectionTooLarge,
-  streamMessages,
   type QuickActionId,
   type StreamView,
 } from "./aiStream";
+import { isMarkdownFile } from "./markdown";
+import { extractHeadings } from "./outline";
+import { assembleRewrite, type ContextPartId } from "./rewriteContext";
+import { runReadAgent, type AgentTrace } from "./readAgent";
+import { completeAgentTurn, workspaceAgentTools } from "./readAgentHost";
+import {
+  activeMentionQuery,
+  buildReferences,
+  collectWorkspaceFiles,
+  insertMention,
+  instructionWithoutMentions,
+  mentionToken,
+  parseMentions,
+  relativePath,
+  type WorkspaceFile,
+} from "./workspaceQuery";
 
 interface Props {
   tabId: string;
@@ -23,97 +48,179 @@ interface Props {
   onNeedSettings(): void;
 }
 
-interface PendingInsert {
+interface PendingRewrite {
   tabId: string;
-  originalFrom: number;
-  originalTo: number;
+  from: number;
+  to: number;
   original: string;
-  insertFrom: number;
-  insertTo: number;
   text: string;
 }
 
 type Note = "accepted" | "restored" | "stale" | null;
 
-function same(item: PendingInsert): boolean {
+const PART_LABEL: Record<ContextPartId, string> = {
+  selection: "ai.context.selection",
+  section: "ai.context.section",
+  neighbors: "ai.context.neighbors",
+  filename: "ai.context.filename",
+  outline: "ai.context.outline",
+  references: "ai.context.references",
+};
+
+function same(item: PendingRewrite): boolean {
   const view = getEditorView(item.tabId);
   if (!view) return false;
-  return (
-    view.state.sliceDoc(item.originalFrom, item.originalTo) === item.original &&
-    view.state.sliceDoc(item.insertFrom, item.insertTo) === item.text
-  );
+  return view.state.sliceDoc(item.from, item.to) === item.original;
 }
 
-/** Delete the highlighted insert. Returns false when the document no longer matches. */
-function erase(item: PendingInsert | null): boolean {
-  if (!item) return true;
-  if (!item.text) return true;
-  if (!same(item)) return false;
+/** Remove the proposal decoration. The buffer itself was never changed. */
+function clearProposal(item: PendingRewrite | null): void {
+  if (!item) return;
   const view = getEditorView(item.tabId);
-  if (!view) return false;
-  cancelInline(view, item.insertFrom, item.insertTo);
-  return true;
+  if (view) clearRewritePreview(view);
 }
 
 /** Left: the instruction. Right: collapsible thinking. The reply is typed into the open editor. */
 export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props) {
   const { t } = useI18n();
   const [instruction, setInstruction] = useState("");
+  const [mode, setMode] = useState<"rewrite" | "ask">("rewrite");
+  const [asking, setAsking] = useState(false);
+  const [agentAnswer, setAgentAnswer] = useState<string | null>(null);
+  const [agentTrace, setAgentTrace] = useState<AgentTrace[]>([]);
   const [action, setAction] = useState<QuickActionId | null>(null);
   const [selection, setSelection] = useState("");
   const [view, setView] = useState<StreamView>(IDLE_STREAM);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [offer, setOffer] = useState(false);
   const [note, setNote] = useState<Note>(null);
+  const [usage, setUsage] = useState<AiUsage | null>(null);
+  const [excluded, setExcluded] = useState<ContextPartId[]>([]);
+  const [span, setSpan] = useState<{ from: number; to: number; text: string } | null>(null);
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
+  const [referenceText, setReferenceText] = useState("");
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCaret, setMentionCaret] = useState(0);
+  const workspaceRoot = useFileTree((state) => state.rootPath);
+  const listedFiles = workspaceRoot ? workspaceFiles : [];
+  const tabName = useWorkspace((state) => state.tabs.find((item) => item.id === tabId)?.name ?? "");
+  const tabSnapshot = useWorkspace(
+    (state) => state.tabs.find((item) => item.id === tabId)?.content ?? ""
+  );
   const rootRef = useRef<HTMLElement | null>(null);
   const streamId = useRef<string | null>(null);
-  const pending = useRef<PendingInsert | null>(null);
+  const epoch = useRef(0);
+  const claimRef = useRef<AiStreamClaim | null>(null);
+  const pending = useRef<PendingRewrite | null>(null);
   const viewRef = useRef(view);
   const thinkingRef = useRef<HTMLPreElement | null>(null);
   const followThinking = useRef(true);
-  const early = useRef<
-    Array<
-      | { kind: "delta"; streamId: string; delta: string; channel: "content" | "reasoning" }
-      | { kind: "done"; streamId: string }
-      | { kind: "error"; streamId: string; message: string }
-    >
-  >([]);
   const settings = activeModel(loadAiSettings());
   const host = modelHost(settings?.baseUrl ?? "");
   const running = view.phase === "waiting" || view.phase === "streaming";
-  const messages = selection && instruction.trim() ? streamMessages(selection, instruction) : [];
+  const assembled = span
+    ? assembleRewrite(
+        span.text,
+        instructionWithoutMentions(instruction) || instruction.trim(),
+        {
+          filename: tabName,
+          document: readBuffer(tabId, tabSnapshot),
+          from: span.from,
+          to: span.to,
+        },
+        {
+          exclude: excluded,
+          references: parseMentions(instruction).length === 0 ? "" : referenceText,
+        }
+      )
+    : null;
+  const messages = assembled && instruction.trim() ? assembled.messages : [];
   const count = outgoingChars(messages);
+  const contextParts = (assembled?.parts ?? []).filter((part) => part.available);
 
   const show = (next: StreamView) => {
     viewRef.current = next;
     setView(next);
   };
 
-  const pushText = (delta: string) => {
-    const item = pending.current;
-    if (!item || !delta) return;
-    const view = getEditorView(item.tabId);
-    if (!view || !same(item)) {
+  const paint = (item: PendingRewrite) => {
+    const editor = getEditorView(item.tabId);
+    if (!editor || !same(item)) {
       pending.current = null;
+      disarmRewriteGate(item.tabId);
       setOffer(false);
       setNote("stale");
       return;
     }
-    item.insertTo = paintInline(view, item.insertFrom, item.insertTo, delta);
+    showRewritePreview(editor, {
+      from: item.from,
+      to: item.to,
+      text: item.text,
+      originalLabel: t("ai.stream.original"),
+      rewriteLabel: t("ai.stream.proposal"),
+    });
+  };
+
+  const pushText = (delta: string) => {
+    const item = pending.current;
+    if (!item || !delta) return;
+    if (!same(item)) {
+      pending.current = null;
+      disarmRewriteGate(item.tabId);
+      setOffer(false);
+      setNote("stale");
+      return;
+    }
     item.text += delta;
+    paint(item);
     setOffer(true);
   };
 
   useEffect(() => {
-    const read = () => setSelection(getSelectionText(tabId) ?? "");
+    const read = () => {
+      const next = getSelectionSpan(tabId);
+      setSelection(next?.text ?? "");
+      setSpan(next);
+    };
     read();
     window.addEventListener("keyup", read);
     window.addEventListener("mouseup", read);
+    const stop = subscribeDocChanges(tabId, read);
     return () => {
       window.removeEventListener("keyup", read);
       window.removeEventListener("mouseup", read);
+      stop();
     };
   }, [tabId]);
+
+  useEffect(() => {
+    if (!workspaceRoot) return;
+    let cancel = false;
+    void collectWorkspaceFiles(workspaceRoot, listDirChildren).then((files) => {
+      if (!cancel) setWorkspaceFiles(files);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [workspaceRoot]);
+
+  useEffect(() => {
+    const found = parseMentions(instruction);
+    if (found.length === 0) return;
+    let cancel = false;
+    void buildReferences(
+      found,
+      readBuffer(tabId, tabSnapshot),
+      workspaceRoot ? workspaceFiles : [],
+      workspaceRoot,
+      readFile
+    ).then((text) => {
+      if (!cancel) setReferenceText(text);
+    });
+    return () => {
+      cancel = true;
+    };
+  }, [instruction, tabId, tabSnapshot, workspaceFiles, workspaceRoot]);
 
   useEffect(() => {
     const node = thinkingRef.current;
@@ -124,7 +231,7 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
   const apply = (
     event:
       | { kind: "delta"; streamId: string; delta: string; channel: "content" | "reasoning" }
-      | { kind: "done"; streamId: string }
+      | { kind: "done"; streamId: string; usage?: AiUsage }
       | { kind: "error"; streamId: string; message: string }
   ) => {
     if (event.streamId !== streamId.current) return;
@@ -144,8 +251,10 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
       event.kind === "done" ? { type: "done" } : { type: "error", message: event.message }
     );
     show(next);
-    if (!next.text) {
-      erase(pending.current);
+    if (event.kind === "done") setUsage(event.usage ?? null);
+    if (event.kind === "error" || !next.text) {
+      clearProposal(pending.current);
+      if (pending.current) disarmRewriteGate(pending.current.tabId);
       pending.current = null;
       setOffer(false);
     }
@@ -154,13 +263,9 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
   const take = (
     event:
       | { kind: "delta"; streamId: string; delta: string; channel: "content" | "reasoning" }
-      | { kind: "done"; streamId: string }
+      | { kind: "done"; streamId: string; usage?: AiUsage }
       | { kind: "error"; streamId: string; message: string }
   ) => {
-    if (streamId.current === null) {
-      early.current.push(event);
-      return;
-    }
     apply(event);
   };
   const takeRef = useRef(take);
@@ -169,42 +274,42 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
   });
 
   useEffect(() => {
-    let stops: Array<() => void> = [];
-    let closed = false;
-    void (async () => {
-      const next = await Promise.all([
-        onAiToken((event) =>
-          takeRef.current({
-            kind: "delta",
-            streamId: event.streamId,
-            delta: event.delta,
-            channel: event.kind === "reasoning" ? "reasoning" : "content",
-          })
-        ),
-        onAiDone((event) => takeRef.current({ kind: "done", streamId: event.streamId })),
-        onAiError((event) =>
-          takeRef.current({ kind: "error", streamId: event.streamId, message: event.message })
-        ),
-      ]);
-      if (closed) next.forEach((stop) => stop());
-      else stops = next;
-    })();
+    const claim = claimAiStream({
+      token: (event) =>
+        takeRef.current({
+          kind: "delta",
+          streamId: event.streamId,
+          delta: event.delta,
+          channel: event.kind === "reasoning" ? "reasoning" : "content",
+        }),
+      done: (event) =>
+        takeRef.current({ kind: "done", streamId: event.streamId, usage: event.usage }),
+      error: (event) =>
+        takeRef.current({ kind: "error", streamId: event.streamId, message: event.message }),
+    });
+    claimRef.current = claim;
     return () => {
-      closed = true;
-      stops.forEach((stop) => stop());
+      claim.release();
+      claimRef.current = null;
     };
   }, []);
 
   const discard = useCallback(() => {
+    epoch.current += 1;
     const id = streamId.current;
+    claimRef.current?.release();
     const item = pending.current;
     streamId.current = null;
     pending.current = null;
     setOffer(false);
+    setUsage(null);
     setAction(null);
-    if (item?.text) {
-      if (erase(item)) setNote("restored");
-      else setNote("stale");
+    if (item) {
+      disarmRewriteGate(item.tabId);
+      if (same(item)) {
+        clearProposal(item);
+        setNote("restored");
+      } else setNote("stale");
     }
     if (item || id) {
       const next = reduceStream(viewRef.current, { type: "cancel" });
@@ -242,15 +347,16 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
   const accept = () => {
     const item = pending.current;
     if (!item?.text) return;
-    const view = getEditorView(item.tabId);
+    const editor = getEditorView(item.tabId);
     pending.current = null;
+    disarmRewriteGate(item.tabId);
     setOffer(false);
     setAction(null);
-    if (!view || !same(item)) {
+    if (!editor || !same(item) || !commitRewrite(editor, item.from, item.to, item.text)) {
+      clearProposal(item);
       setNote("stale");
       return;
     }
-    acceptInline(view, item.originalFrom, item.originalTo, item.insertFrom, item.insertTo);
     setNote("accepted");
   };
   const acceptRef = useRef(accept);
@@ -286,39 +392,146 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     }
     if (!span || selectionTooLarge(current) || !request) return;
     if (pending.current) discard();
-    pending.current = {
+    const ticket = epoch.current;
+    const item: PendingRewrite = {
       tabId,
-      originalFrom: span.from,
-      originalTo: span.to,
+      from: span.from,
+      to: span.to,
       original: span.text,
-      insertFrom: span.to,
-      insertTo: span.to,
       text: "",
     };
+    pending.current = item;
+    armRewriteGate(tabId, () => discardRef.current());
+    paint(item);
     setOffer(false);
     setNote(null);
+    setUsage(null);
     streamId.current = null;
-    early.current = [];
     followThinking.current = true;
     show(reduceStream(IDLE_STREAM, { type: "start" }));
     try {
+      const tab = useWorkspace.getState().tabs.find((item) => item.id === tabId);
+      const document = tab ? readBuffer(tab.id, tab.content) : readBuffer(tabId, "");
+      const references = await buildReferences(
+        parseMentions(request),
+        document,
+        listedFiles,
+        workspaceRoot,
+        readFile
+      );
       const id = await aiStart({
         providerId: "openai-compatible",
         baseUrl: settings.baseUrl,
         model: settings.model,
         profileId: settings.id,
-        messages: prompt ? quickActionMessages(current, request) : streamMessages(current, request),
+        maxTokens: REWRITE_MAX_TOKENS,
+        messages: assembleRewrite(
+          current,
+          instructionWithoutMentions(request) || request,
+          tab
+            ? {
+                filename: tab.name,
+                document,
+                from: span.from,
+                to: span.to,
+              }
+            : null,
+          { exclude: excluded, references }
+        ).messages,
       });
+      if (ticket !== epoch.current) {
+        abandonAiStream(id);
+        void aiCancel(id).catch(() => {});
+        return;
+      }
       streamId.current = id;
-      const queued = early.current.splice(0);
-      for (const event of queued) apply(event);
+      claimRef.current?.bind(id);
     } catch (error) {
       streamId.current = null;
+      const failed = pending.current;
       pending.current = null;
+      if (failed) {
+        disarmRewriteGate(failed.tabId);
+        clearProposal(failed);
+      }
       const message = error instanceof Error ? error.message : String(error);
       show(reduceStream(viewRef.current, { type: "error", message }));
     }
   };
+
+  const askWorkspace = async () => {
+    const request = instruction.trim();
+    if (!workspaceRoot || !request || asking) return;
+    if (!settings?.baseUrl.trim() || !settings.model.trim()) {
+      onNeedSettings();
+      return;
+    }
+    setAsking(true);
+    setAgentAnswer(null);
+    setAgentTrace([]);
+    try {
+      const result = await runReadAgent({
+        question: request,
+        root: workspaceRoot,
+        tools: workspaceAgentTools(),
+        complete: (messages) =>
+          completeAgentTurn({
+            baseUrl: settings.baseUrl,
+            model: settings.model,
+            profileId: settings.id,
+            messages,
+          }),
+      });
+      setAgentAnswer(result.answer);
+      setAgentTrace(result.trace);
+    } catch (error) {
+      setAgentAnswer(localizeError(error));
+    } finally {
+      setAsking(false);
+    }
+  };
+
+  const mentionChoices =
+    mentionQuery === null
+      ? []
+      : [
+          ...(isMarkdownFile(tabName)
+            ? extractHeadings(readBuffer(tabId, tabSnapshot))
+                .filter((heading) =>
+                  heading.text.toLowerCase().includes(mentionQuery.toLowerCase())
+                )
+                .slice(0, 6)
+                .map((heading) => ({
+                  key: `heading:${heading.line}:${heading.text}`,
+                  label: heading.text,
+                  detail: "#".repeat(heading.level),
+                  token: mentionToken({
+                    kind: "heading" as const,
+                    label: heading.text,
+                    line: heading.line,
+                  }),
+                }))
+            : []),
+          ...listedFiles
+            .filter((file) => {
+              if (!workspaceRoot) return false;
+              const relative = workspaceRoot ? relativePath(workspaceRoot, file.path) : file.name;
+              const needle = mentionQuery.toLowerCase();
+              return (
+                relative.toLowerCase().includes(needle) || file.name.toLowerCase().includes(needle)
+              );
+            })
+            .slice(0, 6)
+            .map((file) => {
+              const relative = workspaceRoot ? relativePath(workspaceRoot, file.path) : file.name;
+              return {
+                key: file.path,
+                label: file.name,
+                detail: relative,
+                token: mentionToken({ kind: "file" as const, label: relative }),
+              };
+            }),
+        ].slice(0, 8);
 
   const status =
     note === "accepted"
@@ -343,6 +556,24 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
     <section className="ai-stream" ref={rootRef} aria-label={t("ai.stream.title")}>
       <div className="ai-stream__head">
         <strong>{t("ai.stream.title")}</strong>
+        <div className="ai-stream__modes" role="group" aria-label={t("ai.mode.label")}>
+          <button
+            type="button"
+            className={`ai-stream__mode${mode === "rewrite" ? " is-on" : ""}`}
+            aria-pressed={mode === "rewrite"}
+            onClick={() => setMode("rewrite")}
+          >
+            {t("ai.mode.rewrite")}
+          </button>
+          <button
+            type="button"
+            className={`ai-stream__mode${mode === "ask" ? " is-on" : ""}`}
+            aria-pressed={mode === "ask"}
+            onClick={() => setMode("ask")}
+          >
+            {t("ai.mode.ask")}
+          </button>
+        </div>
         <span className="ai-stream__host">{host}</span>
         <button type="button" className="ai-stream__close" onClick={onClose}>
           {t("ai.stream.close")}
@@ -350,48 +581,138 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
       </div>
       <div className="ai-stream__columns">
         <div className="ai-stream__input-col">
-          <p className="ai-stream__hint">{t("ai.stream.hint")}</p>
-          <div className="ai-stream__presets" role="group" aria-label={t("ai.stream.actions")}>
-            {QUICK_ACTIONS.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                className={`btn ai-stream__preset${action === item.id ? " is-on" : ""}`}
-                title={t(item.promptKey)}
-                disabled={running || !selection || selectionTooLarge(selection)}
-                onClick={() => {
-                  const prompt = t(item.promptKey);
-                  setInstruction(prompt);
-                  setAction(item.id);
-                  void send(prompt);
-                }}
-              >
-                {t(item.labelKey)}
-              </button>
-            ))}
-          </div>
+          <p className="ai-stream__hint">
+            {mode === "ask" ? t("ai.mode.askHint") : t("ai.stream.hint")}
+          </p>
+          {mode === "rewrite" && (
+            <div className="ai-stream__presets" role="group" aria-label={t("ai.stream.actions")}>
+              {QUICK_ACTIONS.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`btn ai-stream__preset${action === item.id ? " is-on" : ""}`}
+                  title={t(item.promptKey)}
+                  disabled={running || !selection || selectionTooLarge(selection)}
+                  onClick={() => {
+                    const prompt = t(item.promptKey);
+                    setInstruction(prompt);
+                    setAction(item.id);
+                    void send(prompt);
+                  }}
+                >
+                  {t(item.labelKey)}
+                </button>
+              ))}
+            </div>
+          )}
           <label className="ai-stream__field">
             <span>{t("ai.stream.instruction")}</span>
             <textarea
               className="ai-stream__input"
               rows={3}
               value={instruction}
-              placeholder={t("ai.stream.placeholder")}
+              placeholder={
+                mode === "ask" ? t("ai.mode.askPlaceholder") : t("ai.stream.placeholder")
+              }
               onChange={(event) => {
-                setInstruction(event.target.value);
+                const value = event.target.value;
+                const caret = event.target.selectionStart ?? value.length;
+                setInstruction(value);
+                setMentionCaret(caret);
+                setMentionQuery(activeMentionQuery(value, caret));
                 if (action) setAction(null);
               }}
+              onKeyUp={(event) => {
+                const caret = event.currentTarget.selectionStart ?? instruction.length;
+                setMentionCaret(caret);
+                setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+              }}
+              onClick={(event) => {
+                const caret = event.currentTarget.selectionStart ?? instruction.length;
+                setMentionCaret(caret);
+                setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+              }}
             />
+            {mentionQuery !== null && (
+              <ul className="ai-stream__mentions" role="listbox" aria-label={t("ai.mention.list")}>
+                {mentionChoices.length === 0 ? (
+                  <li className="ai-stream__mention-empty">{t("ai.mention.empty")}</li>
+                ) : (
+                  mentionChoices.map((choice) => (
+                    <li key={choice.key}>
+                      <button
+                        type="button"
+                        role="option"
+                        className="ai-stream__mention"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => {
+                          const next = insertMention(
+                            instruction,
+                            mentionCaret,
+                            mentionQuery,
+                            choice.token
+                          );
+                          setInstruction(next.text);
+                          setMentionQuery(null);
+                          if (action) setAction(null);
+                        }}
+                      >
+                        <span>{choice.label}</span>
+                        <span className="ai-stream__mention-detail">{choice.detail}</span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
           </label>
           <div className="ai-stream__meta">
-            {!selection && <span>{t("ai.stream.selectionEmpty")}</span>}
-            {selection && selectionTooLarge(selection) && <span>{t("ai.stream.tooLarge")}</span>}
-            {count > 0 && !selectionTooLarge(selection) && (
+            {mode === "rewrite" && !selection && <span>{t("ai.stream.selectionEmpty")}</span>}
+            {mode === "rewrite" && selection && selectionTooLarge(selection) && (
+              <span>{t("ai.stream.tooLarge")}</span>
+            )}
+            {mode === "rewrite" && count > 0 && !selectionTooLarge(selection) && (
               <span>{t("ai.stream.budget", { count, host })}</span>
             )}
           </div>
+          {mode === "rewrite" &&
+            selection &&
+            !selectionTooLarge(selection) &&
+            contextParts.length > 0 && (
+              <div className="ai-stream__context" role="group" aria-label={t("ai.context.list")}>
+                {contextParts.map((part) => (
+                  <button
+                    key={part.id}
+                    type="button"
+                    className={`ai-stream__chip${part.included ? " is-on" : ""}`}
+                    aria-pressed={part.included}
+                    disabled={running || part.id === "selection"}
+                    title={part.dropped ? t("ai.context.dropped") : t(PART_LABEL[part.id])}
+                    onClick={() => {
+                      if (part.id === "selection") return;
+                      setExcluded((current) =>
+                        current.includes(part.id)
+                          ? current.filter((item) => item !== part.id)
+                          : [...current, part.id]
+                      );
+                    }}
+                  >
+                    {t(PART_LABEL[part.id])}
+                  </button>
+                ))}
+              </div>
+            )}
           <div className="ai-stream__actions">
-            {running ? (
+            {mode === "ask" ? (
+              <button
+                type="button"
+                className="btn btn--primary"
+                disabled={asking || running || !workspaceRoot || !instruction.trim()}
+                onClick={() => void askWorkspace()}
+              >
+                {asking ? t("ai.mode.asking") : t("ai.mode.askSend")}
+              </button>
+            ) : running ? (
               <button type="button" className="btn" onClick={discard}>
                 {t("ai.stream.cancel")}
               </button>
@@ -418,7 +739,31 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings }: Props)
               </button>
             )}
           </div>
+          {mode === "ask" && !workspaceRoot && (
+            <p className="ai-stream__status">{t("ai.mode.needWorkspace")}</p>
+          )}
+          {mode === "ask" && agentTrace.length > 0 && (
+            <ol className="ai-stream__trace">
+              {agentTrace.map((step, index) => (
+                <li key={`${step.name}-${index}`}>
+                  <span>{step.name}</span>
+                  {step.detail ? (
+                    <span className="ai-stream__mention-detail"> {step.detail}</span>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          )}
+          {mode === "ask" && agentAnswer && <p className="ai-stream__answer">{agentAnswer}</p>}
           {status && <p className="ai-stream__status">{status}</p>}
+          {usage && (
+            <p className="ai-stream__status">
+              {t("ai.stream.usage", {
+                prompt: usage.promptTokens,
+                completion: usage.completionTokens,
+              })}
+            </p>
+          )}
         </div>
         <details
           className="ai-stream__thinking"

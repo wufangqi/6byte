@@ -19,6 +19,7 @@ interface Props {
   onNewWindow(): void;
   onOpenFile(): void;
   onOpenFolder(): void;
+  onGoToFile(): void;
   onCloseFolder(): void;
   hasWorkspace: boolean;
   treeHidden: boolean;
@@ -39,6 +40,7 @@ export default function MenuBar({
   onNewWindow,
   onOpenFile,
   onOpenFolder,
+  onGoToFile,
   onCloseFolder,
   hasWorkspace,
   treeHidden,
@@ -168,6 +170,12 @@ export default function MenuBar({
               <FileItem
                 label={t("menu.openFolder")}
                 onClick={onOpenFolder}
+                close={() => setMenu(null)}
+              />
+              <FileItem
+                label={t("menu.goTo")}
+                shortcut="Ctrl+P"
+                onClick={onGoToFile}
                 close={() => setMenu(null)}
               />
               <FileItem

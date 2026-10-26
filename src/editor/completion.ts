@@ -9,11 +9,13 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import {
+  COMPLETION_MAX_TOKENS,
   completionMessages,
   completionSlice,
   suggestionSettled,
   visibleSuggestion,
 } from "../features/completion";
+import { abandonAiStream, claimAiStream, type AiStreamClaim } from "../ipc/aiStreamBus";
 import type { AiMessage } from "../ipc/types";
 import { loadCompletionEndpoint, loadCompletionSettings } from "../features/completionSettings";
 import { inlineInsertField } from "./inlineInsert";
@@ -98,12 +100,9 @@ interface StreamHandlers {
     model: string;
     profileId: string;
     messages: AiMessage[];
+    maxTokens: number;
   }): Promise<string>;
   cancel(streamId: string): Promise<void>;
-  listen(handlers: {
-    token(event: { streamId: string; delta: string; kind?: string }): void;
-    done(streamId: string): void;
-  }): Promise<Array<() => void>>;
 }
 
 async function openClient(): Promise<StreamHandlers> {
@@ -111,12 +110,6 @@ async function openClient(): Promise<StreamHandlers> {
   return {
     start: (request) => api.aiStart(request),
     cancel: (streamId) => api.aiCancel(streamId),
-    listen: (handlers) =>
-      Promise.all([
-        api.onAiToken((event) => handlers.token(event)),
-        api.onAiDone((event) => handlers.done(event.streamId)),
-        api.onAiError((event) => handlers.done(event.streamId)),
-      ]),
   };
 }
 
@@ -129,8 +122,7 @@ class CompletionPlugin implements PluginValue {
   private streamId: string | null = null;
   private raw = "";
   private prefix = "";
-  private early: EarlyEvent[] = [];
-  private stops: Array<() => void> = [];
+  private claim: AiStreamClaim | null = null;
   private client: Promise<StreamHandlers> | null = null;
   private destroyed = false;
 
@@ -168,7 +160,6 @@ class CompletionPlugin implements PluginValue {
   destroy(): void {
     this.destroyed = true;
     this.stop();
-    this.stops.forEach((stop) => stop());
     if (activePlugin === this) activePlugin = null;
   }
 
@@ -179,7 +170,7 @@ class CompletionPlugin implements PluginValue {
     const id = this.streamId;
     this.streamId = null;
     this.raw = "";
-    this.early = [];
+    this.claim?.release();
     if (id) void this.client?.then((client) => client.cancel(id).catch(() => {}));
   }
 
@@ -200,7 +191,7 @@ class CompletionPlugin implements PluginValue {
     const selection = this.view.state.selection.main;
     if (!selection.empty || this.view.state.selection.ranges.length !== 1) return;
     if (rewritePending(this.view)) return;
-    const slice = completionSlice(this.view.state.doc.toString(), selection.head);
+    const slice = completionSlice(this.view.state.doc, selection.head);
     if (!slice) return;
     const ticket = this.ticket;
     this.raw = "";
@@ -214,40 +205,32 @@ class CompletionPlugin implements PluginValue {
         model: endpoint.model,
         profileId: endpoint.id,
         messages: completionMessages(slice.prefix, slice.suffix),
+        maxTokens: COMPLETION_MAX_TOKENS,
       });
       if (ticket !== this.ticket || this.destroyed) {
+        abandonAiStream(id);
         void client.cancel(id).catch(() => {});
         return;
       }
       this.streamId = id;
-      const queued = this.early.splice(0);
-      for (const event of queued) this.apply(event);
+      this.ensureClaim().bind(id);
     } catch {
       /* a missing runtime or a refused request leaves the editor unchanged */
     }
   }
 
   private async ensureClient(): Promise<StreamHandlers> {
-    if (!this.client) {
-      this.client = openClient().then(async (client) => {
-        const stops = await client.listen({
-          token: (event) => this.onToken(event),
-          done: (streamId) => this.apply({ streamId, done: true }),
-        });
-        if (this.destroyed) stops.forEach((stop) => stop());
-        else this.stops = stops;
-        return client;
-      });
-    }
+    this.client ??= openClient();
     return this.client;
   }
 
-  private onToken(event: { streamId: string; delta: string; kind?: string }): void {
-    if (this.streamId === null) {
-      this.early.push(event);
-      return;
-    }
-    this.apply(event);
+  private ensureClaim(): AiStreamClaim {
+    this.claim ??= claimAiStream({
+      token: (event) => this.apply(event),
+      done: (event) => this.apply({ streamId: event.streamId, done: true }),
+      error: (event) => this.apply({ streamId: event.streamId, done: true }),
+    });
+    return this.claim;
   }
 
   private apply(event: EarlyEvent): void {

@@ -42,6 +42,7 @@ pub fn run() {
             ai::ai_start,
             ai::ai_cancel,
             ai::ai_set_key,
+            ai::ai_bound_origin,
             ai::ai_clear_key,
             ai::ai_has_key,
             ai::ai_probe,

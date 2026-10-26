@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from "vitest";
 import { undoDepth } from "@codemirror/commands";
+import { language } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 import {
   docStateCount,
   dropDocStatesExcept,
@@ -61,6 +64,27 @@ describe("per-tab editor states (M-06)", () => {
     expect(docStateCount()).toBe(1);
     expect(getDocText("a")).toBe("alpha");
     expect(getDocText("b")).toBeNull();
+  });
+
+  it("reconfigures highlighting and wrapping when the filename changes", () => {
+    const first = ensureDocState("a", init("hello", 0, "note.txt"));
+    const edited = first.update({ changes: { from: 5, insert: "!" } }).state;
+    saveDocState("a", edited);
+
+    const renamed = ensureDocState("a", init("hello", 0, "note.md"));
+    expect(getDocText("a")).toBe("hello!");
+    expect(undoDepth(renamed)).toBe(1);
+    expect(renamed.facet(language)?.name).toBe("markdown");
+
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const before = new EditorView({ state: first, parent });
+    expect(before.contentDOM.classList.contains("cm-lineWrapping")).toBe(true);
+    before.destroy();
+    const after = new EditorView({ state: renamed, parent });
+    expect(after.contentDOM.classList.contains("cm-lineWrapping")).toBe(false);
+    after.destroy();
+    parent.remove();
   });
 
   it("remembers the scroll offset per tab", () => {

@@ -38,6 +38,10 @@ fn account_name(profile_id: Option<&str>) -> Result<String, String> {
     Ok(format!("{ACCOUNT}-{id}"))
 }
 
+fn host_account(profile_id: Option<&str>) -> Result<String, String> {
+    Ok(format!("{}-host", account_name(profile_id)?))
+}
+
 /// OS credential store. A missing entry is "no key", not an error.
 pub struct SystemKeyring;
 
@@ -124,12 +128,33 @@ impl AiSecrets {
         self.store.get(&account_name(profile_id)?)
     }
 
+    /// Store the key and the origin it may be sent to. A later request to
+    /// another origin does not receive this key.
+    pub fn set_bound(
+        &self,
+        profile_id: Option<&str>,
+        secret: &str,
+        origin: &str,
+    ) -> Result<(), String> {
+        let origin = origin.trim();
+        if origin.is_empty() {
+            return Err("服务地址无效。".to_string());
+        }
+        self.set(profile_id, secret)?;
+        self.store.set(&host_account(profile_id)?, origin)
+    }
+
+    pub fn bound_origin(&self, profile_id: Option<&str>) -> Result<Option<String>, String> {
+        self.store.get(&host_account(profile_id)?)
+    }
+
     pub fn delete(&self, profile_id: Option<&str>) -> Result<(), String> {
-        self.store.delete(&account_name(profile_id)?)
+        self.store.delete(&account_name(profile_id)?)?;
+        self.store.delete(&host_account(profile_id)?)
     }
 
     #[cfg(test)]
-    fn memory() -> Self {
+    pub(crate) fn memory() -> Self {
         Self {
             store: Arc::new(MemoryStore::default()),
         }

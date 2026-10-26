@@ -3,16 +3,18 @@
 //! here: callers receive `ai-token` / `ai-done` / `ai-error` and decide later.
 
 use std::collections::HashMap;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::{json, Value};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::secrets::{resolve_key, AiSecrets};
 use tokio::sync::mpsc;
@@ -69,6 +71,14 @@ pub enum ProviderError {
     Unauthorized,
     /// Edit path: no event arrived before the first-token deadline.
     FirstToken,
+    /// Bytes stopped arriving after the reply had started.
+    Idle,
+    /// The reply ran past the total cap.
+    TooLong,
+    /// The socket closed before the model finished.
+    Incomplete,
+    /// `finish_reason: length`. The reply hit `max_tokens`.
+    Truncated,
 }
 
 impl ProviderError {
@@ -83,6 +93,8 @@ impl ProviderError {
             Self::Timeout => "timeout",
             Self::Unauthorized => "http",
             Self::FirstToken => "timeout",
+            Self::Idle | Self::TooLong => "timeout",
+            Self::Incomplete | Self::Truncated => "incomplete",
         }
     }
 
@@ -99,6 +111,10 @@ impl ProviderError {
             Self::FirstToken => {
                 "15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。".to_string()
             }
+            Self::Idle => "模型中途停止输出，已取消。".to_string(),
+            Self::TooLong => format!("模型响应超过 {STREAM_TOTAL_MINUTES} 分钟，已停止。"),
+            Self::Incomplete => "模型响应中途断开，结果不完整。".to_string(),
+            Self::Truncated => "输出达到长度上限，结果不完整。".to_string(),
         }
     }
 }
@@ -115,25 +131,54 @@ pub trait Provider: Send + Sync {
     ) -> Result<(), ProviderError>;
 }
 
+/// Silence after a chunk, and the cap on one reply. The first-token deadline is separate.
+const STREAM_IDLE: Duration = Duration::from_secs(45);
+const STREAM_TOTAL_MINUTES: u64 = 4;
+const STREAM_TOTAL: Duration = Duration::from_secs(STREAM_TOTAL_MINUTES * 60);
+
+/// One process-wide client so repeated completion calls reuse the connection.
+fn http_client() -> reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .connect_timeout(Duration::from_secs(10))
+                .tcp_nodelay(true)
+                .pool_idle_timeout(Duration::from_secs(90))
+                .pool_max_idle_per_host(8)
+                .build()
+                .unwrap_or_else(|_| reqwest::Client::new())
+        })
+        .clone()
+}
+
 /// OpenAI `/v1/chat/completions` with `stream: true`.
 #[derive(Clone)]
 pub struct OpenAiCompatible {
     client: reqwest::Client,
     endpoint: String,
     api_key: Option<String>,
+    idle: Duration,
+    total: Duration,
 }
 
 impl OpenAiCompatible {
     fn new(base_url: &str, api_key: Option<String>) -> Result<Self, ProviderError> {
-        let client = reqwest::Client::builder()
-            .connect_timeout(Duration::from_secs(10))
-            .tcp_nodelay(true)
-            .build()
-            .map_err(|error| ProviderError::Network(error.to_string()))?;
+        Self::with_limits(base_url, api_key, STREAM_IDLE, STREAM_TOTAL)
+    }
+
+    fn with_limits(
+        base_url: &str,
+        api_key: Option<String>,
+        idle: Duration,
+        total: Duration,
+    ) -> Result<Self, ProviderError> {
         Ok(Self {
-            client,
+            client: http_client(),
             endpoint: chat_completions_url(base_url)?,
             api_key: blank_to_none(api_key),
+            idle,
+            total,
         })
     }
 }
@@ -194,13 +239,22 @@ impl OpenAiCompatible {
 
         let mut events = response.bytes_stream().eventsource();
         let mut usage = None;
+        let mut finish_reason = None;
+        let started = tokio::time::Instant::now();
         loop {
+            let idle = tokio::time::sleep(self.idle);
+            tokio::pin!(idle);
             let item = tokio::select! {
+                biased;
                 _ = cancel.cancelled() => return Err(ProviderError::Cancelled),
                 item = events.next() => item,
+                _ = tokio::time::sleep_until(started + self.total) => {
+                    return Err(ProviderError::TooLong);
+                }
+                _ = &mut idle => return Err(ProviderError::Idle),
             };
             let Some(item) = item else {
-                break;
+                return finish_stream(sink, usage, finish_reason.as_deref(), false).await;
             };
             let event = item.map_err(|error| ProviderError::Protocol(error.to_string()))?;
             let data = event.data.trim();
@@ -208,9 +262,12 @@ impl OpenAiCompatible {
                 continue;
             }
             if data == "[DONE]" {
-                return send_event(sink, StreamEvent::Done(usage)).await;
+                return finish_stream(sink, usage, finish_reason.as_deref(), true).await;
             }
             let chunk = interpret_chunk(data)?;
+            if let Some(reason) = chunk.finish {
+                finish_reason = Some(reason);
+            }
             if let Some(next) = chunk.usage {
                 usage = Some(next);
             }
@@ -229,7 +286,6 @@ impl OpenAiCompatible {
                 return Err(ProviderError::Cancelled);
             }
         }
-        send_event(sink, StreamEvent::Done(usage)).await
     }
 }
 
@@ -237,6 +293,7 @@ struct Chunk {
     content: String,
     reasoning: String,
     usage: Option<TokenUsage>,
+    finish: Option<String>,
 }
 
 fn interpret_chunk(data: &str) -> Result<Chunk, ProviderError> {
@@ -250,7 +307,34 @@ fn interpret_chunk(data: &str) -> Result<Chunk, ProviderError> {
         content,
         reasoning,
         usage: token_usage(&value),
+        finish: value
+            .pointer("/choices/0/finish_reason")
+            .and_then(Value::as_str)
+            .filter(|reason| !reason.is_empty())
+            .map(str::to_string),
     })
+}
+
+/// `[DONE]` or `finish_reason: stop` is a finished reply. A socket close, a
+/// length cap, or a content filter is not.
+fn stream_outcome(reason: Option<&str>, announced: bool) -> Result<(), ProviderError> {
+    match reason {
+        Some("stop") => Ok(()),
+        Some("length") => Err(ProviderError::Truncated),
+        Some("content_filter") => Err(ProviderError::Upstream("输出被拦截".into())),
+        None if announced => Ok(()),
+        _ => Err(ProviderError::Incomplete),
+    }
+}
+
+async fn finish_stream(
+    sink: &mpsc::Sender<StreamEvent>,
+    usage: Option<TokenUsage>,
+    reason: Option<&str>,
+    announced: bool,
+) -> Result<(), ProviderError> {
+    stream_outcome(reason, announced)?;
+    send_event(sink, StreamEvent::Done(usage)).await
 }
 
 /// Split one chunk into thinking and answer. Thinking models send
@@ -428,10 +512,79 @@ fn chat_completions_url(base_url: &str) -> Result<String, ProviderError> {
             "服务地址只支持 http 或 https。".to_string(),
         ));
     }
+    if url.scheme() == "http" && !is_loopback(&url) {
+        return Err(ProviderError::Invalid(
+            "非本机地址只支持 https。".to_string(),
+        ));
+    }
     if trimmed.ends_with("/chat/completions") {
         Ok(trimmed.to_string())
     } else {
         Ok(format!("{trimmed}/chat/completions"))
+    }
+}
+
+fn is_loopback(url: &reqwest::Url) -> bool {
+    let Some(host) = url.host_str() else {
+        return false;
+    };
+    // `host_str` wraps IPv6 in brackets, which `IpAddr` does not accept.
+    let host = host.trim_start_matches('[').trim_end_matches(']');
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    host.parse::<std::net::IpAddr>()
+        .is_ok_and(|ip| ip.is_loopback())
+}
+
+/// `scheme://host[:port]` for the address a stored key is allowed to reach.
+fn endpoint_origin(base_url: &str) -> Result<String, ProviderError> {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    let url = reqwest::Url::parse(trimmed)
+        .map_err(|_| ProviderError::Invalid("服务地址无效。".to_string()))?;
+    if url.scheme() != "http" && url.scheme() != "https" {
+        return Err(ProviderError::Invalid(
+            "服务地址只支持 http 或 https。".to_string(),
+        ));
+    }
+    if url.scheme() == "http" && !is_loopback(&url) {
+        return Err(ProviderError::Invalid(
+            "非本机地址只支持 https。".to_string(),
+        ));
+    }
+    let Some(host) = url.host_str() else {
+        return Err(ProviderError::Invalid("服务地址无效。".to_string()));
+    };
+    let host = if host.starts_with('[') {
+        host.to_string()
+    } else if host.contains(':') {
+        format!("[{host}]")
+    } else {
+        host.to_string()
+    };
+    let port = url.port_or_known_default().unwrap_or(80);
+    let default_port = if url.scheme() == "https" { 443 } else { 80 };
+    if port == default_port {
+        Ok(format!("{}://{host}", url.scheme()))
+    } else {
+        Ok(format!("{}://{host}:{port}", url.scheme()))
+    }
+}
+
+/// Use the stored key only when this request's origin is the one it was saved for.
+fn stored_key_for(
+    secrets: &crate::secrets::AiSecrets,
+    profile_id: Option<&str>,
+    base_url: &str,
+) -> Result<Option<String>, String> {
+    let Some(key) = secrets.get(profile_id)? else {
+        return Ok(None);
+    };
+    let origin = endpoint_origin(base_url).map_err(|error| error.message())?;
+    match secrets.bound_origin(profile_id)? {
+        Some(bound) if bound.eq_ignore_ascii_case(&origin) => Ok(Some(key)),
+        Some(_) => Err("密钥只发给保存时的服务地址。更换地址需要重新输入密钥。".to_string()),
+        None => Err("密钥还没有绑定服务地址，请在模型服务里重新保存。".to_string()),
     }
 }
 
@@ -576,7 +729,8 @@ fn explain_edit_error(error: ProviderError) -> ProviderError {
 
 /// Edit-path wrapper around `stream`. The probe does not use this: it keeps its own
 /// overall deadline and does not back off. 429 and 5xx retry twice. 401/403 do not.
-/// The first-token timer stops once any event arrives, so a long reply is not cut off.
+/// The first-token timer stops once any event arrives. Later silence and the
+/// total cap are enforced while the body is read.
 async fn run_edit_stream(
     provider: &impl Provider,
     request: ChatRequest,
@@ -693,10 +847,23 @@ async fn drive(
     request: ChatRequest,
     cancel: CancellationToken,
 ) {
+    let started = std::time::Instant::now();
+    ai_log(
+        &app,
+        &format!(
+            "start id={stream_id} model={} max_tokens={}",
+            log_field(&request.model),
+            request
+                .max_tokens
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "-".to_string())
+        ),
+    );
     let (tx, mut rx) = mpsc::channel(32);
     let producer = run_edit_stream(&provider, request, tx, cancel, edit_policy());
     let consumer = async {
         let mut finished = false;
+        let mut usage = None;
         while let Some(event) = rx.recv().await {
             match event {
                 StreamEvent::Delta(delta) => {
@@ -705,21 +872,47 @@ async fn drive(
                 StreamEvent::Reasoning(delta) => {
                     emit_token(&app, &stream_id, &delta, "reasoning");
                 }
-                StreamEvent::Done(usage) => {
+                StreamEvent::Done(tokens) => {
                     finished = true;
+                    usage = tokens;
                     let _ = app.emit(
                         "ai-done",
                         AiDone {
                             stream_id: stream_id.clone(),
-                            usage,
+                            usage: usage.clone(),
                         },
                     );
                 }
             }
         }
-        finished
+        (finished, usage)
     };
-    let (result, finished) = tokio::join!(producer, consumer);
+    let (result, (finished, usage)) = tokio::join!(producer, consumer);
+    let elapsed = started.elapsed().as_millis();
+    match &result {
+        Ok(()) => {
+            let prompt = usage.as_ref().map(|item| item.prompt_tokens).unwrap_or(0);
+            let completion = usage
+                .as_ref()
+                .map(|item| item.completion_tokens)
+                .unwrap_or(0);
+            ai_log(
+                &app,
+                &format!(
+                    "done id={stream_id} elapsed_ms={elapsed} prompt_tokens={prompt} completion_tokens={completion}"
+                ),
+            );
+        }
+        Err(error) => {
+            ai_log(
+                &app,
+                &format!(
+                    "error id={stream_id} code={} elapsed_ms={elapsed}",
+                    error.code()
+                ),
+            );
+        }
+    }
     if let Err(error) = result {
         if !finished {
             let _ = app.emit(
@@ -755,7 +948,12 @@ pub fn ai_start(
     }
     validate_request(&model, &messages, temperature, max_tokens)
         .map_err(|error| error.message())?;
-    let api_key = resolve_key(api_key, secrets.get(profile_id.as_deref()))?;
+    let stored = if api_key.as_ref().is_some_and(|key| !key.trim().is_empty()) {
+        Ok(None)
+    } else {
+        stored_key_for(&secrets, profile_id.as_deref(), &base_url)
+    }?;
+    let api_key = resolve_key(api_key, Ok(stored))?;
     let provider = OpenAiCompatible::new(&base_url, api_key).map_err(|error| error.message())?;
     if provider.id() != PROVIDER_ID {
         return Err(format!("不支持的模型服务：{}", provider.id()));
@@ -787,8 +985,18 @@ pub fn ai_set_key(
     secrets: State<'_, AiSecrets>,
     api_key: String,
     profile_id: Option<String>,
+    base_url: String,
 ) -> Result<(), String> {
-    secrets.set(profile_id.as_deref(), &api_key)
+    let origin = endpoint_origin(&base_url).map_err(|error| error.message())?;
+    secrets.set_bound(profile_id.as_deref(), &api_key, &origin)
+}
+
+#[tauri::command]
+pub fn ai_bound_origin(
+    secrets: State<'_, AiSecrets>,
+    profile_id: Option<String>,
+) -> Result<Option<String>, String> {
+    secrets.bound_origin(profile_id.as_deref())
 }
 
 #[tauri::command]
@@ -858,6 +1066,7 @@ pub async fn probe_model(
 
 #[tauri::command]
 pub async fn ai_probe(
+    app: AppHandle,
     secrets: State<'_, AiSecrets>,
     base_url: String,
     model: String,
@@ -874,11 +1083,80 @@ pub async fn ai_probe(
         None,
     )
     .map_err(|error| error.message())?;
-    let api_key = resolve_key(api_key, secrets.get(profile_id.as_deref()))?;
+    let stored = if api_key.as_ref().is_some_and(|key| !key.trim().is_empty()) {
+        Ok(None)
+    } else {
+        stored_key_for(&secrets, profile_id.as_deref(), &base_url)
+    }?;
+    let api_key = resolve_key(api_key, Ok(stored))?;
     let provider = OpenAiCompatible::new(&base_url, api_key).map_err(|error| error.message())?;
-    probe_model(&provider, &model, PROBE_TIMEOUT)
-        .await
-        .map_err(|error| error.message())
+    let started = std::time::Instant::now();
+    let model_name = model.trim().to_string();
+    ai_log(&app, &format!("probe model={}", log_field(&model_name)));
+    match probe_model(&provider, &model, PROBE_TIMEOUT).await {
+        Ok(text) => {
+            ai_log(
+                &app,
+                &format!(
+                    "probe-ok model={} elapsed_ms={}",
+                    log_field(&model_name),
+                    started.elapsed().as_millis()
+                ),
+            );
+            Ok(text)
+        }
+        Err(error) => {
+            ai_log(
+                &app,
+                &format!(
+                    "probe-error model={} code={} elapsed_ms={}",
+                    log_field(&model_name),
+                    error.code(),
+                    started.elapsed().as_millis()
+                ),
+            );
+            Err(error.message())
+        }
+    }
+}
+
+/// Request outcomes only: no prompt, no document text, no API key.
+fn ai_log(app: &AppHandle, event: &str) {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis())
+        .unwrap_or(0);
+    let line = format!("{millis} {event}");
+    eprintln!("ai {line}");
+    let Ok(dir) = app.path().app_log_dir() else {
+        return;
+    };
+    if std::fs::create_dir_all(&dir).is_err() {
+        return;
+    }
+    let path = dir.join("ai.log");
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 256 * 1024) {
+        let rotated = dir.join("ai.log.1");
+        let _ = std::fs::remove_file(&rotated);
+        let _ = std::fs::rename(&path, rotated);
+    }
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(file, "{line}");
+    }
+}
+
+fn log_field(value: &str) -> String {
+    value
+        .chars()
+        .map(|ch| {
+            if ch.is_control() || ch.is_whitespace() {
+                '_'
+            } else {
+                ch
+            }
+        })
+        .take(80)
+        .collect()
 }
 
 #[cfg(test)]
@@ -929,6 +1207,39 @@ mod tests {
         let error = chat_completions_url("file:///tmp/model").unwrap_err();
         assert_eq!(error.message(), "服务地址只支持 http 或 https。");
         assert!(chat_completions_url("not a url").is_err());
+    }
+
+    #[test]
+    fn remote_http_is_rejected_and_loopback_http_is_kept() {
+        let error = chat_completions_url("http://example.com/v1").unwrap_err();
+        assert_eq!(error.message(), "非本机地址只支持 https。");
+        assert!(chat_completions_url("https://api.openai.com/v1").is_ok());
+        assert!(chat_completions_url("http://localhost:11434/v1").is_ok());
+        assert!(chat_completions_url("http://[::1]:11434/v1").is_ok());
+        assert_eq!(
+            endpoint_origin("http://[::1]:11434/v1").unwrap(),
+            "http://[::1]:11434"
+        );
+    }
+
+    #[test]
+    fn a_stored_key_is_sent_only_to_its_saved_origin() {
+        let secrets = crate::secrets::AiSecrets::memory();
+        secrets
+            .set_bound(Some("m1"), "sk-test", "https://api.openai.com")
+            .unwrap();
+        assert_eq!(
+            stored_key_for(&secrets, Some("m1"), "https://api.openai.com/v1")
+                .unwrap()
+                .as_deref(),
+            Some("sk-test")
+        );
+        let mismatch = stored_key_for(&secrets, Some("m1"), "https://evil.example/v1").unwrap_err();
+        assert!(mismatch.contains("保存时的服务地址"));
+        secrets.set(Some("m2"), "sk-old").unwrap();
+        let unbound =
+            stored_key_for(&secrets, Some("m2"), "https://api.openai.com/v1").unwrap_err();
+        assert!(unbound.contains("还没有绑定"));
     }
 
     #[test]
@@ -1078,6 +1389,114 @@ mod tests {
                 .unwrap();
         assert_eq!(both.reasoning, "想");
         assert_eq!(both.content, "答");
+    }
+
+    #[test]
+    fn a_closed_stream_is_complete_only_when_the_model_says_so() {
+        assert!(stream_outcome(Some("stop"), false).is_ok());
+        assert!(stream_outcome(None, true).is_ok());
+        assert!(matches!(
+            stream_outcome(None, false),
+            Err(ProviderError::Incomplete)
+        ));
+        assert!(matches!(
+            stream_outcome(Some("length"), true),
+            Err(ProviderError::Truncated)
+        ));
+        assert_eq!(
+            stream_outcome(Some("length"), true).unwrap_err().message(),
+            "输出达到长度上限，结果不完整。"
+        );
+        assert!(matches!(
+            stream_outcome(Some("content_filter"), true),
+            Err(ProviderError::Upstream(_))
+        ));
+    }
+
+    fn spawn_sse(body: &str) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let payload = body.to_string();
+        thread::spawn(move || {
+            let Ok((mut socket, _)) = listener.accept() else {
+                return;
+            };
+            let _ = read_request(&mut socket);
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                payload.len()
+            );
+            let _ = socket.write_all(header.as_bytes());
+            let _ = socket.write_all(payload.as_bytes());
+            let _ = socket.flush();
+        });
+        format!("http://{address}/v1")
+    }
+
+    #[tokio::test]
+    async fn a_socket_close_without_done_is_incomplete() {
+        let url = spawn_sse("data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\n");
+        let provider = OpenAiCompatible::new(&url, None).unwrap();
+        let error = collect(&provider, CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ProviderError::Incomplete));
+    }
+
+    #[tokio::test]
+    async fn finish_reason_stop_completes_without_the_done_marker() {
+        let url = spawn_sse(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"好\"},\"finish_reason\":\"stop\"}]}\n\n",
+        );
+        let provider = OpenAiCompatible::new(&url, None).unwrap();
+        let events = collect(&provider, CancellationToken::new()).await.unwrap();
+        assert!(matches!(events.last(), Some(StreamEvent::Done(_))));
+    }
+
+    #[tokio::test]
+    async fn silence_after_the_first_token_stops_the_stream() {
+        let server = spawn_chunked("data: {\"choices\":[{\"delta\":{\"content\":\"你\"}}]}\n\n");
+        let provider = OpenAiCompatible::with_limits(
+            &server.url,
+            None,
+            Duration::from_millis(200),
+            Duration::from_secs(5),
+        )
+        .unwrap();
+        let error = collect(&provider, CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ProviderError::Idle));
+        assert_eq!(error.message(), "模型中途停止输出，已取消。");
+    }
+
+    #[tokio::test]
+    async fn the_total_cap_stops_a_stream_that_never_ends() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        thread::spawn(move || {
+            let Ok((mut socket, _)) = listener.accept() else {
+                return;
+            };
+            let _ = read_request(&mut socket);
+            let header = "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+            let _ = socket.write_all(header.as_bytes());
+            let _ = socket.flush();
+            let _ = socket.set_read_timeout(Some(Duration::from_secs(2)));
+            let mut tmp = [0_u8; 8];
+            let _ = socket.read(&mut tmp);
+        });
+        let provider = OpenAiCompatible::with_limits(
+            &format!("http://{address}/v1"),
+            None,
+            Duration::from_secs(5),
+            Duration::from_millis(200),
+        )
+        .unwrap();
+        let error = collect(&provider, CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert!(matches!(error, ProviderError::TooLong));
     }
 
     #[tokio::test]
@@ -1930,14 +2349,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn edit_path_finishes_when_the_socket_closes_after_one_event() {
+    async fn edit_path_rejects_a_socket_close_before_the_model_finishes() {
         let body = "data: {\"choices\":[{\"delta\":{\"content\":\"半截\"}}]}\n\n";
         let (url, hits) = spawn_sequence(vec![http_message(200, "OK", "text/event-stream", body)]);
         let provider = OpenAiCompatible::new(&url, None).unwrap();
         let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
-        watched.result.unwrap();
+        assert!(matches!(watched.result, Err(ProviderError::Incomplete)));
         assert_eq!(watched.text, "半截");
-        assert!(watched.done);
+        assert!(!watched.done);
         assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 

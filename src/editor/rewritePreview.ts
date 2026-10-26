@@ -3,11 +3,10 @@ import { StateEffect, StateField, type EditorState, type TransactionSpec } from 
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 
 /**
- * Inline diff decorations for the editor (T37 groundwork).
+ * Side-by-side rewrite decorations.
  *
- * The field is wired into every editor state so Ctrl+K can paint a proposal in
- * place; the live rewrite path today types the proposal into the document via
- * `inlineInsert.ts` instead. Only tests set the field until T37 lands.
+ * The proposal is not part of the document. Accept replaces the selection in
+ * one undo step; cancel, failure, and save leave the buffer unchanged.
  */
 
 export interface RewritePreview {

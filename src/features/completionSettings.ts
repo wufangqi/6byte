@@ -1,4 +1,5 @@
 import { loadAiSettings, type ActiveEndpoint, type AiCatalog } from "./aiSettings";
+import { watchStorageKey } from "../lib/storageSync";
 
 /** Separate from the rewrite catalog so the completion model can differ. */
 export const COMPLETION_KEY = "ainative.complete";
@@ -17,8 +18,16 @@ export const COMPLETION_OFF: CompletionSettings = {
 };
 
 const listeners = new Set<() => void>();
+let unwatchStorage: (() => void) | null = null;
+
+function watchCompletionStorage(): void {
+  unwatchStorage ??= watchStorageKey(COMPLETION_KEY, () => {
+    listeners.forEach((listener) => listener());
+  });
+}
 
 export function subscribeCompletion(listener: () => void): () => void {
+  watchCompletionStorage();
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

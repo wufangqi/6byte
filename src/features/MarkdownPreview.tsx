@@ -17,7 +17,7 @@ interface Props {
   /** Directory of the document; resolves `assets/…` image paths. */
   baseDir: string | null;
   onExport(): void;
-  /** Markdown opens in preview. `<>` reveals the source beside it. */
+  /** Markdown opens in preview. `</>` reveals the source beside it. */
   sourceOn?: boolean;
   onToggleSource?: () => void;
   /** Skip editor scroll sync while the source pane is hidden. */
@@ -253,7 +253,7 @@ export default function MarkdownPreview({
             title={t(sourceOn ? "preview.source.titleOn" : "preview.source.title")}
             onClick={onToggleSource}
           >
-            {"<>"}
+            {"</>"}
           </button>
         )}
         <button

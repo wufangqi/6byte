@@ -4,6 +4,8 @@ import { getResolvedTheme } from "../features/theme";
 import {
   buildExtensions,
   editorChrome,
+  languageCompartment,
+  languageExtensions,
   localeCompartment,
   searchPhrases,
   themeCompartment,
@@ -15,6 +17,7 @@ import {
  * Undo history lives inside the state, so keeping the state objects around lets
  * the single shared `EditorView` swap documents without losing history. A state
  * is only recreated when the store bumps the tab's `version` (reload from disk).
+ * A new filename reconfigures highlighting and wrapping and keeps the history.
  */
 export interface DocStateInit {
   content: string;
@@ -31,6 +34,7 @@ export interface DocStateInit {
 interface DocEntry {
   state: EditorState;
   version: number;
+  filename: string;
   scrollTop: number;
 }
 
@@ -52,11 +56,25 @@ function createState(init: DocStateInit): EditorState {
  * State for `tabId`, reusing the cached one (with its undo history) when the
  * store version still matches. Callers swap the result into the shared view.
  */
+function applyFilename(entry: DocEntry, filename: string): EditorState {
+  if (entry.filename === filename) return entry.state;
+  entry.filename = filename;
+  entry.state = entry.state.update({
+    effects: languageCompartment.reconfigure(languageExtensions(filename)),
+  }).state;
+  return entry.state;
+}
+
 export function ensureDocState(tabId: string, init: DocStateInit): EditorState {
   const existing = entries.get(tabId);
-  if (existing && existing.version === init.version) return existing.state;
+  if (existing && existing.version === init.version) return applyFilename(existing, init.filename);
   const state = createState(init);
-  entries.set(tabId, { state, version: init.version, scrollTop: existing?.scrollTop ?? 0 });
+  entries.set(tabId, {
+    state,
+    version: init.version,
+    filename: init.filename,
+    scrollTop: existing?.scrollTop ?? 0,
+  });
   return state;
 }
 

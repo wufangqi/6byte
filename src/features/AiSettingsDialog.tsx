@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { dismissActiveCompletion } from "../editor/completion";
+import { ask } from "./dialogStore";
+import { endpointOrigin } from "./aiStream";
 import { localizeError, useI18n } from "../i18n";
-import { aiClearKey, aiHasKey, aiProbe, aiSetKey, isTauri } from "../ipc/api";
+import { aiBoundOrigin, aiClearKey, aiHasKey, aiProbe, aiSetKey, isTauri } from "../ipc/api";
 import {
   SAVED_KEY_MASK,
   activeModel,
@@ -49,6 +51,9 @@ export default function AiSettingsDialog({ onClose }: Props) {
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const savedIds = useRef(loadAiSettings().providers.map((provider) => provider.id));
+  const boundOrigin = useRef<string | null>(null);
+  const storedKey = useRef(false);
+  const keyLoaded = useRef(false);
   const provider = activeProvider(catalog);
   const model = activeModelEntry(catalog);
   const providerId = provider?.id ?? "";
@@ -67,12 +72,18 @@ export default function AiSettingsDialog({ onClose }: Props) {
   };
 
   useEffect(() => {
+    keyLoaded.current = false;
+    storedKey.current = false;
+    boundOrigin.current = null;
     if (!isTauri || !providerId) return;
     let cancel = false;
     void aiHasKey(providerId)
-      .then((stored) => {
+      .then(async (stored) => {
         if (cancel) return;
         setHasKey(stored);
+        storedKey.current = stored;
+        boundOrigin.current = stored ? await aiBoundOrigin(providerId) : null;
+        keyLoaded.current = true;
         if (stored) {
           setApiKey((current) =>
             isSavedKeyMask(current) || current.trim() === "" ? SAVED_KEY_MASK : current
@@ -80,7 +91,11 @@ export default function AiSettingsDialog({ onClose }: Props) {
         }
       })
       .catch(() => {
-        if (!cancel) setHasKey(false);
+        if (cancel) return;
+        keyLoaded.current = true;
+        storedKey.current = false;
+        boundOrigin.current = null;
+        setHasKey(false);
       });
     return () => {
       cancel = true;
@@ -102,6 +117,7 @@ export default function AiSettingsDialog({ onClose }: Props) {
   const forgetKey = () => {
     setApiKey("");
     setHasKey(false);
+    keyLoaded.current = false;
   };
 
   const editProvider = (patch: Partial<Provider>) => {
@@ -138,20 +154,64 @@ export default function AiSettingsDialog({ onClose }: Props) {
     const typed = enteredKey(apiKey);
     const current = activeProvider(next);
     if (typed && current) {
-      await aiSetKey(typed, current.id);
+      await aiSetKey(typed, current.id, current.baseUrl);
+      boundOrigin.current = endpointOrigin(current.baseUrl);
+      storedKey.current = true;
+      keyLoaded.current = true;
       setApiKey(SAVED_KEY_MASK);
       setHasKey(true);
     }
     return activeModel(next);
   };
 
+  const confirmHostChange = async (baseUrl: string): Promise<"ok" | "cleared" | "cancel"> => {
+    const typed = enteredKey(apiKey);
+    if (!isTauri || !provider || typed) return "ok";
+    if (!keyLoaded.current) {
+      const stored = await aiHasKey(provider.id);
+      storedKey.current = stored;
+      boundOrigin.current = stored ? await aiBoundOrigin(provider.id) : null;
+      keyLoaded.current = true;
+      setHasKey(stored);
+    }
+    if (!storedKey.current) return "ok";
+    const nextOrigin = endpointOrigin(baseUrl);
+    const previous = boundOrigin.current;
+    if (!nextOrigin || previous === nextOrigin) return "ok";
+    const choice = await ask({
+      title: t("ai.hostChanged.title"),
+      message: t("ai.hostChanged.message"),
+      buttons: [
+        { label: t("dialog.cancel"), value: "cancel" },
+        { label: t("ai.hostChanged.confirm"), value: "confirm", variant: "danger" },
+      ],
+    });
+    if (choice !== "confirm") return "cancel";
+    await aiClearKey(provider.id);
+    storedKey.current = false;
+    boundOrigin.current = null;
+    keyLoaded.current = true;
+    setHasKey(false);
+    setApiKey("");
+    return "cleared";
+  };
+
   const save = async () => {
     setBusy(true);
     setStatus(null);
     try {
+      const current = activeProvider(catalog);
+      const hostChange = current ? await confirmHostChange(current.baseUrl) : "ok";
+      if (hostChange === "cancel") return;
       const typed = enteredKey(apiKey);
       await persist();
-      setStatus(typed ? t("ai.saved") : t("ai.savedPublic"));
+      setStatus(
+        hostChange === "cleared"
+          ? t("ai.hostChanged.cleared")
+          : typed
+            ? t("ai.saved")
+            : t("ai.savedPublic")
+      );
     } catch (error) {
       setStatus(localizeError(error));
     } finally {
