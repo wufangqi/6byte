@@ -8,7 +8,7 @@
 
 - [ ] `tsc --noEmit`、`eslint .`、`prettier --check .`、`vitest run` 全绿
 - [ ] `cargo fmt --check`、`cargo clippy --all-targets -- -D warnings`、`cargo test --lib` 全绿
-- [ ] `pnpm tauri build` 产出 MSI + NSIS，体积在预算内（NSIS ≤ 20 MB）
+- [ ] `pnpm tauri build` 产出本平台安装包；三平台包由 `Release` workflow 构建（Windows NSIS/MSI、Linux deb/AppImage、macOS universal DMG），体积在预算内（NSIS ≤ 20 MB）
 - [ ] `scripts/e2e-smoke.ps1` 在安装版上全绿（需 WebView2 远程调试端口）
 - [ ] 版本号三处一致：`package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`
 - [ ] `CHANGELOG.md` 的 `[Unreleased]` 已归档为本次版本
@@ -111,11 +111,18 @@
 
 1. 归档 CHANGELOG、更新三处版本号、提交 `chore: release vX.Y.Z`，并走 `scripts/ship.ps1` 合入 `master`。
 2. 打 tag 并推送：`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`
-   → `Release` workflow 在 Windows 上构建 MSI/NSIS，自动创建 **draft** Release 并附加资产，
+   → `Release` workflow 先创建 **draft** Release，再并行构建 Windows（NSIS/MSI）、Linux（deb/AppImage）、macOS（universal DMG）并附加到同一 Release，
    Release Notes 取自 CHANGELOG 对应章节。
-3. 核对 draft：资产齐全（MSI + NSIS）、体积在预算内、Notes 正确；必要时本机安装一次做最终验证。
+3. 核对 draft：三平台资产齐全、体积在预算内、Notes 正确；必要时本机安装一次做最终验证。
 4. 发布：`gh release edit vX.Y.Z --draft=false`（或在 Actions 手动运行 `Release` 且 `publish: true`）。
    事后记录产物 SHA256（`gh release view vX.Y.Z --json assets` 或 `Get-FileHash`）。
+
+## 8.1 多平台安装包（v0.1.8 起）
+
+- [ ] Release 同时产出 Windows NSIS/MSI、Linux deb/AppImage、macOS universal DMG
+- [ ] Linux deb 在 Ubuntu 22.04 可安装并启动（需 `libwebkit2gtk-4.1-0`）；AppImage `chmod +x` 后可直接运行
+- [ ] macOS DMG 可挂载、拖入 Applications 后能启动；包未签名/未公证，首次需右键 →「打开」
+- [ ] 各平台包体积合理（Windows NSIS ≤ 20 MB）
 
 ## 9. 工作区文件树（T54）
 

@@ -1,7 +1,8 @@
-// Extract the CHANGELOG section for a release tag and expose it as a
-// step output (`body`) for tauri-action.
-// Usage: node scripts/release-notes.mjs v0.1.7
-import { appendFileSync, readFileSync } from "node:fs";
+// Extract the CHANGELOG section for a release tag. Writes the notes to an
+// optional file argument (used by the draft-release job) and exposes them as a
+// step output (`body`) for other consumers.
+// Usage: node scripts/release-notes.mjs v0.1.8 [notes.md]
+import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 const tag = process.argv[2] ?? "";
 const version = tag.replace(/^v/, "").split("-")[0];
@@ -38,8 +39,13 @@ const notes = [
   "",
   body,
   "",
-  "**下载 / Downloads**: Windows 安装包见下方 Assets（MSI / NSIS）。",
+  "**下载 / Downloads**: 见下方 Assets —— Windows（NSIS / MSI）、Linux（deb / AppImage）、macOS（universal DMG，未签名）。",
 ].join("\n");
+
+const notesFile = process.argv[3];
+if (notesFile) {
+  writeFileSync(notesFile, `${notes}\n`, "utf8");
+}
 
 console.log(`release notes from ${source}:\n${notes}`);
 if (process.env.GITHUB_OUTPUT) {

@@ -8,7 +8,7 @@
 
 [中文](./README.zh.md) · **English**
 
-**Status**: v0.1.7 (2026-10-25) is out with M0–M3. One-click actions and `Ctrl+K` / Tab accept are merged into `master` and will ship in the next version.
+**Status**: v0.1.8 (2026-10-26) is out with M0–M3, the workspace file tree and Markdown-first preview. Installers are now built for Windows, Linux and macOS.
 
 > The app UI is bilingual (switch under **View → Language**). The detailed docs under `docs/` are written in Chinese.
 
@@ -31,8 +31,19 @@
 
 Download from [Releases](https://github.com/wufangqi/6byte/releases/latest):
 
-- `6byte_0.1.7_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
-- `6byte_0.1.7_x64_en-US.msi` — MSI, for enterprise / silent install
+- `6byte_0.1.8_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
+- `6byte_0.1.8_x64_en-US.msi` — MSI, for enterprise / silent install
+
+**Linux**
+
+- `6byte_0.1.8_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.1.8_amd64.deb`
+- `6byte_0.1.8_amd64.AppImage` — portable: `chmod +x 6byte_0.1.8_amd64.AppImage && ./6byte_0.1.8_amd64.AppImage`
+
+Needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Ubuntu 22.04+ / Debian 12+).
+
+**macOS**
+
+- `6byte_0.1.8_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 

@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.md)
 
-**状态**：v0.1.7（2026-10-25）已发布，含 M0–M3。`master` 上的一键动作与 `Ctrl+K` / Tab 接受已合入，随下一版发布。
+**状态**：v0.1.8（2026-10-26）已发布，含 M0–M3、工作区文件树与 Markdown 默认预览；安装包覆盖 Windows、Linux、macOS。
 
 ![欢迎页](./docs/assets/welcome.png)
 ![编辑器与 Markdown 分屏预览](./docs/assets/editor-preview.png)
@@ -29,8 +29,19 @@
 
 从 [Releases](https://github.com/wufangqi/6byte/releases/latest) 下载：
 
-- `6byte_0.1.7_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
-- `6byte_0.1.7_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
+- `6byte_0.1.8_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
+- `6byte_0.1.8_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
+
+**Linux**
+
+- `6byte_0.1.8_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.1.8_amd64.deb`
+- `6byte_0.1.8_amd64.AppImage` — 免安装：`chmod +x 6byte_0.1.8_amd64.AppImage && ./6byte_0.1.8_amd64.AppImage`
+
+依赖 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 为 `libwebkit2gtk-4.1-0`）。
+
+**macOS**
+
+- `6byte_0.1.8_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
