@@ -52,13 +52,20 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "release $TAG already exists"
-          else
+          release_id() {
+            gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+              --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1
+          }
+          ID=$(release_id)
+          if [ -z "$ID" ]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
               --title "6byte $TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
+            ID=$(release_id)
           fi
-          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq .id)
+          if [ -z "$ID" ]; then
+            echo "could not find or create a release for $TAG" >&2
+            exit 1
+          fi
           echo "id=$ID" >> "$GITHUB_OUTPUT"
           echo "release id: $ID"
 
