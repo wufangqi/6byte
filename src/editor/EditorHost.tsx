@@ -20,6 +20,8 @@ interface Props {
   simplified?: boolean;
   /** Saves a pasted image, returning the Markdown snippet to insert. */
   onPasteImage?: (file: File) => Promise<string | null>;
+  /** Markdown preview-only keeps the view mounted but must not take the caret. */
+  visible?: boolean;
 }
 
 /**
@@ -29,17 +31,19 @@ interface Props {
  * state into this one view, so undo history survives tab switches and preview
  * toggles instead of being reset by a remount.
  */
-export default function EditorHost({ tab, simplified, onPasteImage }: Props) {
+export default function EditorHost({ tab, simplified, onPasteImage, visible = true }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
   const activeIdRef = useRef<string | null>(null);
   const pasteRef = useRef(onPasteImage);
   const simplifiedRef = useRef(simplified);
+  const visibleRef = useRef(visible);
 
   // Keep the latest props without remounting the view.
   useEffect(() => {
     pasteRef.current = onPasteImage;
     simplifiedRef.current = simplified;
+    visibleRef.current = visible;
   });
 
   const initFor = (target: Tab): DocStateInit => ({
@@ -72,7 +76,7 @@ export default function EditorHost({ tab, simplified, onPasteImage }: Props) {
     attachView(tab.id, view);
     requestAnimationFrame(() => {
       view.scrollDOM.scrollTop = getDocScrollTop(tab.id);
-      view.focus();
+      if (visibleRef.current) view.focus();
     });
 
     const unsubscribeTheme = subscribeTheme(() => {
@@ -118,12 +122,28 @@ export default function EditorHost({ tab, simplified, onPasteImage }: Props) {
     }
     activeIdRef.current = tab.id;
     setActiveTab(tab.id);
-    view.focus();
+    if (visibleRef.current) view.focus();
     // `tab.version` changes when the buffer is reloaded from disk, which must
     // rebuild the state (and intentionally drop that tab's history). The rest of
     // the tab object is not a dependency: only its id and version matter here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab.id, tab.version]);
+
+  // A hidden editor is measured at zero. Relayout once the source pane is shown,
+  // and drop focus while it is hidden so keystrokes do not edit an invisible buffer.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    if (!visible) {
+      if (view.hasFocus) view.contentDOM.blur();
+      return;
+    }
+    view.requestMeasure();
+    const frame = requestAnimationFrame(() => {
+      if (visibleRef.current) view.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [visible]);
 
   return <div className="editor-host" ref={hostRef} />;
 }

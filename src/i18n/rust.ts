@@ -26,6 +26,8 @@ const RULES: Rule[] = [
     params: (m) => ({ size: m[1], limit: m[2] }),
   },
   { pattern: /^所选路径不是文件。$/, key: "notAFile" },
+  { pattern: /^不是文件夹。$/, key: "notAFolder" },
+  { pattern: /^没有权限。$/, key: "permissionDenied" },
   { pattern: /^该文件包含二进制内容（NUL 字节），已拒绝以文本方式打开。$/, key: "binary" },
   {
     pattern: /^该文件在打开时包含无法解码的字节，直接保存会用替换字符覆盖原数据。$/,
@@ -148,6 +150,8 @@ const RULES: Rule[] = [
 const EN: Record<string, string> = {
   readFailed: "Read failed: {detail}",
   notAFile: "The selected path is not a file.",
+  notAFolder: "That path is not a folder.",
+  permissionDenied: "Permission denied.",
   tooLarge: "File is too large ({size} MB); the current limit is {limit} MB.",
   tooLargeReadonly: "File is too large ({size} MB); the read-only preview limit is {limit} MB.",
   binary: "The file contains binary data (NUL byte); it cannot be opened as text.",

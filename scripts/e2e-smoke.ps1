@@ -6,12 +6,13 @@
 
 .DESCRIPTION
   Covers the paths that unit tests cannot reach:
-    0. reset persisted session/recent/theme, then:
+    0. reset persisted session/recent/theme/workspace, then:
     1-15. large files, mixed EOL, session recovery, watcher, conflicts, grep,
           find & replace, Markdown preview/export/outline, image paste, shiki,
           split divider, recent-file deletion, >100 MB read-only viewer,
     16-19. title bar menus and window controls, theme switching + persistence,
-           per-file preview state, Mermaid and KaTeX rendering.
+           per-file preview state, Mermaid and KaTeX rendering,
+    23-24. workspace file tree (list, expand, open, close folder while the tab stays).
 
   Prerequisites:
     $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9222'
@@ -126,12 +127,24 @@ function Wait-AppReady {
 }
 
 function Set-SessionAndReload {
-  param([string[]]$Paths, [int]$SettleSeconds = 5)
+  param(
+    [string[]]$Paths,
+    [int]$SettleSeconds = 5,
+    [string]$Workspace = '',
+    [switch]$KeepTreeHidden
+  )
   $json = ($Paths | ForEach-Object { "'" + $_.Replace('\', '\\') + "'" }) -join ','
   $page = Get-PageTarget
   if (-not $page) { throw "no WebView2 page target on port $Port" }
   $socket = Connect-Cdp $page.webSocketDebuggerUrl
-  Invoke-CdpEval $socket "localStorage.setItem('ainative.session', JSON.stringify([$json])); localStorage.setItem('ainative.preview', '0'); localStorage.setItem('ainative.splitPercent', '50'); 'ok'" | Out-Null
+  if ($Workspace) {
+    $escaped = $Workspace.Replace('\', '\\').Replace("'", "\'")
+    $treeHiddenJs = if ($KeepTreeHidden) { '' } else { "localStorage.setItem('ainative.treeHidden','0');" }
+    $workspaceJs = "localStorage.setItem('ainative.workspace', JSON.stringify({version:1, rootPath:'$escaped'})); $treeHiddenJs"
+  } else {
+    $workspaceJs = "localStorage.removeItem('ainative.workspace');"
+  }
+  Invoke-CdpEval $socket "$workspaceJs localStorage.setItem('ainative.session', JSON.stringify([$json])); localStorage.setItem('ainative.preview', '0'); localStorage.setItem('ainative.splitPercent', '50'); 'ok'" | Out-Null
   Invoke-CdpEval $socket 'location.reload(); "ok"' | Out-Null
   $socket.Dispose()
   Start-Sleep -Seconds $SettleSeconds
@@ -158,16 +171,16 @@ try {
 # --------------------------------------- 0. reset persisted state
 # The app restores its last session on launch; a stale session (e.g. files the
 # previous run deleted) makes the first steps flaky. Clear it before testing.
-Write-Host '[0/22] reset persisted session, recent files, theme and locale' -ForegroundColor DarkCyan
+Write-Host '[0/24] reset persisted session, recent files, theme, locale and workspace' -ForegroundColor DarkCyan
 $resetPage = Get-PageTarget
 $resetSocket = Connect-Cdp $resetPage.webSocketDebuggerUrl
 Wait-AppReady $resetSocket
-Invoke-CdpEval $resetSocket "localStorage.setItem('ainative.session', '[]'); localStorage.setItem('ainative.recent', '[]'); localStorage.setItem('ainative.theme', 'dark'); localStorage.setItem('ainative.locale', 'zh'); 'ok'" | Out-Null
+Invoke-CdpEval $resetSocket "localStorage.setItem('ainative.session', '[]'); localStorage.setItem('ainative.recent', '[]'); localStorage.setItem('ainative.theme', 'dark'); localStorage.setItem('ainative.locale', 'zh'); localStorage.removeItem('ainative.workspace'); localStorage.removeItem('ainative.treeHidden'); 'ok'" | Out-Null
 Invoke-CdpEval $resetSocket 'location.reload(); "ok"' | Out-Null
 $resetSocket.Dispose()
 Start-Sleep -Seconds 4
 
-Write-Host '[1/22] large-file staged loading' -ForegroundColor Cyan
+Write-Host '[1/24] large-file staged loading' -ForegroundColor Cyan
 if (-not (Test-Path $LogFile)) {
   Write-Host "      creating $LogFile (~35 MB)..."
   $stream = [IO.File]::Create($LogFile)
@@ -212,7 +225,7 @@ Assert-True ($after.lines -gt 0) 'window still rendered after scroll'
 $socket.Dispose()
 
 # ------------------------------------------------- mixed EOL + missing file
-Write-Host '[2/22] mixed line endings badge' -ForegroundColor Cyan
+Write-Host '[2/24] mixed line endings badge' -ForegroundColor Cyan
 $fixture = Join-Path $PSScriptRoot '..\src-tauri\fixtures\mixed-eol.txt'
 $missing = Join-Path $PSScriptRoot '..\src-tauri\fixtures\does-not-exist.txt'
 $socket = Set-SessionAndReload -Paths @($fixture, $missing)
@@ -228,12 +241,12 @@ $mixedResult = Invoke-CdpEval $socket ($mixed -replace "`r`n", ' ')
 Assert-True ($mixedResult.warnings -contains '混合换行') 'mixed EOL badge shown' "$($mixedResult.warnings -join ',')"
 $socket.Dispose()
 
-Write-Host '[3/22] session restore with a missing path' -ForegroundColor Cyan
+Write-Host '[3/24] session restore with a missing path' -ForegroundColor Cyan
 Assert-True ($mixedResult.banner -like '*已无法打开*') 'one-off banner for skipped files' "$($mixedResult.banner)"
 Assert-True ($mixedResult.session -notlike '*does-not-exist*') 'missing path dropped from session' "$($mixedResult.session)"
 
 # ------------------------------------------- external change (T13 file watch)
-Write-Host '[4/22] external change reloads a clean tab' -ForegroundColor Cyan
+Write-Host '[4/24] external change reloads a clean tab' -ForegroundColor Cyan
 $watchedFile = Join-Path $env:TEMP 'ainative-e2e-watch.txt'
 Set-Content -Path $watchedFile -Value 'before external change' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($watchedFile)
@@ -251,7 +264,7 @@ $socket.Dispose()
 Remove-Item $watchedFile -ErrorAction SilentlyContinue
 
 # ------------------------------- dirty tab: three-way conflict prompt (T13)
-Write-Host '[5/22] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
+Write-Host '[5/24] dirty tab shows the external-change conflict prompt' -ForegroundColor Cyan
 $conflictFile = Join-Path $env:TEMP 'ainative-e2e-conflict.txt'
 Set-Content -Path $conflictFile -Value 'base content' -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($conflictFile)
@@ -307,7 +320,7 @@ $socket.Dispose()
 Remove-Item $conflictFile -ErrorAction SilentlyContinue
 
 # ------------------------------------------- cross-file search (T14 grep)
-Write-Host '[6/22] cross-file search opens the hit' -ForegroundColor Cyan
+Write-Host '[6/24] cross-file search opens the hit' -ForegroundColor Cyan
 $grepDir = Join-Path $env:TEMP 'ainative-e2e-grep'
 New-Item -ItemType Directory -Force -Path $grepDir | Out-Null
 $grepTarget = Join-Path $grepDir 'target-note.txt'
@@ -369,7 +382,7 @@ $socket.Dispose()
 Remove-Item $grepDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- find & replace panel (T16)
-Write-Host '[7/22] search panel finds and replaces' -ForegroundColor Cyan
+Write-Host '[7/24] search panel finds and replaces' -ForegroundColor Cyan
 $findDir = Join-Path $env:TEMP 'ainative-e2e-find'
 New-Item -ItemType Directory -Force -Path $findDir | Out-Null
 $findFile = Join-Path $findDir 'find-target.txt'
@@ -422,7 +435,7 @@ $socket.Dispose()
 Remove-Item $findDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown split preview (T19)
-Write-Host '[8/22] markdown split preview renders live' -ForegroundColor Cyan
+Write-Host '[8/24] markdown split preview renders live' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewFile = Join-Path $previewDir 'preview-target.md'
@@ -476,7 +489,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- export HTML (T19)
-Write-Host '[9/22] preview exports a self-contained HTML file' -ForegroundColor Cyan
+Write-Host '[9/24] preview exports a self-contained HTML file' -ForegroundColor Cyan
 $exportDir = Join-Path $env:TEMP 'ainative-e2e-export'
 New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
 $exportFile = Join-Path $exportDir 'export-target.md'
@@ -511,7 +524,7 @@ Assert-True ($htmlText -like '*<title>export-target</title>*') 'exported html ha
 Remove-Item $exportDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- markdown outline (T19)
-Write-Host '[10/22] markdown outline jumps inside the preview' -ForegroundColor Cyan
+Write-Host '[10/24] markdown outline jumps inside the preview' -ForegroundColor Cyan
 $outlineDir = Join-Path $env:TEMP 'ainative-e2e-outline'
 New-Item -ItemType Directory -Force -Path $outlineDir | Out-Null
 $outlineFile = Join-Path $outlineDir 'outline-target.md'
@@ -563,7 +576,7 @@ $socket.Dispose()
 Remove-Item $outlineDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- image paste into assets/ (T19)
-Write-Host '[11/22] pasted image is saved, previewed and exported' -ForegroundColor Cyan
+Write-Host '[11/24] pasted image is saved, previewed and exported' -ForegroundColor Cyan
 $pasteDir = Join-Path $env:TEMP 'ainative-e2e-paste'
 New-Item -ItemType Directory -Force -Path $pasteDir | Out-Null
 $pasteFile = Join-Path $pasteDir 'paste-target.md'
@@ -607,7 +620,7 @@ Assert-True ($exportedHtml -like '*data:image/png;base64,*') 'exported HTML inli
 Remove-Item $pasteDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- shiki code highlighting (T19)
-Write-Host '[12/22] code fences are highlighted by shiki' -ForegroundColor Cyan
+Write-Host '[12/24] code fences are highlighted by shiki' -ForegroundColor Cyan
 $highlightDir = Join-Path $env:TEMP 'ainative-e2e-highlight'
 New-Item -ItemType Directory -Force -Path $highlightDir | Out-Null
 $highlightFile = Join-Path $highlightDir 'highlight-target.md'
@@ -641,7 +654,7 @@ $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- resizable split divider (T19)
-Write-Host '[13/22] split divider is draggable' -ForegroundColor Cyan
+Write-Host '[13/24] split divider is draggable' -ForegroundColor Cyan
 $splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
 New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
 $splitFile = Join-Path $splitDir 'split-target.md'
@@ -688,7 +701,7 @@ Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 
 # --------------------------------------- recent files: delete (v0.1.4)
-Write-Host '[14/22] recent files can be deleted' -ForegroundColor Cyan
+Write-Host '[14/24] recent files can be deleted' -ForegroundColor Cyan
 $recentDir = Join-Path $env:TEMP 'ainative-e2e-recent'
 New-Item -ItemType Directory -Force -Path $recentDir | Out-Null
 $recentA = Join-Path $recentDir 'recent-a.md'
@@ -732,7 +745,7 @@ Remove-Item $recentDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host ''
 
 # --------------------------------------- L3 large file >100 MB (M-01)
-Write-Host '[15/22] read-only viewer opens a >100 MB file' -ForegroundColor Cyan
+Write-Host '[15/24] read-only viewer opens a >100 MB file' -ForegroundColor Cyan
 $hugeLog = Join-Path $env:TEMP 'ainative-e2e-huge.log'
 if (-not (Test-Path $hugeLog)) {
   Write-Host "      creating $hugeLog (~110 MB)..."
@@ -774,7 +787,7 @@ $socket.Dispose()
 Remove-Item $hugeLog -ErrorAction SilentlyContinue
 
 # --------------------------------------- title bar menus (T51)
-Write-Host '[16/22] title bar exposes menus, theme items and window controls' -ForegroundColor Cyan
+Write-Host '[16/24] title bar exposes menus, theme items and window controls' -ForegroundColor Cyan
 $socket = Set-SessionAndReload -Paths @()
 $chrome = @'
 (async () => {
@@ -797,7 +810,7 @@ Assert-True ($bar.controls.Count -eq 3) 'window controls: minimize/maximize/clos
 Assert-True (($bar.fileItems -join ' ').Contains('打开文件夹') -and ($bar.fileItems -join ' ').Contains('全部保存')) 'file menu lists folder and save-all actions' "$($bar.fileItems -join ' | ')"
 
 # --------------------------------------- theme switch + persistence (T51)
-Write-Host '[17/22] theme switches from the view menu and survives a reload' -ForegroundColor Cyan
+Write-Host '[17/24] theme switches from the view menu and survives a reload' -ForegroundColor Cyan
 $toLight = @'
 (async () => {
   const openView = () => {
@@ -838,7 +851,7 @@ $dark = Invoke-CdpEval $socket ($toDark -replace "`r`n", ' ')
 Assert-True ($dark.theme -eq 'dark' -and $dark.stored -eq 'dark') 'switching back to dark persists' "$($dark | ConvertTo-Json -Compress)"
 
 # --------------------------------------- per-file preview state (T51)
-Write-Host '[18/22] preview toggle is remembered per file' -ForegroundColor Cyan
+Write-Host '[18/24] preview toggle is remembered per file' -ForegroundColor Cyan
 $previewDir = Join-Path $env:TEMP 'ainative-e2e-preview-state'
 New-Item -ItemType Directory -Force -Path $previewDir | Out-Null
 $previewMd = Join-Path $previewDir 'diagram.md'
@@ -872,7 +885,7 @@ Assert-True ($state.onTxt -eq $false) 'switching to a text tab hides the preview
 Assert-True ($state.backOnMd) 'returning to the markdown tab restores its preview' "$($state | ConvertTo-Json -Compress)"
 
 # --------------------------------------- mermaid + katex (T51)
-Write-Host '[19/22] preview renders KaTeX formulas and Mermaid diagrams' -ForegroundColor Cyan
+Write-Host '[19/24] preview renders KaTeX formulas and Mermaid diagrams' -ForegroundColor Cyan
 $render = @'
 (async () => {
   const md = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('diagram.md'));
@@ -900,7 +913,7 @@ $socket.Dispose()
 Remove-Item $previewDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- theme repaint for code + diagrams (T53)
-Write-Host '[20/22] light theme repaints highlighted code and Mermaid diagrams' -ForegroundColor Cyan
+Write-Host '[20/24] light theme repaints highlighted code and Mermaid diagrams' -ForegroundColor Cyan
 $themeDir = Join-Path $env:TEMP 'ainative-e2e-theme-repaint'
 New-Item -ItemType Directory -Force -Path $themeDir | Out-Null
 $themeFile = Join-Path $themeDir 'theme-demo.md'
@@ -979,7 +992,7 @@ $socket.Dispose()
 Remove-Item $themeDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- UI language switch (M-10)
-Write-Host '[21/22] interface language switches to English and persists' -ForegroundColor Cyan
+Write-Host '[21/24] interface language switches to English and persists' -ForegroundColor Cyan
 $langDir = Join-Path $env:TEMP 'ainative-e2e-locale'
 New-Item -ItemType Directory -Force -Path $langDir | Out-Null
 $langFile = Join-Path $langDir 'greeting.md'
@@ -1058,7 +1071,7 @@ $socket.Dispose()
 Remove-Item $langDir -Recurse -Force -ErrorAction SilentlyContinue
 
 # --------------------------------------- 22. undo history across tabs and preview (M-06)
-Write-Host '[22/22] undo history survives tab switches and preview toggles' -ForegroundColor Cyan
+Write-Host '[22/24] undo history survives tab switches and preview toggles' -ForegroundColor Cyan
 $undoDir = Join-Path $env:TEMP 'ainative-e2e-undo'
 New-Item -ItemType Directory -Force -Path $undoDir | Out-Null
 $undoA = Join-Path $undoDir 'undo-a.md'
@@ -1072,6 +1085,9 @@ $switchToA = @'
   const tab = (name) =>
     [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes(name));
   tab('undo-a.md')?.click();
+  await sleep(400);
+  const source = document.querySelector('.markdown-preview__source');
+  if (source && source.getAttribute('aria-pressed') !== 'true') source.click();
   await sleep(400);
   return (document.querySelector('.cm-content')?.innerText ?? '').includes('first line');
 })()
@@ -1106,10 +1122,11 @@ $openPreview = @'
 (async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const before = document.querySelector('.cm-content');
-  [...document.querySelectorAll('.statusbar button')]
-    .find((el) => (el.textContent || '').includes('预览'))
-    ?.click();
-  await sleep(900);
+  const source = document.querySelector('.markdown-preview__source');
+  if (source && source.getAttribute('aria-pressed') === 'true') source.click();
+  await sleep(300);
+  if (source && source.getAttribute('aria-pressed') !== 'true') source.click();
+  await sleep(600);
   return { sameEditor: before === document.querySelector('.cm-content'), preview: document.querySelector('.markdown-preview') !== null };
 })()
 '@
@@ -1127,6 +1144,116 @@ $previewUndo = Invoke-CdpEval $socket "document.querySelector('.cm-content')?.in
 Assert-True ($previewTyped.Contains('UNDO-PREVIEW') -and -not $previewUndo.Contains('UNDO-PREVIEW')) 'undo still works after opening the preview (history survived)' "typed=$($previewTyped.Contains('UNDO-PREVIEW')) undone=$(-not $previewUndo.Contains('UNDO-PREVIEW'))"
 $socket.Dispose()
 Remove-Item $undoDir -Recurse -Force -ErrorAction SilentlyContinue
+
+# --------------------------------------- 23. workspace file tree (T54)
+Write-Host '[23/24] workspace file tree lists, expands and opens' -ForegroundColor Cyan
+$treeDir = Join-Path $env:TEMP 'ainative-e2e-tree'
+$treeNested = Join-Path $treeDir 'nested'
+New-Item -ItemType Directory -Force -Path $treeNested | Out-Null
+$treeHello = Join-Path $treeDir 'hello.txt'
+$treeInner = Join-Path $treeNested 'inner.txt'
+[IO.File]::WriteAllText($treeHello, "tree-hello`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText($treeInner, "tree-inner`n", [Text.UTF8Encoding]::new($false))
+[IO.File]::WriteAllText((Join-Path $treeDir '.secret'), "hidden`n", [Text.UTF8Encoding]::new($false))
+$socket = Set-SessionAndReload -Paths @() -Workspace $treeDir
+$treeListed = @'
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline && !document.querySelector('.file-tree__row')) {
+    await sleep(200);
+  }
+  const names = [...document.querySelectorAll('.file-tree__row')].map((el) => el.getAttribute('data-name'));
+  return {
+    title: document.querySelector('.file-tree__name')?.textContent ?? '',
+    role: document.querySelector('.file-tree__body')?.getAttribute('role') ?? '',
+    names,
+    more: document.querySelector('.file-tree__more') !== null,
+    status: document.querySelector('.statusbar')?.textContent ?? '',
+  };
+})()
+'@
+$listed = Invoke-CdpEval $socket ($treeListed -replace "`r`n", ' ')
+Assert-True ($listed.title -eq 'ainative-e2e-tree') 'workspace tree shows the folder name' "$($listed.title)"
+Assert-True ($listed.role -eq 'tree') 'file tree exposes an ARIA tree' "$($listed.role)"
+Assert-True (($listed.names -contains 'hello.txt') -and ($listed.names -contains 'nested') -and -not ($listed.names -contains '.secret')) 'one level lists the file and folder and hides dot names' "$($listed.names -join ',')"
+Assert-True ($listed.more -eq $false) 'a small folder does not show the paging button' "$($listed.more)"
+Assert-True ($listed.status.Contains('ainative-e2e-tree')) 'status bar shows the workspace name' "$($listed.status)"
+$treeToggle = @'
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const btn = document.querySelector('.statusbar__icon');
+  const inStatusBar = !!document.querySelector('.statusbar .statusbar__icon');
+  const before = !!document.querySelector('.file-tree');
+  btn?.click();
+  await sleep(300);
+  const hidden = !document.querySelector('.file-tree');
+  btn?.click();
+  await sleep(300);
+  const shown = !!document.querySelector('.file-tree');
+  return { inStatusBar, before, hidden, shown };
+})()
+'@
+$toggled = Invoke-CdpEval $socket ($treeToggle -replace "`r`n", ' ')
+Assert-True ($toggled.inStatusBar) 'panel toggle sits in the status bar' "$($toggled.inStatusBar)"
+Assert-True ($toggled.before) 'status bar toggle starts with the tree visible' "$($toggled.before)"
+Assert-True ($toggled.hidden) 'status bar toggle hides the file tree' "$($toggled.hidden)"
+Assert-True ($toggled.shown) 'status bar toggle shows the file tree again' "$($toggled.shown)"
+
+# The last toggle state survives a reload / restart.
+Invoke-CdpEval $socket "document.querySelector('.statusbar__icon')?.click(); 'ok'" | Out-Null
+Start-Sleep -Milliseconds 400
+$hiddenNow = Invoke-CdpEval $socket "!document.querySelector('.file-tree')"
+Assert-True $hiddenNow 'status bar toggle can hide the tree again' "$hiddenNow"
+$socket.Dispose()
+$socket = Set-SessionAndReload -Paths @() -Workspace $treeDir -KeepTreeHidden
+$persistedHidden = Invoke-CdpEval $socket "!document.querySelector('.file-tree')"
+Assert-True $persistedHidden 'hidden tree stays hidden after reload' "$persistedHidden"
+Invoke-CdpEval $socket "document.querySelector('.statusbar__icon')?.click(); 'ok'" | Out-Null
+Start-Sleep -Milliseconds 400
+$socket.Dispose()
+$socket = Set-SessionAndReload -Paths @() -Workspace $treeDir -KeepTreeHidden
+$persistedShown = Invoke-CdpEval $socket "!!document.querySelector('.file-tree')"
+Assert-True $persistedShown 'visible tree stays visible after reload' "$persistedShown"
+$treeOpen = @'
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const row = (name) => [...document.querySelectorAll('.file-tree__row')].find((el) => el.getAttribute('data-name') === name);
+  row('nested')?.querySelector('.file-tree__twist')?.click();
+  await sleep(800);
+  const names = [...document.querySelectorAll('.file-tree__row')].map((el) => el.getAttribute('data-name'));
+  const file = row('hello.txt');
+  file?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await sleep(800);
+  return {
+    names,
+    text: document.querySelector('.cm-content')?.innerText ?? '',
+  };
+})()
+'@
+$opened = Invoke-CdpEval $socket ($treeOpen -replace "`r`n", ' ')
+Assert-True ($opened.names -contains 'inner.txt') 'expanding a folder loads its children' "$($opened.names -join ',')"
+Assert-True ($opened.text.Contains('tree-hello')) 'single click opens the file in the editor' "$($opened.text)"
+
+# --------------------------------------- 24. close folder keeps the tab (T54)
+Write-Host '[24/24] closing the folder clears the tree and keeps the tab' -ForegroundColor Cyan
+$treeClose = @'
+(async () => {
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  document.querySelector('.file-tree__close')?.click();
+  await sleep(300);
+  const tabs = [...document.querySelectorAll('.tab')].map((el) => (el.textContent || '').trim());
+  return {
+    tree: document.querySelector('.file-tree') !== null,
+    tabs,
+  };
+})()
+'@
+$closed = Invoke-CdpEval $socket ($treeClose -replace "`r`n", ' ')
+Assert-True ($closed.tree -eq $false) 'closing the folder removes the tree' "$($closed.tree)"
+Assert-True (($closed.tabs -join ' ').Contains('hello.txt')) 'the opened tab stays after the folder closes' "$($closed.tabs -join ',')"
+$socket.Dispose()
+Remove-Item $treeDir -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
 if ($script:Failures -eq 0) {

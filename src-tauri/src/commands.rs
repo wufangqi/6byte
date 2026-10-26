@@ -351,40 +351,6 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     Ok(())
 }
 
-const TEXT_EXTENSIONS: &[&str] = &[
-    "md", "markdown", "txt", "log", "json", "yaml", "yml", "ini", "csv", "ts", "js", "rs", "py",
-];
-
-const MAX_FOLDER_FILES: usize = 40;
-
-/// Text files directly inside a folder, capped so opening a folder cannot flood the tab bar.
-#[tauri::command]
-pub fn list_text_files(path: String) -> Result<Vec<String>, String> {
-    let directory = PathBuf::from(&path);
-    let entries = fs::read_dir(&directory).map_err(|error| format!("读取失败：{error}"))?;
-    let mut files = Vec::new();
-    for entry in entries.flatten() {
-        let candidate = entry.path();
-        if !candidate.is_file() {
-            continue;
-        }
-        let extension = candidate
-            .extension()
-            .and_then(|value| value.to_str())
-            .unwrap_or("")
-            .to_ascii_lowercase();
-        if !TEXT_EXTENSIONS.contains(&extension.as_str()) {
-            continue;
-        }
-        if let Some(value) = candidate.to_str() {
-            files.push(value.to_string());
-        }
-    }
-    files.sort();
-    files.truncate(MAX_FOLDER_FILES);
-    Ok(files)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -556,28 +522,6 @@ mod tests {
         .unwrap_err();
         assert!(error.contains("文件过大"), "unexpected error: {error}");
         let _ = fs::remove_file(path);
-    }
-
-    #[test]
-    fn list_text_files_keeps_text_files_in_the_folder() {
-        let dir = std::env::temp_dir().join(format!(
-            "ainative-list-{}-{}",
-            std::process::id(),
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos()
-        ));
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("notes.md"), "hi").unwrap();
-        fs::write(dir.join("shot.png"), [1u8, 2]).unwrap();
-        fs::create_dir(dir.join("nested")).unwrap();
-        fs::write(dir.join("nested").join("inner.txt"), "x").unwrap();
-
-        let listed = list_text_files(dir.to_string_lossy().to_string()).unwrap();
-        assert_eq!(listed.len(), 1);
-        assert!(listed[0].ends_with("notes.md"));
-        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

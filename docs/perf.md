@@ -248,6 +248,7 @@ cargo test --release --lib perf_grep -- --ignored --nocapture
 | 10 MB 端到端打开（编辑器模式） | 未测 | 需要把 L1 打开到可滚动的计时从「会话重载 + CDP 重连」里拆出来 |
 | 3 文件内存 | 未测（无自动化入口） | 进程树私有内存，打开 3 个文本标签后采样 |
 | 冷磁盘冷启动 | 未测 | 发布前在干净机器上复测（T22 发布清单） |
+| 文件树首屏 | ≤300 ms（人工，不是 CI 门禁） | 未测 | 先画 300 行，其余点「显示更多」。单层列举上限 2000，不做整树扫描 |
 
 **已知环境问题（不影响用户）**：本机 `cargo clippy` 默认会解析到
 `stable-x86_64-pc-windows-gnu` toolchain，而该 toolchain 的 llvm-mingw 链接器缺少 `libgcc`，

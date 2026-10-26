@@ -10,6 +10,11 @@ describe("samePath", () => {
     expect(samePath("D:\\docs\\a.md", "d:/docs/A.md")).toBe(true);
   });
 
+  it("treats a Windows verbatim path as the same path", () => {
+    expect(samePath("\\\\?\\C:\\docs\\a.md", "C:\\docs\\a.md")).toBe(true);
+    expect(samePath("\\\\?\\UNC\\server\\share\\a.md", "\\\\server\\share\\a.md")).toBe(true);
+  });
+
   it("keeps POSIX paths case-sensitive", () => {
     expect(samePath("/docs/a.md", "/docs/A.md")).toBe(false);
     expect(samePath("/docs/a.md", "/docs/b.md")).toBe(false);

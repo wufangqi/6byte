@@ -58,7 +58,7 @@
 - **次按钮**：`.btn`，用于取消、测试、增删等。
 - **危险按钮**：`.btn .btn--danger`，用于不可撤销操作。
 - **标题栏入口**：`.titlebar__chip`；开启态加 `.titlebar__chip--on`；设置类入口加 `.titlebar__chip--outline`。不要再做填充式 pill——标题栏不放主按钮。
-- **工具条小按钮**：状态栏 `.statusbar__action`、预览 `.markdown-preview__export` / `__outline-toggle`，统一 20px 高、`--radius-sm`、`--text-xs`。
+- **工具条小按钮**：状态栏 `.statusbar__action` / `.statusbar__icon` / `.statusbar__source`、预览 `.markdown-preview__export` / `__outline-toggle` / `__source`，统一 20px 高、`--radius-sm`、`--text-xs`。
 - **输入**：`.ai-settings__input` / `.grep__input` / `.ai-stream__input`，32px 高、`--radius-md`、`--font-mono`（正文类输入用 UI 字体）。
 - **列表项**：菜单 `.menu__item`、服务商/模型 `.ai-settings__model`、最近打开 `.link`，悬停用 `--bg-active-line`，选中用 `--accent` 描边 + `--accent-soft` 底。
 - **对话框**：`.dialog` + `.dialog__head`（标题 + 右上关闭）+ `.dialog__actions`；长表单把操作区做成 sticky footer。
@@ -82,4 +82,4 @@
 2. `pnpm exec vitest run` 全绿（纯样式改动也应通过）。
 3. 深/浅两套主题各看一遍：标题栏、标签栏、状态栏、菜单、对话框、搜索面板、空状态。
 4. 键盘走一遍：Tab 到控件有焦点环；Esc 能关菜单/对话框/搜索。
-5. 构建并在安装版跑 `scripts/e2e-smoke.ps1`（22 步 / 91 条断言）。
+5. 构建并在安装版跑 `scripts/e2e-smoke.ps1`（24 步 / 101 条断言，含文件树第 23–24 步）。

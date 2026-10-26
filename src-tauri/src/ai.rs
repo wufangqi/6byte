@@ -578,7 +578,7 @@ fn explain_edit_error(error: ProviderError) -> ProviderError {
 /// overall deadline and does not back off. 429 and 5xx retry twice. 401/403 do not.
 /// The first-token timer stops once any event arrives, so a long reply is not cut off.
 async fn run_edit_stream(
-    provider: &OpenAiCompatible,
+    provider: &impl Provider,
     request: ChatRequest,
     sink: mpsc::Sender<StreamEvent>,
     cancel: CancellationToken,
@@ -615,7 +615,7 @@ async fn run_edit_stream(
 }
 
 async fn run_attempt(
-    provider: &OpenAiCompatible,
+    provider: &impl Provider,
     request: ChatRequest,
     sink: &mpsc::Sender<StreamEvent>,
     cancel: &CancellationToken,
@@ -884,6 +884,7 @@ pub async fn ai_probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::VecDeque;
     use std::io::{Read, Write};
     use std::net::TcpListener;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -1339,28 +1340,47 @@ mod tests {
         (format!("http://{address}/v1"), hits)
     }
 
-    async fn collect_edit(
-        provider: &OpenAiCompatible,
+    struct WatchedEdit {
+        result: Result<(), ProviderError>,
+        text: String,
+        done: bool,
+    }
+
+    async fn watch_edit(
+        provider: &impl Provider,
         policy: EditPolicy,
         cancel: CancellationToken,
-    ) -> Result<String, ProviderError> {
+    ) -> WatchedEdit {
         let (tx, mut rx) = mpsc::channel(8);
         let request = sample_request();
         let producer = run_edit_stream(provider, request, tx, cancel, policy);
         let consumer = async {
             let mut text = String::new();
+            let mut done = false;
             while let Some(event) = rx.recv().await {
                 match event {
                     StreamEvent::Delta(delta) | StreamEvent::Reasoning(delta) => {
                         text.push_str(&delta)
                     }
-                    StreamEvent::Done(_) => break,
+                    StreamEvent::Done(_) => {
+                        done = true;
+                        break;
+                    }
                 }
             }
-            text
+            (text, done)
         };
-        let (result, text) = tokio::join!(producer, consumer);
-        result.map(|()| text)
+        let (result, (text, done)) = tokio::join!(producer, consumer);
+        WatchedEdit { result, text, done }
+    }
+
+    async fn collect_edit(
+        provider: &impl Provider,
+        policy: EditPolicy,
+        cancel: CancellationToken,
+    ) -> Result<String, ProviderError> {
+        let watched = watch_edit(provider, policy, cancel).await;
+        watched.result.map(|()| watched.text)
     }
 
     #[tokio::test]
@@ -1543,5 +1563,421 @@ mod tests {
             disconnected.load(Ordering::SeqCst),
             "first-token timeout did not close the connection"
         );
+    }
+
+    /// Fixed replay. Edit-path tests use this instead of a socket so CI never
+    /// leaves the machine, and never needs an API key.
+    enum MockStep {
+        Events(Vec<StreamEvent>),
+        Fail(ProviderError),
+        EventsThenFail(Vec<StreamEvent>, ProviderError),
+        Hang,
+        EventsThenHang(Vec<StreamEvent>),
+        Gap {
+            head: Vec<StreamEvent>,
+            pause: Duration,
+            tail: Vec<StreamEvent>,
+        },
+    }
+
+    struct MockProvider {
+        steps: Mutex<VecDeque<MockStep>>,
+        calls: AtomicUsize,
+    }
+
+    impl MockProvider {
+        fn new(steps: Vec<MockStep>) -> Self {
+            Self {
+                steps: Mutex::new(VecDeque::from(steps)),
+                calls: AtomicUsize::new(0),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl Provider for MockProvider {
+        fn id(&self) -> &str {
+            "mock"
+        }
+
+        async fn stream(
+            &self,
+            _request: ChatRequest,
+            sink: mpsc::Sender<StreamEvent>,
+            cancel: CancellationToken,
+        ) -> Result<(), ProviderError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            let step = lock(&self.steps)
+                .pop_front()
+                .expect("mock script has no step left");
+            match step {
+                MockStep::Fail(error) => Err(error),
+                MockStep::Hang => {
+                    cancel.cancelled().await;
+                    Err(ProviderError::Cancelled)
+                }
+                MockStep::Events(events) => replay(&sink, &cancel, events).await,
+                MockStep::EventsThenFail(events, error) => {
+                    replay(&sink, &cancel, events).await?;
+                    Err(error)
+                }
+                MockStep::EventsThenHang(events) => {
+                    replay(&sink, &cancel, events).await?;
+                    cancel.cancelled().await;
+                    Err(ProviderError::Cancelled)
+                }
+                MockStep::Gap { head, pause, tail } => {
+                    replay(&sink, &cancel, head).await?;
+                    tokio::select! {
+                        _ = cancel.cancelled() => return Err(ProviderError::Cancelled),
+                        _ = tokio::time::sleep(pause) => {}
+                    }
+                    replay(&sink, &cancel, tail).await
+                }
+            }
+        }
+    }
+
+    async fn replay(
+        sink: &mpsc::Sender<StreamEvent>,
+        cancel: &CancellationToken,
+        events: Vec<StreamEvent>,
+    ) -> Result<(), ProviderError> {
+        for event in events {
+            if cancel.is_cancelled() {
+                return Err(ProviderError::Cancelled);
+            }
+            sink.send(event)
+                .await
+                .map_err(|_| ProviderError::Cancelled)?;
+        }
+        Ok(())
+    }
+
+    fn fast_edit() -> EditPolicy {
+        EditPolicy {
+            first_token: Duration::from_secs(2),
+            retries: &QUICK_RETRY,
+        }
+    }
+
+    fn status(code: u16, detail: &str) -> MockStep {
+        MockStep::Fail(ProviderError::Http {
+            status: code,
+            detail: detail.to_string(),
+        })
+    }
+
+    fn pong() -> MockStep {
+        MockStep::Events(vec![
+            StreamEvent::Delta("pong".to_string()),
+            StreamEvent::Done(None),
+        ])
+    }
+
+    fn delta(text: &str) -> StreamEvent {
+        StreamEvent::Delta(text.to_string())
+    }
+
+    #[tokio::test]
+    async fn mock_times_out_before_the_first_token() {
+        let provider = MockProvider::new(vec![MockStep::Hang, pong()]);
+        let policy = EditPolicy {
+            first_token: Duration::from_millis(40),
+            retries: &[],
+        };
+        let watched = tokio::time::timeout(
+            Duration::from_secs(2),
+            watch_edit(&provider, policy, CancellationToken::new()),
+        )
+        .await
+        .expect("first-token timeout hung");
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "timeout");
+        assert_eq!(
+            error.message(),
+            "15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。"
+        );
+        assert_eq!(watched.text, "");
+        assert!(!watched.done);
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_retries_a_rate_limit_then_returns_the_reply() {
+        let provider = MockProvider::new(vec![status(429, "slow down"), pong()]);
+        let text = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(text, "pong");
+        assert_eq!(provider.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn mock_stops_when_the_rate_limit_retries_are_spent() {
+        let provider = MockProvider::new(vec![
+            status(429, "slow down"),
+            status(429, "slow down"),
+            status(429, "slow down"),
+            pong(),
+        ]);
+        let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "http");
+        assert_eq!(error.message(), "服务返回 429：slow down");
+        assert_eq!(watched.text, "");
+        assert!(!watched.done);
+        assert_eq!(provider.calls(), 3);
+    }
+
+    #[tokio::test]
+    async fn mock_retries_a_server_error_then_returns_the_reply() {
+        let provider = MockProvider::new(vec![status(503, "down"), pong()]);
+        let text = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(text, "pong");
+        assert_eq!(provider.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn mock_does_not_retry_a_dropped_connection() {
+        let provider = MockProvider::new(vec![
+            MockStep::Fail(ProviderError::Network("connection refused".to_string())),
+            pong(),
+        ]);
+        let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "network");
+        assert_eq!(error.message(), "无法连接模型服务：connection refused");
+        assert_eq!(watched.text, "");
+        assert!(!watched.done);
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_keeps_the_partial_reply_when_the_stream_drops() {
+        let provider = MockProvider::new(vec![
+            MockStep::EventsThenFail(
+                vec![delta("半截")],
+                ProviderError::Network("connection reset".to_string()),
+            ),
+            pong(),
+        ]);
+        let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "network");
+        assert_eq!(error.message(), "无法连接模型服务：connection reset");
+        assert_eq!(watched.text, "半截");
+        assert!(!watched.done);
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_cancel_before_any_token_writes_nothing() {
+        let provider = MockProvider::new(vec![MockStep::Hang, pong()]);
+        let cancel = CancellationToken::new();
+        let stop = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+            stop.cancel();
+        });
+        let watched = tokio::time::timeout(
+            Duration::from_secs(2),
+            watch_edit(&provider, fast_edit(), cancel),
+        )
+        .await
+        .expect("cancel hung");
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "cancelled");
+        assert_eq!(error.message(), "已取消。");
+        assert_eq!(watched.text, "");
+        assert!(!watched.done);
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_cancel_after_a_delta_does_not_finish() {
+        let provider = Arc::new(MockProvider::new(vec![
+            MockStep::EventsThenHang(vec![delta("半")]),
+            pong(),
+        ]));
+        let running = provider.clone();
+        let cancel = CancellationToken::new();
+        let stop = cancel.clone();
+        let (tx, mut rx) = mpsc::channel(8);
+        let task = tokio::spawn(async move {
+            run_edit_stream(&*running, sample_request(), tx, cancel, fast_edit()).await
+        });
+        let first = tokio::time::timeout(Duration::from_secs(2), rx.recv())
+            .await
+            .expect("delta hung")
+            .expect("delta missing");
+        assert!(matches!(first, StreamEvent::Delta(text) if text == "半"));
+        stop.cancel();
+        let error = tokio::time::timeout(Duration::from_secs(2), task)
+            .await
+            .expect("cancel hung")
+            .unwrap()
+            .unwrap_err();
+        assert_eq!(error.code(), "cancelled");
+        assert!(rx.recv().await.is_none());
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_two_requests_do_not_mix_replies() {
+        let provider = MockProvider::new(vec![
+            MockStep::Events(vec![delta("one"), StreamEvent::Done(None)]),
+            MockStep::Events(vec![delta("two"), StreamEvent::Done(None)]),
+        ]);
+        let policy = fast_edit();
+        let (left, right) = tokio::join!(
+            collect_edit(&provider, policy, CancellationToken::new()),
+            collect_edit(&provider, policy, CancellationToken::new()),
+        );
+        let mut texts = vec![left.unwrap(), right.unwrap()];
+        texts.sort();
+        assert_eq!(texts, vec!["one".to_string(), "two".to_string()]);
+        assert_eq!(provider.calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn mock_delivers_a_long_reply_without_truncating() {
+        let long = "字".repeat(20_000);
+        let provider = MockProvider::new(vec![MockStep::Events(vec![
+            delta(&long),
+            StreamEvent::Done(None),
+        ])]);
+        let text = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap();
+        assert_eq!(text, long);
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_does_not_cut_a_reply_that_pauses_after_the_first_token() {
+        let provider = MockProvider::new(vec![MockStep::Gap {
+            head: vec![delta("已")],
+            pause: Duration::from_millis(180),
+            tail: vec![StreamEvent::Done(None)],
+        }]);
+        let policy = EditPolicy {
+            first_token: Duration::from_millis(50),
+            retries: &[],
+        };
+        let started = std::time::Instant::now();
+        let text = tokio::time::timeout(
+            Duration::from_secs(2),
+            collect_edit(&provider, policy, CancellationToken::new()),
+        )
+        .await
+        .expect("pause hung")
+        .unwrap();
+        assert_eq!(text, "已");
+        assert!(started.elapsed() >= Duration::from_millis(150));
+        assert_eq!(provider.calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn mock_does_not_retry_a_forbidden_key() {
+        let provider = MockProvider::new(vec![status(403, "nope"), pong()]);
+        let error = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert_eq!(error.message(), "密钥无效或没有权限。");
+        assert_eq!(error.code(), "http");
+        assert_eq!(provider.calls(), 1);
+    }
+
+    fn chunk_error(data: &str) -> ProviderError {
+        match interpret_chunk(data) {
+            Ok(_) => panic!("expected a chunk error"),
+            Err(error) => error,
+        }
+    }
+
+    #[test]
+    fn a_truncated_chunk_is_a_protocol_error() {
+        let error = chunk_error("{\"choices\":[{\"delta\":{\"content\":\"半");
+        assert_eq!(error.code(), "protocol");
+        assert!(error.message().starts_with("模型响应无法解析："));
+        let upstream = chunk_error(r#"{"error":{"message":"overloaded"}}"#);
+        assert_eq!(upstream.code(), "upstream");
+        assert_eq!(upstream.message(), "模型服务错误：overloaded");
+    }
+
+    #[tokio::test]
+    async fn edit_path_rejects_a_truncated_json_event_without_retrying() {
+        let body = "data: {\"choices\":[{\"delta\":{\"content\":\"半\"}\n\n";
+        let (url, hits) = spawn_sequence(vec![
+            http_message(200, "OK", "text/event-stream", body),
+            sse_pong(),
+        ]);
+        let provider = OpenAiCompatible::new(&url, None).unwrap();
+        let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
+        let error = watched.result.unwrap_err();
+        assert_eq!(error.code(), "protocol");
+        assert!(error.message().starts_with("模型响应无法解析："));
+        assert_eq!(watched.text, "");
+        assert!(!watched.done);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn edit_path_finishes_when_the_socket_closes_after_one_event() {
+        let body = "data: {\"choices\":[{\"delta\":{\"content\":\"半截\"}}]}\n\n";
+        let (url, hits) = spawn_sequence(vec![http_message(200, "OK", "text/event-stream", body)]);
+        let provider = OpenAiCompatible::new(&url, None).unwrap();
+        let watched = watch_edit(&provider, fast_edit(), CancellationToken::new()).await;
+        watched.result.unwrap();
+        assert_eq!(watched.text, "半截");
+        assert!(watched.done);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn edit_path_does_not_retry_an_upstream_error_event() {
+        let body = "data: {\"error\":{\"message\":\"overloaded\"}}\n\n";
+        let (url, hits) = spawn_sequence(vec![
+            http_message(200, "OK", "text/event-stream", body),
+            sse_pong(),
+        ]);
+        let provider = OpenAiCompatible::new(&url, None).unwrap();
+        let error = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "upstream");
+        assert_eq!(error.message(), "模型服务错误：overloaded");
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn edit_path_does_not_retry_when_the_socket_drops() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let hits = Arc::new(AtomicUsize::new(0));
+        let count = hits.clone();
+        thread::spawn(move || {
+            for _ in 0..4 {
+                let Ok((socket, _)) = listener.accept() else {
+                    return;
+                };
+                count.fetch_add(1, Ordering::SeqCst);
+                drop(socket);
+            }
+        });
+        let provider = OpenAiCompatible::new(&format!("http://{address}/v1"), None).unwrap();
+        let error = collect_edit(&provider, fast_edit(), CancellationToken::new())
+            .await
+            .unwrap_err();
+        assert_eq!(error.code(), "network");
+        assert!(error.message().starts_with("无法连接模型服务："));
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 }

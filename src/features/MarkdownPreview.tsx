@@ -17,6 +17,11 @@ interface Props {
   /** Directory of the document; resolves `assets/…` image paths. */
   baseDir: string | null;
   onExport(): void;
+  /** Markdown opens in preview. `<>` reveals the source beside it. */
+  sourceOn?: boolean;
+  onToggleSource?: () => void;
+  /** Skip editor scroll sync while the source pane is hidden. */
+  syncScroll?: boolean;
 }
 
 const renderAll = (tabId: string, baseDir: string | null) => {
@@ -33,7 +38,15 @@ const renderAll = (tabId: string, baseDir: string | null) => {
  * The buffer lives in CodeMirror; this pane re-renders from `getDocText` with a
  * 120 ms debounce and keeps its scroll position in sync with the editor.
  */
-export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Props) {
+export default function MarkdownPreview({
+  tabId,
+  name,
+  baseDir,
+  onExport,
+  sourceOn = false,
+  onToggleSource,
+  syncScroll = true,
+}: Props) {
   const resolvedTheme = useResolvedTheme();
   const { t } = useI18n();
   const [rendered, setRendered] = useState(() => renderAll(tabId, baseDir));
@@ -151,6 +164,7 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
 
   // Bidirectional, fraction-based scroll sync; the editor remains the source of truth.
   useEffect(() => {
+    if (!syncScroll) return;
     const editor = getScrollElement(tabId);
     const preview = scrollerRef.current;
     if (!editor || !preview) return;
@@ -195,7 +209,7 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
       editor.removeEventListener("scroll", onEditorScroll);
       preview.removeEventListener("scroll", onPreviewScroll);
     };
-  }, [tabId]);
+  }, [tabId, syncScroll]);
 
   const onPreviewClick = (event: MouseEvent<HTMLDivElement>) => {
     const anchor = (event.target as HTMLElement).closest("a");
@@ -231,6 +245,17 @@ export default function MarkdownPreview({ tabId, name, baseDir, onExport }: Prop
         <span className="markdown-preview__name" title={name}>
           {name}
         </span>
+        {onToggleSource && (
+          <button
+            type="button"
+            className={`markdown-preview__source${sourceOn ? " is-on" : ""}`}
+            aria-pressed={sourceOn}
+            title={t(sourceOn ? "preview.source.titleOn" : "preview.source.title")}
+            onClick={onToggleSource}
+          >
+            {"<>"}
+          </button>
+        )}
         <button
           type="button"
           className={`markdown-preview__outline-toggle ${outlineOpen ? "is-on" : ""}`}

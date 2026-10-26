@@ -43,11 +43,11 @@ Start-Process "$env:LOCALAPPDATA\6byte\6byte.exe"
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 ```
 
-覆盖内容（22 步 / 91 条断言，第 0 步先清空会话）：大文件只读预览（首屏 + 滚动重取）、混合换行徽标、会话恢复时失效文件的
+覆盖内容（24 步 / 107 条断言，第 0 步先清空会话和工作区根）：大文件只读预览（首屏 + 滚动重取）、混合换行徽标、会话恢复时失效文件的
 一次性提示与清理、外部修改后干净标签静默重载、脏标签外部修改的三选一冲突弹窗、Ctrl+Shift+F 跨文件搜索
 并点击跳转、Ctrl+F 查找替换（面板中文化、命中高亮、全部替换后变脏）、Ctrl+Shift+M Markdown 分屏预览
 （渲染 h1/粗体/代码块 + 输入后预览实时更新）、预览导出 HTML（成功横幅 + 目标文件内容）、大纲列表
-（条目数 + 点击滚动）、图片粘贴（构造 ClipboardEvent → Markdown 片段 + assets/ 落盘 + data URI 图片）、Shiki 高亮（代码块被替换为 `<pre class="shiki">` 且产生语法 token）、分屏分隔条拖拽（拖动变窄 + 双击恢复 50/50）、最近打开删除（删一条 + localStorage 同步）、自定义标题栏（文件/视图菜单、窗口按钮）、主题切换与重载持久化、按文件独立预览、Mermaid/KaTeX 渲染、浅色主题下代码与图表重绘、中英界面切换与重载持久化、撤销历史跨标签/预览保留（CDP 输入 → 切标签 → Ctrl+Z → 开预览 → Ctrl+Z，编辑器不重挂）。
+（条目数 + 点击滚动）、图片粘贴（构造 ClipboardEvent → Markdown 片段 + assets/ 落盘 + data URI 图片）、Shiki 高亮（代码块被替换为 `<pre class="shiki">` 且产生语法 token）、分屏分隔条拖拽（拖动变窄 + 双击恢复 50/50）、最近打开删除（删一条 + localStorage 同步）、自定义标题栏（文件/视图菜单、窗口按钮）、主题切换与重载持久化、按文件独立预览、Mermaid/KaTeX 渲染、浅色主题下代码与图表重绘、中英界面切换与重载持久化、撤销历史跨标签/预览保留（CDP 输入 → 切标签 → Ctrl+Z → 开预览 → Ctrl+Z，编辑器不重挂）、工作区文件树（写入 `ainative.workspace` 后重载、展开子目录、双击打开、关闭文件夹后标签仍在）。
 
 > 注意：该脚本是 PowerShell 5.1 脚本，文件必须保存为 **UTF-8 with BOM**，否则 PS 5.1 会按 ANSI 解析中文
 > 字面量导致断言失败。修改后请用 `[IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($true))`
@@ -93,6 +93,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 > 便捷方式：`scripts/ship.ps1 -Title "feat: ..."` 一条命令完成分支 → 本地检查 → 提交 → push → 开 PR → 等 6 项 checks → squash 合并。
 
 - 提交信息使用 Conventional Commits：`feat:` / `fix:` / `refactor:` / `docs:` / `chore:` / `test:`。
+- 新建 PR 会带上 `.github/pull_request_template.md`。新建 Issue 从 `.github/ISSUE_TEMPLATE/` 选择缺陷或改进。
 - PR 合并前必须通过：`tsc`、`eslint`、`prettier --check`、`vitest`、`cargo fmt --check`、
   `cargo clippy -D warnings`、`cargo test --lib`（CI 会在三平台跑）。
 - 涉及保存、编码、关闭流程的改动，请在 PR 描述中写明人工验证步骤。
