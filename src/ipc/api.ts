@@ -146,9 +146,19 @@ export async function aiStart(request: AiStartRequest): Promise<string> {
 }
 
 /** Store the API key in the OS keychain. It is not written to app settings. */
-export async function aiSetKey(apiKey: string, profileId?: string): Promise<void> {
+export async function aiSetKey(
+  apiKey: string,
+  profileId: string | undefined,
+  baseUrl: string
+): Promise<void> {
   requireTauri("ipc.ai");
-  return invoke<void>("ai_set_key", { apiKey, profileId });
+  return invoke<void>("ai_set_key", { apiKey, profileId, baseUrl });
+}
+
+/** Origin a stored key may be sent to, or null when the key was saved before binding. */
+export async function aiBoundOrigin(profileId?: string): Promise<string | null> {
+  requireTauri("ipc.ai");
+  return invoke<string | null>("ai_bound_origin", { profileId });
 }
 
 /** Forget the stored API key for one model. */

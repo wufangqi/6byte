@@ -23,6 +23,10 @@ import FileTree from "./features/WorkspaceTree";
 import Welcome from "./features/Welcome";
 import { clampTreeWidth } from "./features/fileTree";
 import { ask } from "./features/dialogStore";
+import { duplicateTab, isWatcherEcho, statConflicts } from "./features/fileSafety";
+import CommandPalette from "./features/CommandPalette";
+import { isAppShortcutBlocked } from "./features/shortcuts";
+import { grepDefaultRoot } from "./features/workspaceQuery";
 import DialogHost from "./features/Dialog";
 import {
   currentWindowOwnsSession,
@@ -41,7 +45,8 @@ import {
   watchFile,
   writeFile,
 } from "./ipc/api";
-import { getDocText, revealLine } from "./editor/registry";
+import { readBuffer, revealLineWhenReady } from "./editor/registry";
+import { dismissRewriteForSave } from "./editor/rewriteGate";
 import { dropDocStatesExcept } from "./editor/docStates";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { localizeError, t as tr, useI18n } from "./i18n";
@@ -87,6 +92,7 @@ export default function App() {
   const active = useWorkspace(selectActiveTab);
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
   const markdown = Boolean(active?.mode === "text" && isMarkdownFile(active.name));
@@ -261,23 +267,11 @@ export default function App() {
       }
       if (!tab) return;
       useWorkspace.getState().setActive(tab.id);
-
       if (tab.mode === "large") {
         useWorkspace.getState().setError(tr("app.large.jump"));
         return;
       }
-
-      const tabId = tab.id;
-      let attempts = 0;
-      const tryReveal = () => {
-        if (revealLine(tabId, line)) {
-          setGrepOpen(false);
-          return;
-        }
-        attempts += 1;
-        if (attempts < 12) window.setTimeout(tryReveal, 50);
-      };
-      window.setTimeout(tryReveal, 50);
+      revealLineWhenReady(tab.id, line, () => setGrepOpen(false));
     },
     [openPaths]
   );
@@ -324,7 +318,7 @@ export default function App() {
       const tab = store.tabs.find((t) => t.id === store.activeId);
       if (!tab || tab.mode !== "text") return;
 
-      const content = getDocText(tab.id) ?? tab.content;
+      const content = readBuffer(tab.id, tab.content);
       const title = tab.name.replace(/\.(md|markdown|mdx)$/i, "") || tr("app.export.untitled");
       const separator = tab.path
         ? Math.max(tab.path.lastIndexOf("/"), tab.path.lastIndexOf("\\"))
@@ -369,8 +363,10 @@ export default function App() {
         return false;
       }
 
-      // The live buffer wins over the store snapshot when the tab is mounted.
-      const content = getDocText(tabId) ?? tab.content;
+      // A proposal is not part of the buffer. Drop it before reading so a
+      // save during the stream cannot be followed by accepting that reply.
+      dismissRewriteForSave(tabId);
+      const content = readBuffer(tabId, tab.content);
 
       let path = tab.path;
       if (!path || saveAs) {
@@ -387,9 +383,7 @@ export default function App() {
       // Saving as onto a path that another tab already owns would create a
       // duplicate tab; switch to that tab instead (T30).
       if (path !== tab.path) {
-        const duplicate = store.tabs.find(
-          (candidate) => candidate.id !== tab.id && candidate.path && samePath(candidate.path, path)
-        );
+        const duplicate = duplicateTab(store.tabs, tab.id, path);
         if (duplicate) {
           store.setError(tr("app.duplicate", { name: duplicate.name }));
           store.setActive(duplicate.id);
@@ -400,7 +394,7 @@ export default function App() {
       if (tab.path && !saveAs) {
         try {
           const disk = await statFile(path);
-          if (disk.mtimeMs !== tab.mtimeMs || disk.size !== tab.size) {
+          if (statConflicts(tab, disk)) {
             const choice = await ask({
               title: tr("dialog.external.title"),
               message: tr("dialog.external.message", {
@@ -533,9 +527,7 @@ export default function App() {
       if (!tab) return;
 
       // Our own saves echo back through the watcher; the store already has the stat.
-      if (event.mtimeMs === tab.mtimeMs && (tab.mode === "large" || event.size === tab.size)) {
-        return;
-      }
+      if (isWatcherEcho(tab, event)) return;
       if (event.size === 0 && event.mtimeMs === 0) {
         store.setError(tr("app.deleted", { name: tab.name }));
         return;
@@ -740,6 +732,7 @@ export default function App() {
   // Global shortcuts.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isAppShortcutBlocked(event)) return;
       const mod = event.ctrlKey || event.metaKey;
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -747,6 +740,9 @@ export default function App() {
       if (key === "k" && !event.shiftKey) {
         event.preventDefault();
         openRewrite();
+      } else if (key === "p" && !event.shiftKey) {
+        event.preventDefault();
+        setPaletteOpen(true);
       } else if (key === "s") {
         event.preventDefault();
         const tab = selectActiveTab(useWorkspace.getState());
@@ -828,7 +824,7 @@ export default function App() {
     ? Math.max(active.path.lastIndexOf("/"), active.path.lastIndexOf("\\"))
     : -1;
   const fileDir = active?.path && lastSeparator > 0 ? active.path.slice(0, lastSeparator) : null;
-  const grepRoot = treeRoot ?? fileDir;
+  const grepRoot = grepDefaultRoot(treeRoot, fileDir);
 
   return (
     <div className="app">
@@ -837,6 +833,7 @@ export default function App() {
         onNewWindow={() => void createWindow()}
         onOpenFile={() => void openViaDialog()}
         onOpenFolder={() => void openFolder()}
+        onGoToFile={() => setPaletteOpen(true)}
         onCloseFolder={() => useFileTree.getState().closeRoot()}
         hasWorkspace={Boolean(treeRoot)}
         treeHidden={treeHidden}
@@ -1002,6 +999,20 @@ export default function App() {
           defaultRoot={grepRoot}
           onClose={() => setGrepOpen(false)}
           onOpenMatch={(path, line) => void openMatch(path, line)}
+        />
+      )}
+
+      {paletteOpen && (
+        <CommandPalette
+          onClose={() => setPaletteOpen(false)}
+          onOpenFile={(path) => {
+            setPaletteOpen(false);
+            void openPaths([path]);
+          }}
+          onRevealLine={(line) => {
+            setPaletteOpen(false);
+            if (active) revealLineWhenReady(active.id, line, () => {});
+          }}
         />
       )}
 

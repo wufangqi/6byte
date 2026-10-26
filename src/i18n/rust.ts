@@ -102,6 +102,15 @@ const RULES: Rule[] = [
   },
   { pattern: /^服务地址无效。$/, key: "aiBaseUrlInvalid" },
   { pattern: /^服务地址只支持 http 或 https。$/, key: "aiBaseUrlScheme" },
+  { pattern: /^非本机地址只支持 https。$/, key: "aiRemoteHttp" },
+  {
+    pattern: /^密钥只发给保存时的服务地址。更换地址需要重新输入密钥。$/,
+    key: "aiKeyOriginMismatch",
+  },
+  {
+    pattern: /^密钥还没有绑定服务地址，请在模型服务里重新保存。$/,
+    key: "aiKeyUnbound",
+  },
   { pattern: /^模型名称不能为空。$/, key: "aiModelEmpty" },
   { pattern: /^消息不能为空。$/, key: "aiMessagesEmpty" },
   {
@@ -133,6 +142,14 @@ const RULES: Rule[] = [
     params: (m) => ({ detail: m[1] }),
   },
   { pattern: /^等待模型响应超时。$/, key: "aiTimeout" },
+  { pattern: /^模型中途停止输出，已取消。$/, key: "aiIdle" },
+  {
+    pattern: /^模型响应超过 (\d+) 分钟，已停止。$/,
+    key: "aiTooLong",
+    params: (m) => ({ minutes: m[1] }),
+  },
+  { pattern: /^模型响应中途断开，结果不完整。$/, key: "aiIncomplete" },
+  { pattern: /^输出达到长度上限，结果不完整。$/, key: "aiTruncated" },
   { pattern: /^密钥无效或没有权限。$/, key: "aiUnauthorized" },
   {
     pattern: /^15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。$/,
@@ -183,6 +200,10 @@ const EN: Record<string, string> = {
   aiProviderUnsupported: "Unsupported model provider: {id}",
   aiBaseUrlInvalid: "The model service address is invalid.",
   aiBaseUrlScheme: "The model service address must use http or https.",
+  aiRemoteHttp: "Remote addresses only support https.",
+  aiKeyOriginMismatch:
+    "The key is only sent to the address it was saved with. Enter it again after changing the address.",
+  aiKeyUnbound: "This key is not bound to a service address yet. Save it again in Model service.",
   aiModelEmpty: "The model name cannot be empty.",
   aiMessagesEmpty: "The message list cannot be empty.",
   aiRoleUnsupported: "Unsupported message role: {role}",
@@ -194,6 +215,10 @@ const EN: Record<string, string> = {
   aiProtocol: "Could not parse the model response: {detail}",
   aiUpstream: "The model service reported an error: {detail}",
   aiTimeout: "Timed out waiting for the model.",
+  aiIdle: "The model stopped sending text, so the request was cancelled.",
+  aiTooLong: "The model ran longer than {minutes} minutes, so the request was stopped.",
+  aiIncomplete: "The model response ended early, so the result is incomplete.",
+  aiTruncated: "The reply hit the length limit and is incomplete.",
   aiUnauthorized: "The API key was rejected or is not allowed.",
   aiFirstToken:
     "No reply arrived within 15 seconds, so the request was cancelled. A local model may respond sooner.",

@@ -1,23 +1,33 @@
 import type { AiMessage } from "../ipc/types";
 
-/** Characters before the caret sent as context. The rest of the file stays local. */
+/** Characters before the caret sent as context. Only this window is copied. */
 export const COMPLETION_PREFIX = 1_600;
 /** Characters after the caret, so the model can see the next words. */
 export const COMPLETION_SUFFIX = 240;
+/** Ceiling for one ghost suggestion. The editor also stops at a sentence. */
+export const COMPLETION_MAX_TOKENS = 128;
 const MIN_PREFIX = 4;
 const MAX_SUGGESTION = 120;
 
 const SYSTEM =
   "只输出光标后面要补上的文字。不要解释，不要标题，不要思考过程，不要重复上文。写到一句结束或换行就停。";
 
+type DocWindow = {
+  length: number;
+  sliceString(from: number, to: number): string;
+};
+
 export function completionSlice(
-  doc: string,
+  doc: string | DocWindow,
   pos: number
 ): { prefix: string; suffix: string } | null {
-  if (pos < 0 || pos > doc.length) return null;
-  const prefix = doc.slice(Math.max(0, pos - COMPLETION_PREFIX), pos);
+  const length = typeof doc === "string" ? doc.length : doc.length;
+  if (pos < 0 || pos > length) return null;
+  const slice = (from: number, to: number) =>
+    typeof doc === "string" ? doc.slice(from, to) : doc.sliceString(from, to);
+  const prefix = slice(Math.max(0, pos - COMPLETION_PREFIX), pos);
   if (prefix.trim().length < MIN_PREFIX) return null;
-  const suffix = doc.slice(pos, Math.min(doc.length, pos + COMPLETION_SUFFIX));
+  const suffix = slice(pos, Math.min(length, pos + COMPLETION_SUFFIX));
   return { prefix, suffix };
 }
 

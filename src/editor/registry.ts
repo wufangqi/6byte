@@ -2,13 +2,25 @@ import type { EditorView } from "@codemirror/view";
 import { getDocText as cachedDocText } from "./docStates";
 
 /**
- * Registry for the single shared EditorView (M-06).
+ * The view currently on screen in this window.
  *
- * The store only keeps a snapshot of each buffer; the authoritative text lives
- * in the cached `EditorState` objects, so saving reads it from here.
+ * Each window has its own module instance. Inactive tabs keep an `EditorState`
+ * in `docStates` (undo included) and do not need a second view.
  */
 let view: EditorView | null = null;
 let activeTabId: string | null = null;
+
+const readyListeners = new Set<(tabId: string) => void>();
+
+function emitReady(tabId: string): void {
+  for (const listener of [...readyListeners]) listener(tabId);
+}
+
+/** Fires after the shared view is showing `tabId`. */
+export function subscribeEditorReady(listener: (tabId: string) => void): () => void {
+  readyListeners.add(listener);
+  return () => readyListeners.delete(listener);
+}
 
 /** Bind the shared view to the tab whose state it currently shows. */
 export function attachView(tabId: string, next: EditorView): void {
@@ -27,9 +39,19 @@ export function setActiveTab(tabId: string): void {
   activeTabId = tabId;
 }
 
-/** Live buffer text of any cached tab, or `null` when the tab is not open. */
+/** The view is showing `tabId` and its saved scroll position has been restored. */
+export function settleEditor(tabId: string): void {
+  if (activeTabId === tabId) emitReady(tabId);
+}
+
+/** Live buffer text of any cached tab, or `null` when the tab has never been mounted. */
 export function getDocText(tabId: string): string | null {
   return cachedDocText(tabId);
+}
+
+/** Live text, or the open/save snapshot when this tab has no editor state yet. */
+export function readBuffer(tabId: string, snapshot: string): string {
+  return cachedDocText(tabId) ?? snapshot;
 }
 
 /**
@@ -101,4 +123,19 @@ export function revealLine(tabId: string, line: number): boolean {
   view.dispatch({ selection: { anchor: info.from }, scrollIntoView: true });
   view.focus();
   return true;
+}
+
+/** Reveal once this window's view has settled on the tab. No timer. */
+export function revealLineWhenReady(tabId: string, line: number, onShown: () => void): () => void {
+  if (revealLine(tabId, line)) {
+    onShown();
+    return () => {};
+  }
+  let stop = () => {};
+  stop = subscribeEditorReady((id) => {
+    if (id !== tabId || !revealLine(tabId, line)) return;
+    stop();
+    onShown();
+  });
+  return stop;
 }

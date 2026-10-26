@@ -3,6 +3,9 @@ import type { AiMessage } from "../ipc/types";
 /** Selection is never truncated. Above this, the request is refused. */
 export const SELECTION_CHAR_LIMIT = 12_000;
 
+/** Upper bound sent with a rewrite so a stream cannot run without a limit. */
+export const REWRITE_MAX_TOKENS = 4096;
+
 const STREAM_SYSTEM = "按用户要求处理用户选中的文字，只输出处理后的正文，不要解释。";
 
 export function modelHost(baseUrl: string): string {
@@ -14,11 +17,22 @@ export function modelHost(baseUrl: string): string {
   }
 }
 
+/** Origin a stored key is bound to. Default ports are omitted, matching Rust. */
+export function endpointOrigin(baseUrl: string): string | null {
+  try {
+    const url = new URL(baseUrl.trim());
+    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
 export function selectionTooLarge(selection: string): boolean {
   return selection.length > SELECTION_CHAR_LIMIT;
 }
 
-/** One instruction plus the selection. The rest of the document is not included. */
+/** Selection and instruction only. The panel adds the document through `assembleRewrite`. */
 export function streamMessages(selection: string, instruction: string): AiMessage[] {
   return [
     { role: "system", content: STREAM_SYSTEM },

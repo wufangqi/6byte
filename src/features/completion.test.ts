@@ -70,4 +70,22 @@ describe("completion text", () => {
   it("refuses a tiny prefix", () => {
     expect(completionSlice("你好", 2)).toBeNull();
   });
+
+  it("copies only the window around the caret", () => {
+    const calls: Array<[number, number]> = [];
+    const doc = {
+      length: 20_000_000,
+      sliceString(from: number, to: number) {
+        calls.push([from, to]);
+        return "字".repeat(to - from);
+      },
+    };
+    const slice = completionSlice(doc, 10_000);
+    expect(calls).toEqual([
+      [10_000 - 1_600, 10_000],
+      [10_000, 10_000 + 240],
+    ]);
+    expect(slice?.prefix).toHaveLength(1_600);
+    expect(slice?.suffix).toHaveLength(240);
+  });
 });

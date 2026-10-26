@@ -9,7 +9,7 @@ import {
   saveDocState,
   type DocStateInit,
 } from "./docStates";
-import { attachView, detachView, notifyDocChanged, setActiveTab } from "./registry";
+import { attachView, detachView, notifyDocChanged, setActiveTab, settleEditor } from "./registry";
 import { editorChrome, localeCompartment, searchPhrases, themeCompartment } from "./extensions";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { getResolvedTheme, subscribeTheme } from "../features/theme";
@@ -77,6 +77,7 @@ export default function EditorHost({ tab, simplified, onPasteImage, visible = tr
     requestAnimationFrame(() => {
       view.scrollDOM.scrollTop = getDocScrollTop(tab.id);
       if (visibleRef.current) view.focus();
+      settleEditor(tab.id);
     });
 
     const unsubscribeTheme = subscribeTheme(() => {
@@ -118,16 +119,18 @@ export default function EditorHost({ tab, simplified, onPasteImage, visible = tr
       const scrollTop = getDocScrollTop(tab.id);
       requestAnimationFrame(() => {
         view.scrollDOM.scrollTop = scrollTop;
+        settleEditor(tab.id);
       });
+    } else {
+      requestAnimationFrame(() => settleEditor(tab.id));
     }
     activeIdRef.current = tab.id;
     setActiveTab(tab.id);
     if (visibleRef.current) view.focus();
-    // `tab.version` changes when the buffer is reloaded from disk, which must
-    // rebuild the state (and intentionally drop that tab's history). The rest of
-    // the tab object is not a dependency: only its id and version matter here.
+    // `tab.version` rebuilds the state after a reload. `tab.name` reconfigures
+    // highlighting when Save As changes the extension, and keeps undo history.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab.id, tab.version]);
+  }, [tab.id, tab.version, tab.name]);
 
   // A hidden editor is measured at zero. Relayout once the source pane is shown,
   // and drop focus while it is hidden so keystrokes do not edit an invisible buffer.

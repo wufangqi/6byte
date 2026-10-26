@@ -23,7 +23,7 @@
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
 - **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
-- **AI**: model services (providers → models, API keys in the OS keychain); `Ctrl+K` or the title-bar **Model** chip rewrites the selection, **Tab** accepts, **Esc** cancels; one-click Polish / Translate / Summarize; autocomplete (off by default).
+- **AI**: model services (providers → models, API keys in the OS keychain); `Ctrl+K` or the title-bar **Model** chip proposes a rewrite beside the selection — the document stays unchanged until **Tab** accepts, and saving or discarding drops the proposal; each reply shows prompt / completion tokens; one-click Polish / Translate / Summarize; `Ctrl+P` opens a command palette for workspace files, recent files and headings; `@` references and a read-only ask mode look things up in the workspace without writing; autocomplete (off by default).
 - **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
 

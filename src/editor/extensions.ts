@@ -32,6 +32,8 @@ import { rewritePreviewField } from "./rewritePreview";
 export const themeCompartment = new Compartment();
 /** Swapped when the UI language changes (CodeMirror's own panel strings). */
 export const localeCompartment = new Compartment();
+/** Swapped when Save As changes the extension, without dropping undo history. */
+export const languageCompartment = new Compartment();
 
 /** Editor chrome driven by the app's CSS variables. `dark` only flips CodeMirror's own panels. */
 export function editorChrome(resolved: ResolvedTheme): Extension {
@@ -83,6 +85,27 @@ export function editorChrome(resolved: ResolvedTheme): Extension {
         backgroundColor: "var(--selection)",
         borderRadius: "2px",
       },
+      ".cm-ai-original": {
+        backgroundColor: "rgba(255, 180, 0, 0.18)",
+        borderRadius: "2px",
+      },
+      ".cm-ai-proposal": {
+        whiteSpace: "pre-wrap",
+      },
+      ".cm-ai-proposal__text": {
+        backgroundColor: "var(--selection)",
+        borderRadius: "2px",
+      },
+      ".cm-ai-label": {
+        display: "inline-block",
+        margin: "0 4px",
+        padding: "0 4px",
+        borderRadius: "2px",
+        fontSize: "10px",
+        lineHeight: "1.4",
+        color: "var(--fg-dim)",
+        backgroundColor: "var(--bg-active-line)",
+      },
       ".cm-ghost-text": {
         color: "var(--fg-dim)",
         fontStyle: "italic",
@@ -124,6 +147,11 @@ function languageFor(filename: string): Extension {
   if (/\.(md|markdown|mdx)$/i.test(filename)) return markdown();
   // TODO(M2): add json/yaml/csv support via @codemirror/legacy-modes or lang-data.
   return [];
+}
+
+/** Highlighting and wrapping for one filename. Reconfigured in place on Save As. */
+export function languageExtensions(filename: string): Extension {
+  return [languageFor(filename), wrapsPlainText(filename) ? EditorView.lineWrapping : []];
 }
 
 /** Soft-wrap prose. `.txt` and extensionless notes (saved as `.txt`) wrap; code-like names do not. */
@@ -180,8 +208,7 @@ export function buildExtensions(
     crosshairCursor(),
     keymap.of([...defaultKeymap, ...historyKeymap, ...searchKeymap, indentWithTab]),
     localeCompartment.of(searchPhrases(getLocale())),
-    languageFor(filename),
-    wrapsPlainText(filename) ? EditorView.lineWrapping : [],
+    languageCompartment.of(languageExtensions(filename)),
     completionExtension(),
     themeCompartment.of(editorChrome(getResolvedTheme())),
     EditorView.domEventHandlers({
