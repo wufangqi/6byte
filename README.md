@@ -70,11 +70,11 @@ Frontend unit tests **156**, Rust **97** (+4 ignored). Installed-build E2E is **
 - AI needs your own OpenAI-compatible endpoint and API key; the key goes to the OS keychain, never a config file.
 - No auto-update, no portable build, no Explorer context menu (M4).
 - The file tree is read-only: no create, rename or delete, no Git status, no watch of the whole tree (open files are still watched), and symlinks are skipped. A single folder lists at most 2000 entries.
-- The custom title bar has only been verified on Windows.
+- The custom title bar has only been verified on Windows. Linux and macOS installers are built by CI; they have not been smoke-tested on real machines yet.
 
 ## Roadmap
 
-Next: M4 distribution (portable build, package feeds, auto-update, shell integration). The workspace file tree is implemented in the working tree and ships with the next release. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: the rest of M4 distribution (portable build, package feeds, auto-update, shell integration), then Linux/macOS smoke tests. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 
