@@ -119,10 +119,10 @@
 
 ## 8.1 多平台安装包（v0.1.8 起）
 
-- [ ] Release 同时产出 Windows NSIS/MSI、Linux deb/AppImage、macOS universal DMG
-- [ ] Linux deb 在 Ubuntu 22.04 可安装并启动（需 `libwebkit2gtk-4.1-0`）；AppImage `chmod +x` 后可直接运行
-- [ ] macOS DMG 可挂载、拖入 Applications 后能启动；包未签名/未公证，首次需右键 →「打开」
-- [ ] 各平台包体积合理（Windows NSIS ≤ 20 MB）
+- [x] Release 同时产出 Windows NSIS/MSI、Linux deb/AppImage、macOS universal DMG（v0.1.8 已上架）
+- [ ] Linux deb 在 Ubuntu 22.04 可安装并启动（需 `libwebkit2gtk-4.1-0`）；AppImage `chmod +x` 后可直接运行（待实机）
+- [ ] macOS DMG 可挂载、拖入 Applications 后能启动；包未签名/未公证，首次需右键 →「打开」（待实机）
+- [x] 各平台包体积合理（Windows NSIS ≤ 20 MB；v0.1.8 NSIS 4.89 MB / AppImage 80.55 MB / DMG 11.09 MB）
 
 ## 9. 工作区文件树（T54）
 
