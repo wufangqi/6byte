@@ -1,5 +1,7 @@
 import { create } from "zustand";
+import { isMarkdownFile } from "../features/markdown";
 import { t } from "../i18n/locale";
+import { samePath } from "../lib/paths";
 import {
   DEFAULT_META,
   type DocumentMode,
@@ -25,8 +27,10 @@ export interface Tab {
   chars: number;
   /** Bumped when the buffer is replaced from disk, which remounts the editor. */
   version: number;
-  /** Markdown split preview for this tab only. New and reopened files start closed. */
+  /** Rendered preview. Markdown files open with this on; other files start closed. */
   preview: boolean;
+  /** Source editor is visible. Markdown files open with this off until `<>` is clicked. */
+  source: boolean;
 }
 
 interface WorkspaceState {
@@ -61,6 +65,8 @@ interface WorkspaceState {
   removeRecent(path: string): void;
   /** Turn Markdown preview on or off for one tab. Other tabs stay as they are. */
   setPreview(id: string, on: boolean): void;
+  /** Show or hide the source editor for one tab. Markdown uses this for the `<>` split. */
+  setSource(id: string, on: boolean): void;
 }
 
 export const countLines = (content: string): number =>
@@ -81,21 +87,25 @@ const dedupe = (paths: string[], max = 12) => {
 };
 
 /** Build the store representation of a freshly opened file. */
-export const tabFromFile = (file: OpenedFile): Tab => ({
-  id: crypto.randomUUID(),
-  name: file.name,
-  path: file.path,
-  mode: "text",
-  content: file.content,
-  meta: file.meta,
-  size: file.size,
-  mtimeMs: file.mtimeMs,
-  dirty: false,
-  lines: countLines(file.content),
-  chars: file.content.length,
-  version: 0,
-  preview: false,
-});
+export const tabFromFile = (file: OpenedFile): Tab => {
+  const markdown = isMarkdownFile(file.name);
+  return {
+    id: crypto.randomUUID(),
+    name: file.name,
+    path: file.path,
+    mode: "text",
+    content: file.content,
+    meta: file.meta,
+    size: file.size,
+    mtimeMs: file.mtimeMs,
+    dirty: false,
+    lines: countLines(file.content),
+    chars: file.content.length,
+    version: 0,
+    preview: markdown,
+    source: !markdown,
+  };
+};
 
 /** Read-only tab backed by `read_range`; the whole file never reaches the frontend. */
 export const tabFromLarge = (info: LargeFileInfo): Tab => ({
@@ -112,6 +122,7 @@ export const tabFromLarge = (info: LargeFileInfo): Tab => ({
   chars: 0,
   version: 0,
   preview: false,
+  source: false,
 });
 
 export const useWorkspace = create<WorkspaceState>((set) => ({
@@ -141,6 +152,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
           chars: 0,
           version: 0,
           preview: false,
+          source: true,
         },
       ],
       activeId: id,
@@ -149,7 +161,9 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
 
   addTab: (tab) =>
     set((state) => {
-      const existing = tab.path ? state.tabs.find((t) => t.path === tab.path) : undefined;
+      const existing = tab.path
+        ? state.tabs.find((item) => item.path && samePath(item.path, tab.path as string))
+        : undefined;
       if (existing) return { activeId: existing.id };
       return {
         tabs: [...state.tabs, tab],
@@ -267,6 +281,13 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set((state) => ({
       tabs: state.tabs.map((tab) =>
         tab.id === id && tab.mode === "text" ? { ...tab, preview: on } : tab
+      ),
+    })),
+
+  setSource: (id, on) =>
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.id === id && tab.mode === "text" ? { ...tab, source: on } : tab
       ),
     })),
 }));

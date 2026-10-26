@@ -11,22 +11,13 @@ use std::time::Instant;
 use regex::RegexBuilder;
 use serde::Serialize;
 
+use crate::skip::is_skipped_dir;
+
 pub const MAX_FILE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_FILES_SCANNED: usize = 20_000;
 const MAX_DEPTH: usize = 16;
 const DEFAULT_MAX_RESULTS: usize = 2_000;
 const SNIPPET_CHARS: usize = 240;
-
-const SKIP_DIRS: [&str; 8] = [
-    ".git",
-    ".svn",
-    ".hg",
-    "node_modules",
-    "target",
-    "dist",
-    ".next",
-    "vendor",
-];
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -92,7 +83,7 @@ pub fn grep(
                     continue;
                 }
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+                if name.starts_with('.') || is_skipped_dir(&name) {
                     continue;
                 }
                 stack.push((path, depth + 1));

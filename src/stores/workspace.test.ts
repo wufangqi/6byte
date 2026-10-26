@@ -196,30 +196,36 @@ describe("removeRecent", () => {
 });
 
 describe("setPreview", () => {
-  it("starts closed and only changes the tab that was toggled", () => {
-    const first = tabFromFile(makeFile("D:/tmp/a.md"));
-    const second = tabFromFile(makeFile("D:/tmp/b.md"));
-    expect(first.preview).toBe(false);
-    expect(second.preview).toBe(false);
+  it("opens markdown in preview and keeps other files in the editor", () => {
+    const markdown = tabFromFile(makeFile("D:/tmp/a.md"));
+    const plain = tabFromFile(makeFile("D:/tmp/b.txt"));
+    expect(markdown.preview).toBe(true);
+    expect(markdown.source).toBe(false);
+    expect(plain.preview).toBe(false);
+    expect(plain.source).toBe(true);
 
-    useWorkspace.getState().addTab(first);
-    useWorkspace.getState().addTab(second);
-    useWorkspace.getState().setPreview(first.id, true);
+    useWorkspace.getState().addTab(markdown);
+    useWorkspace.getState().addTab(plain);
+    useWorkspace.getState().setSource(markdown.id, true);
+    useWorkspace.getState().setPreview(plain.id, true);
 
     const state = useWorkspace.getState();
-    expect(state.tabs.find((tab) => tab.id === first.id)?.preview).toBe(true);
-    expect(state.tabs.find((tab) => tab.id === second.id)?.preview).toBe(false);
+    expect(state.tabs.find((tab) => tab.id === markdown.id)?.source).toBe(true);
+    expect(state.tabs.find((tab) => tab.id === plain.id)?.preview).toBe(true);
+    expect(state.tabs.find((tab) => tab.id === plain.id)?.source).toBe(true);
   });
 
-  it("leaves a reopened file in the default editor", () => {
+  it("reopens a markdown file in preview, with the source hidden", () => {
     const opened = tabFromFile(makeFile("D:/tmp/a.md"));
     useWorkspace.getState().addTab(opened);
-    useWorkspace.getState().setPreview(opened.id, true);
+    useWorkspace.getState().setSource(opened.id, true);
     useWorkspace.getState().closeTab(opened.id);
 
     const again = tabFromFile(makeFile("D:/tmp/a.md"));
     useWorkspace.getState().addTab(again);
-    expect(selectActiveTab(useWorkspace.getState())?.preview).toBe(false);
+    const active = selectActiveTab(useWorkspace.getState());
+    expect(active?.preview).toBe(true);
+    expect(active?.source).toBe(false);
   });
 });
 

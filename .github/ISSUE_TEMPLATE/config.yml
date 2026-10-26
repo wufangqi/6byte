@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 贡献说明
+    url: https://github.com/wufangqi/6byte/blob/master/CONTRIBUTING.md
+    about: 环境、命令和 PR 要求

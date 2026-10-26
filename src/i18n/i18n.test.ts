@@ -99,12 +99,26 @@ describe("Rust error localisation", () => {
     expect(localizeRustMessage("密钥无效或没有权限。", "en")).toBe(
       "The API key was rejected or is not allowed."
     );
+    expect(localizeRustMessage("服务返回 429：slow down", "en")).toBe(
+      "The model service returned 429: slow down"
+    );
+    expect(localizeRustMessage("无法连接模型服务：connection reset", "en")).toBe(
+      "Could not reach the model service: connection reset"
+    );
+    expect(localizeRustMessage("模型响应无法解析：eof", "en")).toBe(
+      "Could not parse the model response: eof"
+    );
+    expect(localizeRustMessage("模型服务错误：overloaded", "en")).toBe(
+      "The model service reported an error: overloaded"
+    );
     expect(
       localizeRustMessage("15 秒内没有收到模型的第一个字，已取消。可以改用本地模型。", "en")
     ).toBe(
       "No reply arrived within 15 seconds, so the request was cancelled. A local model may respond sooner."
     );
     expect(localizeRustMessage("密钥不能为空。", "en")).toBe("The API key cannot be empty.");
+    expect(localizeRustMessage("不是文件夹。", "en")).toBe("That path is not a folder.");
+    expect(localizeRustMessage("没有权限。", "en")).toBe("Permission denied.");
     expect(localizeRustMessage("模型标识无效。", "en")).toBe("The model id is invalid.");
     expect(localizeRustMessage("搜索内容不能为空。", "en")).toBe(
       "The search pattern cannot be empty."

@@ -19,7 +19,9 @@ import { activeModel, loadAiSettings } from "./features/aiSettings";
 import MenuBar from "./features/MenuBar";
 import StatusBar from "./features/StatusBar";
 import TabBar from "./features/TabBar";
+import FileTree from "./features/WorkspaceTree";
 import Welcome from "./features/Welcome";
+import { clampTreeWidth } from "./features/fileTree";
 import { ask } from "./features/dialogStore";
 import DialogHost from "./features/Dialog";
 import {
@@ -29,7 +31,6 @@ import {
   onFileChanged,
   onFileDrop,
   openDocument,
-  listTextFiles,
   openNewWindow,
   pickDirectory,
   pickOpenPaths,
@@ -46,9 +47,11 @@ import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { localizeError, t as tr, useI18n } from "./i18n";
 import { formatSize, formatTime } from "./lib/format";
 import { samePath } from "./lib/paths";
+import { useFileTree } from "./stores/fileTree";
 import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
 import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
+import { isMarkdownFile } from "./features/markdown";
 import {
   selectActiveTab,
   tabFromFile,
@@ -86,13 +89,17 @@ export default function App() {
   const [grepOpen, setGrepOpen] = useState(false);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
+  const markdown = Boolean(active?.mode === "text" && isMarkdownFile(active.name));
   const previewOn = Boolean(active?.mode === "text" && active.preview);
+  const showSource = markdown ? Boolean(active?.source) : true;
+  const showPreview = markdown || previewOn;
   const { t } = useI18n();
 
   const togglePreview = useCallback(() => {
     const tab = selectActiveTab(useWorkspace.getState());
     if (!tab || tab.mode !== "text") return;
-    useWorkspace.getState().setPreview(tab.id, !tab.preview);
+    if (isMarkdownFile(tab.name)) useWorkspace.getState().setSource(tab.id, !tab.source);
+    else useWorkspace.getState().setPreview(tab.id, !tab.preview);
   }, []);
 
   // Draggable editor/preview split (mouse drag or arrow keys on the separator).
@@ -160,7 +167,7 @@ export default function App() {
       const failures: OpenFailure[] = [];
 
       for (const path of paths) {
-        const existing = store.tabs.find((t) => t.path === path);
+        const existing = store.tabs.find((t) => t.path && samePath(t.path, path));
         if (existing) {
           store.setActive(existing.id);
           continue;
@@ -203,21 +210,30 @@ export default function App() {
   }, [openPaths]);
 
   const openFolder = useCallback(async () => {
-    const store = useWorkspace.getState();
     try {
       const directory = await pickDirectory();
       if (!directory) return;
-      const files = await listTextFiles(directory);
-      if (files.length === 0) {
-        store.setNotice(tr("app.folder.empty"));
-        return;
-      }
-      await openPaths(files);
-      if (files.length >= 40) store.setNotice(tr("app.folder.limit"));
+      await useFileTree.getState().openRoot(directory);
     } catch (e) {
       useWorkspace.getState().setError(localizeError(e));
     }
-  }, [openPaths]);
+  }, []);
+
+  /** Status bar / title bar / Ctrl+Shift+E all toggle the same panel. */
+  const toggleTree = useCallback(() => {
+    const tree = useFileTree.getState();
+    if (!tree.rootPath) {
+      void openFolder();
+      return;
+    }
+    if (tree.hidden) {
+      tree.setHidden(false);
+      tree.requestFocus();
+    } else {
+      tree.setHidden(true);
+      document.querySelector<HTMLElement>(".cm-content")?.focus();
+    }
+  }, [openFolder]);
 
   const openRecent = useCallback(
     (path: string) => {
@@ -606,6 +622,7 @@ export default function App() {
     }
 
     if (!isTauri || !currentWindowOwnsSession()) return;
+    void useFileTree.getState().restore();
     try {
       const rawSession = localStorage.getItem(SESSION_KEY);
       if (!rawSession) return;
@@ -734,6 +751,9 @@ export default function App() {
         event.preventDefault();
         const tab = selectActiveTab(useWorkspace.getState());
         if (tab) void saveTab(tab.id, event.shiftKey);
+      } else if (key === "e" && event.shiftKey) {
+        event.preventDefault();
+        toggleTree();
       } else if (key === "f" && event.shiftKey) {
         event.preventDefault();
         setGrepOpen((open) => !open);
@@ -770,13 +790,45 @@ export default function App() {
     requestCloseTab,
     togglePreview,
     openRewrite,
+    openFolder,
+    toggleTree,
   ]);
 
-  // Default grep root: the directory of the active file.
+  const treeRoot = useFileTree((state) => state.rootPath);
+  const treeHidden = useFileTree((state) => state.hidden);
+  const treeWidth = useFileTree((state) => state.width);
+  const showTree = Boolean(treeRoot) && !treeHidden;
+  const workspaceRef = useRef<HTMLDivElement | null>(null);
+  const startTreeDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const container = workspaceRef.current;
+    if (!container || event.button !== 0) return;
+    event.preventDefault();
+    const left = container.getBoundingClientRect().left;
+    const previousCursor = document.body.style.cursor;
+    const previousSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (moveEvent: PointerEvent) => {
+      useFileTree.getState().setWidth(clampTreeWidth(moveEvent.clientX - left));
+    };
+    const onUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousSelect;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+  }, []);
+
+  // Grep prefers the workspace root. Image paths still use the file's own folder.
   const lastSeparator = active?.path
     ? Math.max(active.path.lastIndexOf("/"), active.path.lastIndexOf("\\"))
     : -1;
-  const grepRoot = active?.path && lastSeparator > 0 ? active.path.slice(0, lastSeparator) : null;
+  const fileDir = active?.path && lastSeparator > 0 ? active.path.slice(0, lastSeparator) : null;
+  const grepRoot = treeRoot ?? fileDir;
 
   return (
     <div className="app">
@@ -785,6 +837,10 @@ export default function App() {
         onNewWindow={() => void createWindow()}
         onOpenFile={() => void openViaDialog()}
         onOpenFolder={() => void openFolder()}
+        onCloseFolder={() => useFileTree.getState().closeRoot()}
+        hasWorkspace={Boolean(treeRoot)}
+        treeHidden={treeHidden}
+        onToggleTree={toggleTree}
         onOpenPath={openRecent}
         onSave={() => {
           const tab = selectActiveTab(useWorkspace.getState());
@@ -807,86 +863,118 @@ export default function App() {
           setStreamOpen((open) => !open);
         }}
       />
-      <TabBar onClose={(id) => void requestCloseTab(id)} />
+      <div className="workspace" ref={workspaceRef}>
+        {showTree && (
+          <>
+            <FileTree width={treeWidth} onOpenFile={(path) => void openPaths([path])} />
+            <div
+              className="split__divider file-tree__divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("tree.resize")}
+              aria-valuemin={160}
+              aria-valuemax={400}
+              aria-valuenow={treeWidth}
+              tabIndex={0}
+              onPointerDown={startTreeDrag}
+              onDoubleClick={() => useFileTree.getState().setWidth(240)}
+            />
+          </>
+        )}
+        <div className="workspace__main">
+          <TabBar onClose={(id) => void requestCloseTab(id)} />
 
-      {(error || notice) && (
-        <div className={`banner ${notice && !error ? "banner--ok" : ""}`} role="status">
-          <span className="banner__text">{error ?? notice}</span>
-          <button
-            type="button"
-            className="banner__close"
-            aria-label={t("app.close")}
-            onClick={() => {
-              useWorkspace.getState().setError(null);
-              useWorkspace.getState().setNotice(null);
-            }}
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <main className="workspace">
-        {active ? (
-          active.mode === "large" ? (
-            <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
-          ) : (
-            <div className="split" ref={splitRef}>
-              <div
-                className="split__pane"
-                style={{ width: previewOn ? `${splitPercent}%` : "100%" }}
+          {(error || notice) && (
+            <div className={`banner ${notice && !error ? "banner--ok" : ""}`} role="status">
+              <span className="banner__text">{error ?? notice}</span>
+              <button
+                type="button"
+                className="banner__close"
+                aria-label={t("app.close")}
+                onClick={() => {
+                  useWorkspace.getState().setError(null);
+                  useWorkspace.getState().setNotice(null);
+                }}
               >
-                <EditorHost
-                  tab={active}
-                  simplified={active.size > 5 * 1024 * 1024}
-                  onPasteImage={handlePasteImage}
-                />
-              </div>
-              {previewOn && (
-                <>
+                ×
+              </button>
+            </div>
+          )}
+
+          <div className="workspace__body">
+            {active ? (
+              active.mode === "large" ? (
+                <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
+              ) : (
+                <div className="split" ref={splitRef}>
                   <div
-                    className="split__divider"
-                    role="separator"
-                    aria-orientation="vertical"
-                    aria-label={t("app.split.label")}
-                    aria-valuemin={MIN_SPLIT_PERCENT}
-                    aria-valuemax={MAX_SPLIT_PERCENT}
-                    aria-valuenow={Math.round(splitPercent)}
-                    tabIndex={0}
-                    title={t("app.split.title")}
-                    onPointerDown={startSplitDrag}
-                    onDoubleClick={() => setSplitPercent(50)}
-                    onKeyDown={(event) => {
-                      if (event.key === "ArrowLeft") {
-                        event.preventDefault();
-                        setSplitPercent((value) => adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP));
-                      } else if (event.key === "ArrowRight") {
-                        event.preventDefault();
-                        setSplitPercent((value) => adjustSplitPercent(value, SPLIT_KEYBOARD_STEP));
-                      }
-                    }}
-                  />
-                  <div className="split__pane split__pane--preview">
-                    <MarkdownPreview
-                      key={active.id}
-                      tabId={active.id}
-                      name={active.name}
-                      baseDir={grepRoot}
-                      onExport={() => void exportActiveAsHtml()}
+                    className={`split__pane${showSource ? "" : " split__pane--off"}`}
+                    style={{ width: showSource && showPreview ? `${splitPercent}%` : "100%" }}
+                  >
+                    <EditorHost
+                      tab={active}
+                      simplified={active.size > 5 * 1024 * 1024}
+                      onPasteImage={handlePasteImage}
+                      visible={showSource}
                     />
                   </div>
-                </>
-              )}
-            </div>
-          )
-        ) : (
-          <Welcome
-            onOpen={() => void openViaDialog()}
-            onNew={() => useWorkspace.getState().newTab()}
-            onOpenPath={(path) => void openPaths([path])}
-          />
-        )}
-      </main>
+                  {showPreview && (
+                    <>
+                      {showSource && (
+                        <div
+                          className="split__divider"
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={t("app.split.label")}
+                          aria-valuemin={MIN_SPLIT_PERCENT}
+                          aria-valuemax={MAX_SPLIT_PERCENT}
+                          aria-valuenow={Math.round(splitPercent)}
+                          tabIndex={0}
+                          title={t("app.split.title")}
+                          onPointerDown={startSplitDrag}
+                          onDoubleClick={() => setSplitPercent(50)}
+                          onKeyDown={(event) => {
+                            if (event.key === "ArrowLeft") {
+                              event.preventDefault();
+                              setSplitPercent((value) =>
+                                adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP)
+                              );
+                            } else if (event.key === "ArrowRight") {
+                              event.preventDefault();
+                              setSplitPercent((value) =>
+                                adjustSplitPercent(value, SPLIT_KEYBOARD_STEP)
+                              );
+                            }
+                          }}
+                        />
+                      )}
+                      <div className="split__pane split__pane--preview">
+                        <MarkdownPreview
+                          key={active.id}
+                          tabId={active.id}
+                          name={active.name}
+                          baseDir={fileDir}
+                          onExport={() => void exportActiveAsHtml()}
+                          sourceOn={showSource}
+                          onToggleSource={markdown ? togglePreview : undefined}
+                          syncScroll={showSource}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              )
+            ) : (
+              <Welcome
+                onOpen={() => void openViaDialog()}
+                onNew={() => useWorkspace.getState().newTab()}
+                onOpenFolder={() => void openFolder()}
+                onOpenPath={(path) => void openPaths([path])}
+              />
+            )}
+          </div>
+        </div>
+      </div>
 
       {streamOpen && active?.mode === "text" && (
         <AiStreamPanel
@@ -900,9 +988,13 @@ export default function App() {
       )}
 
       <StatusBar
-        previewOn={previewOn}
+        previewOn={markdown ? showSource : previewOn}
+        sourceToggle={markdown}
         onTogglePreview={togglePreview}
         canPreview={Boolean(active && active.mode === "text")}
+        hasWorkspace={Boolean(treeRoot)}
+        treeHidden={treeHidden}
+        onToggleTree={toggleTree}
       />
 
       {grepOpen && (

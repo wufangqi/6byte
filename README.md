@@ -18,10 +18,11 @@
 ## What it does
 
 - **Writing**: tabs, session restore, recent files, per-tab undo history, drag & drop, middle-click close.
-- **Markdown**: split preview, HTML export, outline, Mermaid / KaTeX, Shiki highlighting, image paste, draggable divider.
+- **Markdown**: opens rendered by default; `<>` (or `Ctrl+Shift+M`) reveals the source. Split preview, HTML export, outline, Mermaid / KaTeX, Shiki highlighting, image paste, draggable divider.
 - **Large files**: ≤5 MB full editing; 5–20 MB reduced decorations; 20–100 MB read-only virtual scrolling; >100 MB read-only memmap (512 MB cap).
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
-- **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (skips binaries and dependency folders).
+- **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
+- **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
 - **AI**: model services (providers → models, API keys in the OS keychain); `Ctrl+K` or the title-bar **Model** chip rewrites the selection, **Tab** accepts, **Esc** cancels; one-click Polish / Translate / Summarize; autocomplete (off by default).
 - **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
@@ -48,7 +49,7 @@ Full commands, directory rules, commit conventions and the release process live 
 
 ## Verified
 
-`tsc` / `eslint` / `prettier` / `cargo fmt` / `clippy` are green; frontend unit tests **147**, Rust **75** (+4 ignored), installed-build E2E **91/91 across 22 steps**; CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
+Frontend unit tests **156**, Rust **97** (+4 ignored). Installed-build E2E is **107/107 across 24 steps** (2026-10-25, includes the file-tree steps). CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
 
 ## Known limitations
 
@@ -57,11 +58,12 @@ Full commands, directory rules, commit conventions and the release process live 
 - Files with mixed line endings are normalized to the dominant EOL on save (confirmed first).
 - AI needs your own OpenAI-compatible endpoint and API key; the key goes to the OS keychain, never a config file.
 - No auto-update, no portable build, no Explorer context menu (M4).
+- The file tree is read-only: no create, rename or delete, no Git status, no watch of the whole tree (open files are still watched), and symlinks are skipped. A single folder lists at most 2000 entries.
 - The custom title bar has only been verified on Windows.
 
 ## Roadmap
 
-Next: workspace file tree ([T54 / PRD](./docs/PRD-工作区文件树.md), replacing today's "open folder" batch-open behaviour), then M4 distribution. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: M4 distribution (portable build, package feeds, auto-update, shell integration). The workspace file tree is implemented in the working tree and ships with the next release. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 

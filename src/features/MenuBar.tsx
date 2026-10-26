@@ -19,6 +19,10 @@ interface Props {
   onNewWindow(): void;
   onOpenFile(): void;
   onOpenFolder(): void;
+  onCloseFolder(): void;
+  hasWorkspace: boolean;
+  treeHidden: boolean;
+  onToggleTree(): void;
   onOpenPath(path: string): void;
   onSave(): void;
   onSaveAs(): void;
@@ -35,6 +39,10 @@ export default function MenuBar({
   onNewWindow,
   onOpenFile,
   onOpenFolder,
+  onCloseFolder,
+  hasWorkspace,
+  treeHidden,
+  onToggleTree,
   onOpenPath,
   onSave,
   onSaveAs,
@@ -162,6 +170,12 @@ export default function MenuBar({
                 onClick={onOpenFolder}
                 close={() => setMenu(null)}
               />
+              <FileItem
+                label={t("menu.closeFolder")}
+                disabled={!hasWorkspace}
+                onClick={onCloseFolder}
+                close={() => setMenu(null)}
+              />
               <div
                 className="menu__branch"
                 onMouseEnter={() => setRecentOpen(true)}
@@ -236,6 +250,23 @@ export default function MenuBar({
           </button>
           {menu === "view" && (
             <div className="menu" role="menu" aria-label={t("menu.view")}>
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={hasWorkspace && !treeHidden}
+                className="menu__item"
+                onClick={() => {
+                  onToggleTree();
+                  setMenu(null);
+                }}
+              >
+                <span className="menu__check" aria-hidden="true">
+                  {hasWorkspace && !treeHidden ? "✓" : ""}
+                </span>
+                {t("menu.fileTree")}
+                <span className="menu__shortcut">Ctrl+Shift+E</span>
+              </button>
+              <div className="menu__sep" />
               <div className="menu__label">{t("menu.theme")}</div>
               {themes.map((theme) => (
                 <button

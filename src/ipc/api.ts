@@ -239,10 +239,28 @@ export async function pickSavePath(suggestedName: string): Promise<string | null
   return path ?? null;
 }
 
-/** Text files sitting directly in a folder (nested folders are not opened). */
-export async function listTextFiles(path: string): Promise<string[]> {
+export interface DirChild {
+  name: string;
+  path: string;
+  kind: "dir" | "file";
+}
+
+export interface DirListing {
+  entries: DirChild[];
+  truncated: boolean;
+  limit: number;
+}
+
+/** Immediate children of one directory. Hidden names, skipped dirs, and symlinks are omitted. */
+export async function listDirChildren(path: string): Promise<DirListing> {
   requireTauri("ipc.folder");
-  return invoke<string[]>("list_text_files", { path });
+  return invoke<DirListing>("list_dir_children", { path });
+}
+
+/** Reveal a path in the system file manager. */
+export async function revealInOs(path: string): Promise<void> {
+  requireTauri("ipc.folder");
+  return invoke<void>("reveal_in_os", { path });
 }
 
 /** Open a fresh editor window. It does not reopen the files in this window. */

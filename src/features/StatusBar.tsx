@@ -1,5 +1,6 @@
 import { useI18n } from "../i18n";
 import { formatSize } from "../lib/format";
+import { useFileTree } from "../stores/fileTree";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
 
 const EOL_LABEL: Record<string, string> = {
@@ -8,23 +9,62 @@ const EOL_LABEL: Record<string, string> = {
   cr: "CR",
 };
 
+function PanelIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+      <rect x="1.5" y="2" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" />
+      <path d="M5.5 2v10" stroke="currentColor" />
+    </svg>
+  );
+}
+
 interface Props {
   previewOn?: boolean;
   canPreview?: boolean;
+  /** Markdown uses `<>` to reveal source beside the preview. Other files keep the preview label. */
+  sourceToggle?: boolean;
   onTogglePreview?: () => void;
+  hasWorkspace?: boolean;
+  treeHidden?: boolean;
+  onToggleTree?: () => void;
 }
 
 export default function StatusBar({
   previewOn = false,
   canPreview = false,
+  sourceToggle = false,
   onTogglePreview,
+  hasWorkspace = false,
+  treeHidden = false,
+  onToggleTree,
 }: Props) {
   const tab = useWorkspace(selectActiveTab);
+  const workspaceName = useFileTree((state) => (state.rootPath ? state.rootName : ""));
+  const workspacePath = useFileTree((state) => state.rootPath);
   const { t, tp } = useI18n();
+  const panelToggle = hasWorkspace && onToggleTree && (
+    <button
+      type="button"
+      className={`statusbar__icon${treeHidden ? "" : " statusbar__icon--on"}`}
+      aria-label={t("menu.fileTreeToggle")}
+      aria-pressed={!treeHidden}
+      title={t("menu.fileTreeToggle")}
+      onClick={onToggleTree}
+    >
+      <PanelIcon />
+    </button>
+  );
+  const workspace = workspaceName ? (
+    <span className="statusbar__item" title={workspacePath ?? undefined}>
+      {t("status.workspace", { name: workspaceName })}
+    </span>
+  ) : null;
 
   if (!tab) {
     return (
       <footer className="statusbar">
+        {panelToggle}
+        {workspace}
         <span className="statusbar__item">{t("status.ready")}</span>
       </footer>
     );
@@ -32,6 +72,8 @@ export default function StatusBar({
 
   return (
     <footer className="statusbar">
+      {panelToggle}
+      {workspace}
       <span className="statusbar__item statusbar__path" title={tab.path ?? undefined}>
         {tab.path ?? t("status.unsavedFile")}
       </span>
@@ -59,11 +101,16 @@ export default function StatusBar({
       {canPreview && onTogglePreview && (
         <button
           type="button"
-          className={`statusbar__action ${previewOn ? "statusbar__action--on" : ""}`}
-          title={t("status.preview.title")}
+          className={`statusbar__action${sourceToggle ? " statusbar__source" : ""}${previewOn ? " statusbar__action--on" : ""}`}
+          aria-pressed={previewOn}
+          title={
+            sourceToggle
+              ? t(previewOn ? "preview.source.titleOn" : "preview.source.title")
+              : t("status.preview.title")
+          }
           onClick={onTogglePreview}
         >
-          {t("status.preview")}
+          {sourceToggle ? "<>" : t("status.preview")}
         </button>
       )}
 

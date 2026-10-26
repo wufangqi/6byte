@@ -6,10 +6,11 @@ import { isTauri } from "../ipc/api";
 interface Props {
   onOpen: () => void;
   onNew: () => void;
+  onOpenFolder: () => void;
   onOpenPath: (path: string) => void;
 }
 
-export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
+export default function Welcome({ onOpen, onNew, onOpenFolder, onOpenPath }: Props) {
   const recent = useWorkspace((s) => s.recent);
   const removeRecent = useWorkspace((s) => s.removeRecent);
   const setRecent = useWorkspace((s) => s.setRecent);
@@ -29,6 +30,9 @@ export default function Welcome({ onOpen, onNew, onOpenPath }: Props) {
           <button type="button" className="btn" onClick={onNew}>
             {t("welcome.new")}
             <kbd>Ctrl+N</kbd>
+          </button>
+          <button type="button" className="btn" onClick={onOpenFolder} disabled={!isTauri}>
+            {t("welcome.openFolder")}
           </button>
         </div>
 

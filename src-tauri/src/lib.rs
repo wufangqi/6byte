@@ -4,6 +4,8 @@ mod codec;
 mod commands;
 mod grep;
 mod secrets;
+mod skip;
+mod tree;
 mod watcher;
 
 use std::sync::Arc;
@@ -33,7 +35,8 @@ pub fn run() {
             commands::grep_files,
             commands::save_asset,
             commands::read_binary_base64,
-            commands::list_text_files,
+            tree::list_dir_children,
+            tree::reveal_in_os,
             commands::watch_file,
             commands::unwatch_file,
             ai::ai_start,
