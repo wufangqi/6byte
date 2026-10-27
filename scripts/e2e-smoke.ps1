@@ -813,20 +813,16 @@ Assert-True (($bar.fileItems -join ' ').Contains('打开文件夹') -and ($bar.f
 Write-Host '[17/24] theme switches from the view menu and survives a reload' -ForegroundColor Cyan
 $toLight = @'
 (async () => {
-  const openView = () => {
-    const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
-    trigger?.click();
-  };
-  openView();
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const item = [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '浅色');
-  item?.click();
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+  await sleep(500);
+  [...document.querySelectorAll('.settings__segment')].find((el) => (el.textContent || '').trim() === '浅色')?.click();
+  await sleep(500);
   return { theme: document.documentElement.getAttribute('data-theme'), stored: localStorage.getItem('ainative.theme') };
 })()
 '@
 $light = Invoke-CdpEval $socket ($toLight -replace "`r`n", ' ')
-Assert-True ($light.theme -eq 'light' -and $light.stored -eq 'light') 'view menu applies the light theme' "$($light | ConvertTo-Json -Compress)"
+Assert-True ($light.theme -eq 'light' -and $light.stored -eq 'light') 'settings page applies the light theme' "$($light | ConvertTo-Json -Compress)"
 Invoke-CdpEval $socket 'location.reload(); "ok"' | Out-Null
 Start-Sleep -Seconds 4
 $socket.Dispose()
@@ -838,12 +834,11 @@ $reloaded = $afterReload | ConvertFrom-Json
 Assert-True ($reloaded.theme -eq 'light' -and $reloaded.stored -eq 'light') 'light theme survives an app reload' "$($afterReload)"
 $toDark = @'
 (async () => {
-  const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
-  trigger?.click();
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const item = [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '深色');
-  item?.click();
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+  await sleep(500);
+  [...document.querySelectorAll('.settings__segment')].find((el) => (el.textContent || '').trim() === '深色')?.click();
+  await sleep(500);
   return { theme: document.documentElement.getAttribute('data-theme'), stored: localStorage.getItem('ainative.theme') };
 })()
 '@
@@ -953,11 +948,17 @@ $repaint = @'
     if (dark.bg && dark.diagramStyle) break;
     await sleep(400);
   }
-  const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
-  trigger?.click();
-  await sleep(200);
-  [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '浅色')?.click();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+  await sleep(500);
+  [...document.querySelectorAll('.settings__segment')].find((el) => (el.textContent || '').trim() === '浅色')?.click();
   await sleep(400);
+  const themeTab = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('theme-demo.md'));
+  themeTab?.click();
+  await sleep(500);
+  if (!document.querySelector('.markdown-preview')) {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
+    await sleep(800);
+  }
   let light = readState();
   for (let attempt = 0; attempt < 25; attempt++) {
     light = readState();
@@ -978,11 +979,11 @@ Assert-True ($painted.light.diagrams -gt 0 -and $painted.light.katex -gt 0) 'dia
 Assert-True ($painted.styleChanged) 'Mermaid re-renders with the light palette' "changed=$($painted.styleChanged)"
 $restoreDark = @'
 (async () => {
-  const trigger = [...document.querySelectorAll('.titlebar__trigger')].find((el) => (el.textContent || '').includes('视图'));
-  trigger?.click();
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  [...document.querySelectorAll('.menu__item')].find((el) => (el.textContent || '').trim() === '深色')?.click();
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+  await sleep(500);
+  [...document.querySelectorAll('.settings__segment')].find((el) => (el.textContent || '').trim() === '深色')?.click();
+  await sleep(400);
   return document.documentElement.getAttribute('data-theme');
 })()
 '@
@@ -1018,11 +1019,18 @@ $lang = @'
     previewExport: document.querySelector('.markdown-preview__export')?.textContent?.trim() ?? null,
     outline: document.querySelector('.markdown-preview__outline-toggle')?.textContent?.trim() ?? null,
   });
-  trigger('视图')?.click();
-  await sleep(200);
-  [...document.querySelectorAll('.menu__item')]
-    .find((el) => (el.textContent || '').trim() === 'English')
-    ?.click();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
+  await sleep(500);
+  const language = [...document.querySelectorAll('.settings__select')].find(
+    (el) => el.getAttribute('aria-label') === '语言'
+  );
+  if (language) {
+    language.value = 'en';
+    language.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await sleep(600);
+  const langTab = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('greeting.md'));
+  langTab?.click();
   await sleep(500);
   return readState();
 })()
@@ -1050,12 +1058,16 @@ $backToZh = @'
     [...document.querySelectorAll('.titlebar__trigger')].find((el) =>
       (el.textContent || '').includes(name)
     );
-  trigger('View')?.click();
-  await sleep(200);
-  [...document.querySelectorAll('.menu__item')]
-    .find((el) => (el.textContent || '').trim() === '中文')
-    ?.click();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: ',', ctrlKey: true, bubbles: true }));
   await sleep(500);
+  const language = [...document.querySelectorAll('.settings__select')].find(
+    (el) => el.getAttribute('aria-label') === 'Language'
+  );
+  if (language) {
+    language.value = 'zh';
+    language.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await sleep(600);
   return {
     locale: localStorage.getItem('ainative.locale'),
     triggers: [...document.querySelectorAll('.titlebar__trigger')].map((el) =>

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { dismissActiveCompletion } from "../editor/completion";
-import { setLocale, useI18n, type Locale } from "../i18n";
+import { useI18n } from "../i18n";
 import { isTauri } from "../ipc/api";
 import { fileName } from "../lib/paths";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
@@ -12,7 +12,6 @@ import {
   saveCompletionSettings,
   subscribeCompletion,
 } from "./completionSettings";
-import { setThemePreference, useThemePreference, type ThemePreference } from "./theme";
 
 interface Props {
   onNew(): void;
@@ -30,6 +29,9 @@ interface Props {
   onSaveAll(): void;
   onRename(): void;
   onOpenModelSettings(): void;
+  onOpenSettings(): void;
+  aiPanelOpen: boolean;
+  onToggleAiPanel(): void;
   onAbout(): void;
   onShortcuts(): void;
   onFeedback(): void;
@@ -55,6 +57,9 @@ export default function MenuBar({
   onSaveAll,
   onRename,
   onOpenModelSettings,
+  onOpenSettings,
+  aiPanelOpen,
+  onToggleAiPanel,
   onAbout,
   onShortcuts,
   onFeedback,
@@ -62,7 +67,6 @@ export default function MenuBar({
   aiMarkerEnabled = true,
   onToggleAiMarker,
 }: Props) {
-  const preference = useThemePreference();
   const active = useWorkspace(selectActiveTab);
   const recent = useWorkspace((state) => state.recent);
   const canSaveAll = useWorkspace((state) =>
@@ -73,7 +77,7 @@ export default function MenuBar({
   const [maximized, setMaximized] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const canSave = active?.mode === "text";
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const [completion, setCompletion] = useState(loadCompletionSettings);
   useEffect(() => subscribeCompletion(() => setCompletion(loadCompletionSettings())), []);
 
@@ -87,16 +91,6 @@ export default function MenuBar({
     saveCompletionSettings(next);
     if (!next.enabled) dismissActiveCompletion();
   };
-
-  const themes: { id: ThemePreference; label: string }[] = [
-    { id: "light", label: t("menu.light") },
-    { id: "dark", label: t("menu.dark") },
-    { id: "system", label: t("menu.system") },
-  ];
-  const languages: { id: Locale; label: string }[] = [
-    { id: "zh", label: t("menu.langZh") },
-    { id: "en", label: t("menu.langEn") },
-  ];
 
   useEffect(() => {
     if (!menu) return;
@@ -298,46 +292,23 @@ export default function MenuBar({
                 {t("menu.fileTree")}
                 <span className="menu__shortcut">Ctrl+Shift+E</span>
               </button>
-              <div className="menu__sep" />
-              <div className="menu__label">{t("menu.theme")}</div>
-              {themes.map((theme) => (
-                <button
-                  key={theme.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={theme.id === preference}
-                  className="menu__item"
-                  onClick={() => {
-                    setThemePreference(theme.id);
-                    setMenu(null);
-                  }}
-                >
-                  <span className="menu__check" aria-hidden="true">
-                    {theme.id === preference ? "✓" : ""}
-                  </span>
-                  {theme.label}
-                </button>
-              ))}
-              <div className="menu__sep" />
-              <div className="menu__label">{t("menu.language")}</div>
-              {languages.map((language) => (
-                <button
-                  key={language.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={language.id === locale}
-                  className="menu__item"
-                  onClick={() => {
-                    setLocale(language.id);
-                    setMenu(null);
-                  }}
-                >
-                  <span className="menu__check" aria-hidden="true">
-                    {language.id === locale ? "✓" : ""}
-                  </span>
-                  {language.label}
-                </button>
-              ))}
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={aiPanelOpen}
+                className="menu__item"
+                disabled={!canAsk}
+                onClick={() => {
+                  onToggleAiPanel();
+                  setMenu(null);
+                }}
+              >
+                <span className="menu__check" aria-hidden="true">
+                  {aiPanelOpen ? "✓" : ""}
+                </span>
+                {t("menu.aiPanel")}
+                <span className="menu__shortcut">Ctrl+Shift+A</span>
+              </button>
             </div>
           )}
         </div>
@@ -353,7 +324,12 @@ export default function MenuBar({
           </button>
           {menu === "help" && (
             <div className="menu" role="menu" aria-label={t("menu.help")}>
-              <FileItem label={t("menu.about")} onClick={onAbout} close={() => setMenu(null)} />
+              <FileItem
+                label={t("menu.settings")}
+                shortcut="Ctrl+,"
+                onClick={onOpenSettings}
+                close={() => setMenu(null)}
+              />
               <div className="menu__sep" />
               <FileItem
                 label={t("menu.shortcuts")}
@@ -365,6 +341,8 @@ export default function MenuBar({
                 onClick={onFeedback}
                 close={() => setMenu(null)}
               />
+              <div className="menu__sep" />
+              <FileItem label={t("menu.about")} onClick={onAbout} close={() => setMenu(null)} />
             </div>
           )}
         </div>
@@ -501,11 +479,17 @@ function FileItem({
   );
 }
 
-function ActionIcon({ kind }: { kind: "complete" | "marker" | "model" }) {
+export function ActionIcon({
+  kind,
+  size = 16,
+}: {
+  kind: "complete" | "marker" | "model";
+  size?: number;
+}) {
   return (
     <svg
-      width="16"
-      height="16"
+      width={size}
+      height={size}
       viewBox="0 0 16 16"
       fill="none"
       stroke="currentColor"

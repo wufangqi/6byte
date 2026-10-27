@@ -32,9 +32,18 @@ export interface Tab {
   source: boolean;
 }
 
+/** `activeId` of the settings page. It is never an entry in `tabs`. */
+export const SETTINGS_TAB_ID = "settings";
+
+export type SettingsSection = "general" | "models" | "providers" | "access" | "usage";
+
 interface WorkspaceState {
   tabs: Tab[];
+  /** A file tab id, `SETTINGS_TAB_ID`, or null for the welcome page. */
   activeId: string | null;
+  /** The settings page sits after the file tabs while open. */
+  settingsOpen: boolean;
+  settingsSection: SettingsSection;
   dragging: boolean;
   error: string | null;
   /** Transient success/info message (auto-cleared by the UI). */
@@ -45,6 +54,10 @@ interface WorkspaceState {
   addTab(tab: Tab): void;
   setActive(id: string): void;
   closeTab(id: string): void;
+  /** Open the settings page, or switch to it when it is already open. */
+  openSettings(section?: SettingsSection): void;
+  setSettingsSection(section: SettingsSection): void;
+  closeSettings(): void;
   setContent(id: string, content: string, version?: number): void;
   markEdited(id: string, stats: { lines: number; chars: number }): void;
   /** Line and character counts for a preview insert. Does not mark the file dirty. */
@@ -131,6 +144,8 @@ export const tabFromLarge = (info: LargeFileInfo): Tab => ({
 export const useWorkspace = create<WorkspaceState>((set) => ({
   tabs: [],
   activeId: null,
+  settingsOpen: false,
+  settingsSection: "general",
   dragging: false,
   error: null,
   notice: null,
@@ -185,10 +200,28 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
       let activeId = state.activeId;
       if (state.activeId === id) {
         const next = tabs[index] ?? tabs[index - 1] ?? null;
-        activeId = next ? next.id : null;
+        activeId = next ? next.id : state.settingsOpen ? SETTINGS_TAB_ID : null;
       }
       return { tabs, activeId };
     }),
+
+  openSettings: (section) =>
+    set((state) => ({
+      settingsOpen: true,
+      activeId: SETTINGS_TAB_ID,
+      settingsSection: section ?? state.settingsSection,
+    })),
+
+  setSettingsSection: (section) => set({ settingsSection: section }),
+
+  closeSettings: () =>
+    set((state) => ({
+      settingsOpen: false,
+      activeId:
+        state.activeId === SETTINGS_TAB_ID
+          ? (state.tabs[state.tabs.length - 1]?.id ?? null)
+          : state.activeId,
+    })),
 
   /** Replaces the open/save snapshot. The live text stays in the editor state. */
   setContent: (id, content, version) =>

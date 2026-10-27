@@ -185,13 +185,15 @@ export default function AiStreamPanel({
   const settings = activeModel(catalog);
   const host = modelHost(settings?.baseUrl ?? "");
   const running = view.phase === "waiting" || view.phase === "streaming";
-  const modelChoices = catalog.providers.flatMap((provider) =>
-    provider.models.map((model) => ({
-      value: `${provider.id}|${model.id}`,
-      label: `${provider.name || provider.baseUrl || "服务商"} · ${model.name || model.model}`,
-    }))
-  );
   const modelValue = `${catalog.activeProviderId}|${catalog.activeModelId}`;
+  const modelChoices = catalog.providers.flatMap((provider) =>
+    provider.models
+      .filter((model) => model.enabled || `${provider.id}|${model.id}` === modelValue)
+      .map((model) => ({
+        value: `${provider.id}|${model.id}`,
+        label: `${provider.name || provider.baseUrl || "服务商"} · ${model.name || model.model}`,
+      }))
+  );
   const switchModel = (value: string) => {
     if (running || asking) return;
     const [providerId, modelId] = value.split("|");

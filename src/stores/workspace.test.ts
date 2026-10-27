@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { OpenedFile } from "../ipc/types";
-import { countLines, selectActiveTab, tabFromFile, tabFromLarge, useWorkspace } from "./workspace";
+import {
+  SETTINGS_TAB_ID,
+  countLines,
+  selectActiveTab,
+  tabFromFile,
+  tabFromLarge,
+  useWorkspace,
+} from "./workspace";
 
 const makeFile = (path: string, content = "a\nb"): OpenedFile => ({
   path,
@@ -12,7 +19,50 @@ const makeFile = (path: string, content = "a\nb"): OpenedFile => ({
 });
 
 beforeEach(() => {
-  useWorkspace.setState({ tabs: [], activeId: null, dragging: false, error: null, recent: [] });
+  useWorkspace.setState({
+    tabs: [],
+    activeId: null,
+    settingsOpen: false,
+    dragging: false,
+    error: null,
+    recent: [],
+  });
+});
+
+describe("settings tab", () => {
+  it("opens once, falls back to it when the last file closes, and hands focus back on close", () => {
+    const store = useWorkspace.getState();
+    store.addTab(tabFromFile(makeFile("/a.md")));
+    const fileId = useWorkspace.getState().activeId as string;
+
+    store.openSettings();
+    store.openSettings();
+    expect(useWorkspace.getState().activeId).toBe(SETTINGS_TAB_ID);
+    expect(useWorkspace.getState().tabs).toHaveLength(1);
+    expect(selectActiveTab(useWorkspace.getState())).toBeNull();
+
+    store.setActive(fileId);
+    store.closeTab(fileId);
+    expect(useWorkspace.getState().activeId).toBe(SETTINGS_TAB_ID);
+
+    store.addTab(tabFromFile(makeFile("/b.md")));
+    store.setActive(SETTINGS_TAB_ID);
+    store.closeSettings();
+    expect(useWorkspace.getState().settingsOpen).toBe(false);
+    expect(selectActiveTab(useWorkspace.getState())?.path).toBe("/b.md");
+  });
+
+  it("opens on the requested section and otherwise keeps the last one", () => {
+    const store = useWorkspace.getState();
+    store.openSettings("models");
+    expect(useWorkspace.getState().settingsSection).toBe("models");
+    store.setSettingsSection("usage");
+    store.closeSettings();
+    store.openSettings();
+    expect(useWorkspace.getState().settingsSection).toBe("usage");
+    store.openSettings("general");
+    expect(useWorkspace.getState().settingsSection).toBe("general");
+  });
 });
 
 describe("countLines", () => {
