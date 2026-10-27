@@ -14,6 +14,7 @@ import {
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
 import AiSettingsDialog from "./features/AiSettingsDialog";
+import AiSelectionAction from "./features/AiSelectionAction";
 import AiStreamPanel from "./features/AiStreamPanel";
 import { activeModel, loadAiSettings } from "./features/aiSettings";
 import MenuBar from "./features/MenuBar";
@@ -26,13 +27,13 @@ import { ask } from "./features/dialogStore";
 import { duplicateTab, isWatcherEcho, statConflicts } from "./features/fileSafety";
 import CommandPalette from "./features/CommandPalette";
 import { isAppShortcutBlocked } from "./features/shortcuts";
+import { useFileWatch } from "./features/useFileWatch";
 import { grepDefaultRoot } from "./features/workspaceQuery";
 import DialogHost from "./features/Dialog";
 import {
   currentWindowOwnsSession,
   isTauri,
   onCloseRequested,
-  onFileChanged,
   onFileDrop,
   openDocument,
   openNewWindow,
@@ -41,8 +42,6 @@ import {
   pickSavePath,
   saveAsset,
   statFile,
-  unwatchFile,
-  watchFile,
   writeFile,
 } from "./ipc/api";
 import { readBuffer, revealLineWhenReady } from "./editor/registry";
@@ -57,13 +56,7 @@ import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/ex
 import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
 import { isMarkdownFile } from "./features/markdown";
-import {
-  selectActiveTab,
-  tabFromFile,
-  tabFromLarge,
-  useWorkspace,
-  type Tab,
-} from "./stores/workspace";
+import { selectActiveTab, tabFromFile, tabFromLarge, useWorkspace } from "./stores/workspace";
 
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
@@ -556,52 +549,7 @@ export default function App() {
     [reloadFromDisk]
   );
 
-  // Keep the Rust watcher in sync with the open tabs.
-  const watchedRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    if (!isTauri) return;
-    const sync = (tabs: Tab[]) => {
-      const next = new Set(
-        tabs.map((tab) => tab.path).filter((path): path is string => Boolean(path))
-      );
-      for (const path of next) {
-        if (watchedRef.current.has(path)) continue;
-        watchedRef.current.add(path);
-        void watchFile(path).catch(() => watchedRef.current.delete(path));
-      }
-      for (const path of [...watchedRef.current]) {
-        if (next.has(path)) continue;
-        watchedRef.current.delete(path);
-        void unwatchFile(path);
-      }
-    };
-
-    sync(useWorkspace.getState().tabs);
-    const unsubscribe = useWorkspace.subscribe((state, previous) => {
-      if (state.tabs !== previous.tabs) sync(state.tabs);
-    });
-    const watched = watchedRef.current;
-    return () => {
-      unsubscribe();
-      for (const path of watched) void unwatchFile(path);
-      watched.clear();
-    };
-  }, []);
-
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let disposed = false;
-    void onFileChanged((event) => {
-      void handleExternalChange(event);
-    }).then((fn) => {
-      if (disposed) fn();
-      else unlisten = fn;
-    });
-    return () => {
-      disposed = true;
-      unlisten?.();
-    };
-  }, [handleExternalChange]);
+  useFileWatch(handleExternalChange);
 
   // Restore recent files + last session.
   useEffect(() => {
@@ -973,10 +921,20 @@ export default function App() {
         </div>
       </div>
 
+      {active?.mode === "text" && (
+        <AiSelectionAction
+          key={active.id}
+          tabId={active.id}
+          visible={showSource && !streamOpen && !modelSettingsOpen}
+          onRewrite={openRewrite}
+        />
+      )}
+
       {streamOpen && active?.mode === "text" && (
         <AiStreamPanel
           tabId={active.id}
           onClose={() => setStreamOpen(false)}
+          onOpenMatch={(path, line) => void openMatch(path, line)}
           onNeedSettings={() => {
             setStreamOpen(false);
             setModelSettingsOpen(true);

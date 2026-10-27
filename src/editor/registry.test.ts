@@ -3,7 +3,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { dropDocStatesExcept, ensureDocState } from "./docStates";
-import { attachView, detachView, readBuffer, revealLineWhenReady, settleEditor } from "./registry";
+import {
+  attachView,
+  detachView,
+  insertTextAtSelection,
+  readBuffer,
+  revealLineWhenReady,
+  settleEditor,
+} from "./registry";
 
 beforeEach(() => {
   dropDocStatesExcept(new Set());
@@ -58,6 +65,28 @@ describe("revealLineWhenReady", () => {
     settleEditor("later");
     expect(shown).toBe(1);
     stop();
+    detachView(view);
+    view.destroy();
+  });
+});
+
+describe("insertTextAtSelection", () => {
+  it("replaces the visible tab selection and moves the caret after the inserted answer", () => {
+    const parent = document.createElement("div");
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: "before selection after",
+        selection: { anchor: 7, head: 16 },
+      }),
+      parent,
+    });
+    attachView("answer", view);
+
+    expect(insertTextAtSelection("answer", "answer")).toBe(true);
+    expect(view.state.doc.toString()).toBe("before answer after");
+    expect(view.state.selection.main.from).toBe(13);
+    expect(insertTextAtSelection("other", "nope")).toBe(false);
+
     detachView(view);
     view.destroy();
   });
