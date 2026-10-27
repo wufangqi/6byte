@@ -56,11 +56,25 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
               --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1
           }
-          ID=$(release_id)
+          # The releases API can lag right after creation; retry instead of
+          # failing the whole release on an empty first read.
+          wait_for_release() {
+            for attempt in 1 2 3 4 5 6 7 8 9 10; do
+              ID=$(release_id)
+              if [ -n "$ID" ]; then
+                echo "$ID"
+                return 0
+              fi
+              sleep 2
+            done
+            echo ""
+            return 0
+          }
+          ID=$(wait_for_release)
           if [ -z "$ID" ]; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft \
               --title "6byte $TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
-            ID=$(release_id)
+            ID=$(wait_for_release)
           fi
           if [ -z "$ID" ]; then
             echo "could not find or create a release for $TAG" >&2
