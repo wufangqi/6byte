@@ -80,6 +80,22 @@ export function getSelectionSpan(tabId: string): { from: number; to: number; tex
   return { from, to, text: editor.state.sliceDoc(from, to) };
 }
 
+/** Insert text at the visible tab's main caret, replacing its current selection. */
+export function insertTextAtSelection(tabId: string, text: string): boolean {
+  const editor = getEditorView(tabId);
+  if (!editor || !text) return false;
+  const { from, to } = editor.state.selection.main;
+  const anchor = from + text.length;
+  editor.dispatch({
+    changes: { from, to, insert: text },
+    selection: { anchor },
+    scrollIntoView: true,
+    userEvent: "input.answer",
+  });
+  editor.focus();
+  return true;
+}
+
 type DocListener = () => void;
 const docListeners = new Map<string, Set<DocListener>>();
 

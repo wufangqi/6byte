@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { dismissActiveCompletion } from "../editor/completion";
+import { loadDenylistText, saveDenylistText } from "./agentAccess";
+import {
+  acceptanceRate,
+  averageFirstTokenMs,
+  failureRate,
+  loadAiMetrics,
+  resetAiMetrics,
+  subscribeAiMetrics,
+  type AiMetrics,
+} from "./aiMetrics";
 import { ask } from "./dialogStore";
 import { endpointOrigin } from "./aiStream";
 import { localizeError, useI18n } from "../i18n";
@@ -41,11 +51,20 @@ function enteredKey(value: string): string {
   return isSavedKeyMask(trimmed) ? "" : trimmed;
 }
 
+function total(
+  metrics: AiMetrics,
+  field: "started" | "succeeded" | "failed" | "cancelled"
+): number {
+  return Object.values(metrics.requests).reduce((sum, item) => sum + item[field], 0);
+}
+
 /** Providers, then the models under the selected provider. Keys stay in the OS keychain. */
 export default function AiSettingsDialog({ onClose }: Props) {
   const { t } = useI18n();
   const [catalog, setCatalog] = useState<AiCatalog>(loadAiSettings);
   const [completion, setCompletion] = useState<CompletionSettings>(loadCompletionSettings);
+  const [denyText, setDenyText] = useState(loadDenylistText);
+  const [metrics, setMetrics] = useState<AiMetrics>(loadAiMetrics);
   const [apiKey, setApiKey] = useState("");
   const [hasKey, setHasKey] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -63,6 +82,25 @@ export default function AiSettingsDialog({ onClose }: Props) {
     completion.providerId && completion.modelId
       ? `${completion.providerId}|${completion.modelId}`
       : "";
+  const requestTotal = total(metrics, "started");
+  const succeeded = total(metrics, "succeeded");
+  const failed = total(metrics, "failed");
+  const cancelled = total(metrics, "cancelled");
+  const requestSummary = {
+    started: requestTotal,
+    succeeded,
+    failed,
+    cancelled,
+    firstTokenCount: Object.values(metrics.requests).reduce(
+      (sum, item) => sum + item.firstTokenCount,
+      0
+    ),
+    firstTokenMs: Object.values(metrics.requests).reduce((sum, item) => sum + item.firstTokenMs, 0),
+  };
+  const totalFailureRate = failureRate(requestSummary);
+  const totalFirstTokenMs = averageFirstTokenMs(requestSummary);
+  const rewriteAcceptance = acceptanceRate(metrics.offers.rewrite);
+  const completionAcceptance = acceptanceRate(metrics.offers.completion);
 
   const editCompletion = (patch: Partial<CompletionSettings>) => {
     const next = { ...completion, ...patch };
@@ -70,6 +108,8 @@ export default function AiSettingsDialog({ onClose }: Props) {
     saveCompletionSettings(next);
     if (!next.enabled) dismissActiveCompletion();
   };
+
+  useEffect(() => subscribeAiMetrics(() => setMetrics(loadAiMetrics())), []);
 
   useEffect(() => {
     keyLoaded.current = false;
@@ -279,6 +319,87 @@ export default function AiSettingsDialog({ onClose }: Props) {
         </div>
         <p className="dialog__message">{t("ai.hint")}</p>
 
+        <section className="ai-settings__metrics">
+          <h3 className="ai-settings__section">{t("ai.metrics.title")}</h3>
+          <div className="ai-settings__metrics-grid">
+            <p>
+              <strong>{t("ai.metrics.tokens")}</strong>
+              <span>
+                {t("ai.metrics.tokensValue", {
+                  prompt: metrics.promptTokens,
+                  completion: metrics.completionTokens,
+                })}
+              </span>
+            </p>
+            <p>
+              <strong>{t("ai.metrics.requests")}</strong>
+              <span>
+                {t("ai.metrics.requestsValue", {
+                  total: requestTotal,
+                  succeeded,
+                  failed,
+                  cancelled,
+                })}
+              </span>
+            </p>
+            <p>
+              <strong>{t("ai.metrics.failure")}</strong>
+              <span>
+                {totalFailureRate === null
+                  ? t("ai.metrics.none")
+                  : t("ai.metrics.percent", {
+                      percent: Math.round(totalFailureRate * 100),
+                    })}
+              </span>
+            </p>
+            <p>
+              <strong>{t("ai.metrics.firstToken")}</strong>
+              <span>
+                {totalFirstTokenMs === null
+                  ? t("ai.metrics.none")
+                  : t("ai.metrics.latency", {
+                      milliseconds: totalFirstTokenMs,
+                    })}
+              </span>
+            </p>
+            <p>
+              <strong>{t("ai.metrics.rewriteAcceptance")}</strong>
+              <span>
+                {t("ai.metrics.acceptanceValue", {
+                  accepted: metrics.offers.rewrite.accepted,
+                  shown: metrics.offers.rewrite.shown,
+                  percent:
+                    rewriteAcceptance === null ? "—" : `${Math.round(rewriteAcceptance * 100)}%`,
+                })}
+              </span>
+            </p>
+            <p>
+              <strong>{t("ai.metrics.completionAcceptance")}</strong>
+              <span>
+                {t("ai.metrics.acceptanceValue", {
+                  accepted: metrics.offers.completion.accepted,
+                  shown: metrics.offers.completion.shown,
+                  percent:
+                    completionAcceptance === null
+                      ? "—"
+                      : `${Math.round(completionAcceptance * 100)}%`,
+                })}
+              </span>
+            </p>
+          </div>
+          <p className="dialog__message">
+            {t("ai.metrics.hint", { reports: metrics.usageReports })}
+          </p>
+          <button
+            type="button"
+            className="btn"
+            onClick={resetAiMetrics}
+            disabled={requestTotal === 0}
+          >
+            {t("ai.metrics.reset")}
+          </button>
+        </section>
+
         <section className="ai-settings__complete">
           <h3 className="ai-settings__section">{t("ai.complete.title")}</h3>
           <label className="ai-settings__toggle">
@@ -317,6 +438,22 @@ export default function AiSettingsDialog({ onClose }: Props) {
             </select>
           </label>
           <p className="dialog__message">{t("ai.complete.hint")}</p>
+        </section>
+
+        <section className="ai-settings__deny">
+          <h3 className="ai-settings__section">{t("ai.deny.title")}</h3>
+          <textarea
+            className="ai-settings__input ai-settings__deny-input"
+            rows={3}
+            spellCheck={false}
+            aria-label={t("ai.deny.title")}
+            value={denyText}
+            onChange={(event) => {
+              setDenyText(event.target.value);
+              saveDenylistText(event.target.value);
+            }}
+          />
+          <p className="dialog__message">{t("ai.deny.hint")}</p>
         </section>
 
         <h3 className="ai-settings__section">{t("ai.providers")}</h3>

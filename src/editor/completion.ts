@@ -15,8 +15,17 @@ import {
   suggestionSettled,
   visibleSuggestion,
 } from "../features/completion";
+import {
+  recordAiAcceptance,
+  recordAiCancellation,
+  recordAiFailure,
+  recordAiFirstToken,
+  recordAiOffer,
+  recordAiRequest,
+  recordAiSuccess,
+} from "../features/aiMetrics";
 import { abandonAiStream, claimAiStream, type AiStreamClaim } from "../ipc/aiStreamBus";
-import type { AiMessage } from "../ipc/types";
+import type { AiMessage, AiUsage } from "../ipc/types";
 import { loadCompletionEndpoint, loadCompletionSettings } from "../features/completionSettings";
 import { inlineInsertField } from "./inlineInsert";
 
@@ -114,7 +123,15 @@ async function openClient(): Promise<StreamHandlers> {
 }
 
 type EarlyEvent =
-  { streamId: string; delta: string; kind?: string } | { streamId: string; done: true };
+  | { streamId: string; delta: string; kind?: string }
+  | { streamId: string; done: true; usage?: AiUsage }
+  | { streamId: string; error: true };
+
+type CompletionMetric = {
+  startedAt: number;
+  firstToken: boolean;
+  settled: boolean;
+};
 
 class CompletionPlugin implements PluginValue {
   private timer = 0;
@@ -125,6 +142,8 @@ class CompletionPlugin implements PluginValue {
   private claim: AiStreamClaim | null = null;
   private client: Promise<StreamHandlers> | null = null;
   private destroyed = false;
+  private metric: CompletionMetric | null = null;
+  private offerVisible = false;
 
   constructor(readonly view: EditorView) {
     // Keymap commands (Tab / Esc) run outside the plugin, so they need this instance.
@@ -170,6 +189,8 @@ class CompletionPlugin implements PluginValue {
     const id = this.streamId;
     this.streamId = null;
     this.raw = "";
+    this.offerVisible = false;
+    this.finishMetric("cancelled");
     this.claim?.release();
     if (id) void this.client?.then((client) => client.cancel(id).catch(() => {}));
   }
@@ -196,9 +217,20 @@ class CompletionPlugin implements PluginValue {
     const ticket = this.ticket;
     this.raw = "";
     this.prefix = slice.prefix;
-    const client = await this.ensureClient();
-    if (ticket !== this.ticket || this.destroyed) return;
+    this.offerVisible = false;
+    const metric: CompletionMetric = {
+      startedAt: performance.now(),
+      firstToken: false,
+      settled: false,
+    };
+    this.metric = metric;
+    recordAiRequest("completion");
     try {
+      const client = await this.ensureClient();
+      if (ticket !== this.ticket || this.destroyed) {
+        this.finishMetric("cancelled", undefined, metric);
+        return;
+      }
       const id = await client.start({
         providerId: "openai-compatible",
         baseUrl: endpoint.baseUrl,
@@ -215,6 +247,7 @@ class CompletionPlugin implements PluginValue {
       this.streamId = id;
       this.ensureClaim().bind(id);
     } catch {
+      this.finishMetric("failed", undefined, metric);
       /* a missing runtime or a refused request leaves the editor unchanged */
     }
   }
@@ -227,21 +260,49 @@ class CompletionPlugin implements PluginValue {
   private ensureClaim(): AiStreamClaim {
     this.claim ??= claimAiStream({
       token: (event) => this.apply(event),
-      done: (event) => this.apply({ streamId: event.streamId, done: true }),
-      error: (event) => this.apply({ streamId: event.streamId, done: true }),
+      done: (event) => this.apply({ streamId: event.streamId, done: true, usage: event.usage }),
+      error: (event) => this.apply({ streamId: event.streamId, error: true }),
     });
     return this.claim;
   }
 
+  private finishMetric(
+    outcome: "success" | "failed" | "cancelled",
+    usage?: AiUsage,
+    metric = this.metric
+  ): void {
+    if (!metric || metric.settled) return;
+    metric.settled = true;
+    if (this.metric === metric) this.metric = null;
+    if (outcome === "success") recordAiSuccess("completion", usage);
+    else if (outcome === "failed") recordAiFailure("completion");
+    else recordAiCancellation("completion");
+  }
+
   private apply(event: EarlyEvent): void {
     if (event.streamId !== this.streamId || this.destroyed) return;
+    if ("error" in event) {
+      this.streamId = null;
+      this.finishMetric("failed");
+      return;
+    }
     if ("done" in event) {
       this.streamId = null;
+      this.finishMetric("success", event.usage);
       return;
+    }
+    const metric = this.metric;
+    if (metric && !metric.firstToken) {
+      metric.firstToken = true;
+      recordAiFirstToken("completion", performance.now() - metric.startedAt);
     }
     if (event.kind === "reasoning") return;
     this.raw += event.delta;
     const shown = visibleSuggestion(this.prefix, this.raw);
+    if (shown && !this.offerVisible) {
+      this.offerVisible = true;
+      recordAiOffer("completion");
+    }
     this.view.dispatch({
       effects: setGhost.of(shown || null),
       annotations: completionMark.of(true),
@@ -249,8 +310,15 @@ class CompletionPlugin implements PluginValue {
     if (suggestionSettled(this.raw) && this.streamId) {
       const id = this.streamId;
       this.streamId = null;
+      this.finishMetric("success");
       void this.client?.then((client) => client.cancel(id).catch(() => {}));
     }
+  }
+
+  accept(): void {
+    if (!this.offerVisible) return;
+    this.offerVisible = false;
+    recordAiAcceptance("completion");
   }
 }
 
@@ -270,6 +338,7 @@ export function acceptGhost(view: EditorView): boolean {
   const text = view.state.field(ghostText, false) ?? "";
   if (!text) return false;
   const pos = view.state.selection.main.head;
+  activePlugin?.accept();
   activePlugin?.stop();
   view.dispatch({
     changes: { from: pos, to: pos, insert: text },

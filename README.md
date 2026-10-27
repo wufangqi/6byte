@@ -23,7 +23,7 @@
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
 - **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
-- **AI**: model services (providers → models, API keys in the OS keychain); `Ctrl+K` or the title-bar **Model** chip proposes a rewrite beside the selection — the document stays unchanged until **Tab** accepts, and saving or discarding drops the proposal; each reply shows prompt / completion tokens; one-click Polish / Translate / Summarize; `Ctrl+P` opens a command palette for workspace files, recent files and headings; `@` references and a read-only ask mode look things up in the workspace without writing; autocomplete (off by default).
+- **AI**: model services (providers → models, API keys in the OS keychain); selecting text reveals an **AI Rewrite** entry (as do `Ctrl+K` and the title-bar **Model** chip). A rewrite stays beside the selection until **Tab** accepts; saving or discarding drops it. Long rewrites can be reviewed and applied block by block from a line-level diff, and a candidate can be followed up on (for example, “make it shorter”) without reselecting, with the last four local turns available for review. The settings page shows device-local aggregate token, failure, first-token latency and acceptance metrics—never content, paths, endpoints or keys. One-click Polish / Translate / Summarize; `Ctrl+P` opens a command palette for workspace files, recent files and headings; `@` references and a read-only ask mode look things up in the workspace without writing (hidden files, key files and a user denylist are never sent; workspace `file:line` references in answers are navigable, and an answer can be inserted at the caret or turned into a rewrite instruction; **Esc** or Cancel stops the run, and one question has a ~12k-character send budget shown in the panel). Compatible providers use native function calling first and fall back to the constrained JSON-text protocol; autocomplete (off by default).
 - **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
 
@@ -60,7 +60,7 @@ Full commands, directory rules, commit conventions and the release process live 
 
 ## Verified
 
-Frontend unit tests **156**, Rust **97** (+4 ignored). Installed-build E2E is **107/107 across 24 steps** (2026-10-25, includes the file-tree steps). CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
+Frontend unit tests **236**, Rust **107** (+4 ignored). The latest installed-build E2E is **107/107 across 24 steps** (2026-10-27, includes the file-tree steps). A freshly rebuilt release binary passed **6/6** isolated local-SSE-mock AI E2E checks for rewrite review, native read-only tool calling, and answer navigation/insertion. CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
 
 ## Known limitations
 
@@ -74,7 +74,7 @@ Frontend unit tests **156**, Rust **97** (+4 ignored). Installed-build E2E is **
 
 ## Roadmap
 
-Next: the rest of M4 distribution (portable build, package feeds, auto-update, shell integration), then Linux/macOS smoke tests. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: review and submit T60–T68, then run the real Ollama ask path on a machine with Ollama installed and execute the new AI E2E script. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 

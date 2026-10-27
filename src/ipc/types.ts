@@ -75,10 +75,34 @@ export interface GrepResponse {
   elapsedMs: number;
 }
 
+/** One native function call returned by an OpenAI-compatible provider. */
+export interface AiToolCall {
+  id: string;
+  type: "function";
+  function: {
+    name: string;
+    arguments: string;
+  };
+}
+
+/** A function schema offered to an OpenAI-compatible provider. */
+export interface AiToolDefinition {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  };
+}
+
 /** One turn sent to an OpenAI-compatible provider. */
 export interface AiMessage {
-  role: "system" | "user" | "assistant";
+  role: "system" | "user" | "assistant" | "tool";
   content: string;
+  /** Native calls emitted with an assistant message. */
+  toolCalls?: AiToolCall[];
+  /** The call this `tool` role message answers. */
+  toolCallId?: string;
 }
 
 export interface AiStartRequest {
@@ -89,6 +113,8 @@ export interface AiStartRequest {
   apiKey?: string;
   model: string;
   messages: AiMessage[];
+  /** Optional native function schemas; unsupported providers fall back to text JSON. */
+  tools?: AiToolDefinition[];
   maxTokens?: number;
   temperature?: number;
   /** Keychain slot. The legacy install uses `default`. */
@@ -110,6 +136,7 @@ export interface AiUsage {
 export interface AiDoneEvent {
   streamId: string;
   usage?: AiUsage;
+  toolCalls?: AiToolCall[];
 }
 
 export interface AiErrorEvent {

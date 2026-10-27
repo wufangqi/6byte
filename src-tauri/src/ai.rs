@@ -12,7 +12,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use async_trait::async_trait;
 use eventsource_stream::Eventsource;
 use futures_util::StreamExt;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -27,12 +27,48 @@ const PROVIDER_ID: &str = "openai-compatible";
 pub struct ChatMessage {
     pub role: String,
     pub content: String,
+    #[serde(default)]
+    pub tool_calls: Vec<ToolCall>,
+    #[serde(default)]
+    pub tool_call_id: Option<String>,
+}
+
+/// OpenAI-compatible native function call. This is deliberately separate from
+/// the app's read-only tool dispatcher: the front end validates every name and
+/// argument before it can reach the workspace.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolCall {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub function: ToolFunctionCall,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolFunctionCall {
+    pub name: String,
+    pub arguments: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolDefinition {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub function: ToolFunctionDefinition,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolFunctionDefinition {
+    pub name: String,
+    pub description: String,
+    pub parameters: Value,
 }
 
 #[derive(Debug, Clone)]
 pub struct ChatRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
+    pub tools: Vec<ToolDefinition>,
     pub max_tokens: Option<u32>,
     pub temperature: Option<f32>,
 }
@@ -51,6 +87,8 @@ pub enum StreamEvent {
     Delta(String),
     /// Chain-of-thought text. Shown beside the input, never written.
     Reasoning(String),
+    /// Native function calls returned by an OpenAI-compatible model.
+    ToolCalls(Vec<ToolCall>),
     Done(Option<TokenUsage>),
 }
 
@@ -240,6 +278,7 @@ impl OpenAiCompatible {
         let mut events = response.bytes_stream().eventsource();
         let mut usage = None;
         let mut finish_reason = None;
+        let mut tool_calls = Vec::new();
         let started = tokio::time::Instant::now();
         loop {
             let idle = tokio::time::sleep(self.idle);
@@ -254,7 +293,8 @@ impl OpenAiCompatible {
                 _ = &mut idle => return Err(ProviderError::Idle),
             };
             let Some(item) = item else {
-                return finish_stream(sink, usage, finish_reason.as_deref(), false).await;
+                return finish_stream(sink, usage, finish_reason.as_deref(), false, tool_calls)
+                    .await;
             };
             let event = item.map_err(|error| ProviderError::Protocol(error.to_string()))?;
             let data = event.data.trim();
@@ -262,27 +302,31 @@ impl OpenAiCompatible {
                 continue;
             }
             if data == "[DONE]" {
-                return finish_stream(sink, usage, finish_reason.as_deref(), true).await;
+                return finish_stream(sink, usage, finish_reason.as_deref(), true, tool_calls)
+                    .await;
             }
-            let chunk = interpret_chunk(data)?;
-            if let Some(reason) = chunk.finish {
+            let Chunk {
+                content,
+                reasoning,
+                tool_calls: next_tool_calls,
+                usage: next_usage,
+                finish,
+            } = interpret_chunk(data)?;
+            if let Some(reason) = finish {
                 finish_reason = Some(reason);
             }
-            if let Some(next) = chunk.usage {
+            if let Some(next) = next_usage {
                 usage = Some(next);
             }
-            if !chunk.reasoning.is_empty()
-                && send_event(sink, StreamEvent::Reasoning(chunk.reasoning))
+            merge_tool_call_deltas(&mut tool_calls, next_tool_calls);
+            if !reasoning.is_empty()
+                && send_event(sink, StreamEvent::Reasoning(reasoning))
                     .await
                     .is_err()
             {
                 return Err(ProviderError::Cancelled);
             }
-            if !chunk.content.is_empty()
-                && send_event(sink, StreamEvent::Delta(chunk.content))
-                    .await
-                    .is_err()
-            {
+            if !content.is_empty() && send_event(sink, StreamEvent::Delta(content)).await.is_err() {
                 return Err(ProviderError::Cancelled);
             }
         }
@@ -292,8 +336,26 @@ impl OpenAiCompatible {
 struct Chunk {
     content: String,
     reasoning: String,
+    tool_calls: Vec<ToolCallDelta>,
     usage: Option<TokenUsage>,
     finish: Option<String>,
+}
+
+#[derive(Debug)]
+struct ToolCallDelta {
+    index: usize,
+    id: Option<String>,
+    kind: Option<String>,
+    name: Option<String>,
+    arguments: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct ToolCallAccumulator {
+    id: String,
+    kind: String,
+    name: String,
+    arguments: String,
 }
 
 fn interpret_chunk(data: &str) -> Result<Chunk, ProviderError> {
@@ -306,6 +368,7 @@ fn interpret_chunk(data: &str) -> Result<Chunk, ProviderError> {
     Ok(Chunk {
         content,
         reasoning,
+        tool_calls: tool_call_deltas(&value),
         usage: token_usage(&value),
         finish: value
             .pointer("/choices/0/finish_reason")
@@ -315,11 +378,103 @@ fn interpret_chunk(data: &str) -> Result<Chunk, ProviderError> {
     })
 }
 
+fn tool_call_deltas(value: &Value) -> Vec<ToolCallDelta> {
+    for pointer in [
+        "/choices/0/delta/tool_calls",
+        "/choices/0/message/tool_calls",
+    ] {
+        let Some(Value::Array(calls)) = value.pointer(pointer) else {
+            continue;
+        };
+        return calls
+            .iter()
+            .enumerate()
+            .filter_map(|(fallback_index, call)| {
+                let object = call.as_object()?;
+                let index = object
+                    .get("index")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| usize::try_from(value).ok())
+                    .unwrap_or(fallback_index);
+                let function = object.get("function").and_then(Value::as_object);
+                let arguments =
+                    function
+                        .and_then(|function| function.get("arguments"))
+                        .map(|value| {
+                            value
+                                .as_str()
+                                .map(str::to_string)
+                                .unwrap_or_else(|| value.to_string())
+                        });
+                Some(ToolCallDelta {
+                    index,
+                    id: object.get("id").and_then(Value::as_str).map(str::to_string),
+                    kind: object
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    name: function
+                        .and_then(|function| function.get("name"))
+                        .and_then(Value::as_str)
+                        .map(str::to_string),
+                    arguments,
+                })
+            })
+            .collect();
+    }
+    Vec::new()
+}
+
+fn merge_tool_call_deltas(calls: &mut Vec<ToolCallAccumulator>, deltas: Vec<ToolCallDelta>) {
+    for delta in deltas {
+        while calls.len() <= delta.index {
+            calls.push(ToolCallAccumulator::default());
+        }
+        let call = &mut calls[delta.index];
+        if let Some(id) = delta.id {
+            call.id = id;
+        }
+        if let Some(kind) = delta.kind {
+            call.kind = kind;
+        }
+        if let Some(name) = delta.name {
+            call.name.push_str(&name);
+        }
+        if let Some(arguments) = delta.arguments {
+            call.arguments.push_str(&arguments);
+        }
+    }
+}
+
+fn completed_tool_calls(calls: Vec<ToolCallAccumulator>) -> Vec<ToolCall> {
+    calls
+        .into_iter()
+        .enumerate()
+        .filter(|(_, call)| !call.name.trim().is_empty())
+        .map(|(index, call)| ToolCall {
+            id: if call.id.is_empty() {
+                format!("tool-call-{index}")
+            } else {
+                call.id
+            },
+            kind: if call.kind.is_empty() {
+                "function".to_string()
+            } else {
+                call.kind
+            },
+            function: ToolFunctionCall {
+                name: call.name,
+                arguments: call.arguments,
+            },
+        })
+        .collect()
+}
+
 /// `[DONE]` or `finish_reason: stop` is a finished reply. A socket close, a
 /// length cap, or a content filter is not.
 fn stream_outcome(reason: Option<&str>, announced: bool) -> Result<(), ProviderError> {
     match reason {
-        Some("stop") => Ok(()),
+        Some("stop" | "tool_calls") => Ok(()),
         Some("length") => Err(ProviderError::Truncated),
         Some("content_filter") => Err(ProviderError::Upstream("输出被拦截".into())),
         None if announced => Ok(()),
@@ -332,8 +487,13 @@ async fn finish_stream(
     usage: Option<TokenUsage>,
     reason: Option<&str>,
     announced: bool,
+    tool_calls: Vec<ToolCallAccumulator>,
 ) -> Result<(), ProviderError> {
     stream_outcome(reason, announced)?;
+    let tool_calls = completed_tool_calls(tool_calls);
+    if !tool_calls.is_empty() {
+        send_event(sink, StreamEvent::ToolCalls(tool_calls)).await?;
+    }
     send_event(sink, StreamEvent::Done(usage)).await
 }
 
@@ -404,7 +564,16 @@ fn request_body(request: &ChatRequest) -> Value {
     let messages: Vec<Value> = request
         .messages
         .iter()
-        .map(|message| json!({ "role": message.role, "content": message.content }))
+        .map(|message| {
+            let mut value = json!({ "role": message.role, "content": message.content });
+            if !message.tool_calls.is_empty() {
+                value["tool_calls"] = serde_json::to_value(&message.tool_calls).unwrap_or_default();
+            }
+            if let Some(tool_call_id) = &message.tool_call_id {
+                value["tool_call_id"] = json!(tool_call_id);
+            }
+            value
+        })
         .collect();
     let mut body = json!({
         "model": request.model,
@@ -416,6 +585,9 @@ fn request_body(request: &ChatRequest) -> Value {
     }
     if let Some(temperature) = request.temperature {
         body["temperature"] = json!(temperature);
+    }
+    if !request.tools.is_empty() {
+        body["tools"] = serde_json::to_value(&request.tools).unwrap_or_default();
     }
     body
 }
@@ -433,6 +605,10 @@ fn without_rejected_parameters(request: &ChatRequest, detail: &str) -> Option<Ch
         changed = true;
     }
     if names.iter().any(|name| name == "max_tokens") && next.max_tokens.take().is_some() {
+        changed = true;
+    }
+    if names.iter().any(|name| name == "tools") && !next.tools.is_empty() {
+        next.tools.clear();
         changed = true;
     }
     changed.then_some(next)
@@ -453,12 +629,16 @@ fn rejected_parameter_names(detail: &str) -> Vec<String> {
         );
     }
     let lower = detail.to_ascii_lowercase();
-    for name in ["temperature", "max_tokens"] {
+    for name in ["temperature", "max_tokens", "tools"] {
         if names.iter().any(|item| item == name) {
             continue;
         }
         if lower.contains(&format!("unsupported parameter: '{name}'"))
             || lower.contains(&format!("unsupported parameter: \"{name}\""))
+            || (name == "tools"
+                && (lower.contains("does not support tools")
+                    || lower.contains("tools are not supported")
+                    || lower.contains("tool calling is not supported")))
         {
             names.push(name.to_string());
         }
@@ -602,6 +782,7 @@ fn blank_to_none(value: Option<String>) -> Option<String> {
 fn validate_request(
     model: &str,
     messages: &[ChatMessage],
+    tools: &[ToolDefinition],
     temperature: Option<f32>,
     max_tokens: Option<u32>,
 ) -> Result<(), ProviderError> {
@@ -612,11 +793,36 @@ fn validate_request(
         return Err(ProviderError::Invalid("消息不能为空。".to_string()));
     }
     for message in messages {
-        if !matches!(message.role.as_str(), "system" | "user" | "assistant") {
+        if !matches!(
+            message.role.as_str(),
+            "system" | "user" | "assistant" | "tool"
+        ) {
             return Err(ProviderError::Invalid(format!(
                 "不支持的消息角色：{}",
                 message.role
             )));
+        }
+        if message.role == "tool"
+            && message
+                .tool_call_id
+                .as_deref()
+                .map_or(true, |id| id.trim().is_empty())
+        {
+            return Err(ProviderError::Invalid("工具结果缺少调用标识。".to_string()));
+        }
+    }
+    if tools.len() > 16 {
+        return Err(ProviderError::Invalid(
+            "工具数量不能超过 16 个。".to_string(),
+        ));
+    }
+    for tool in tools {
+        if tool.kind != "function"
+            || tool.function.name.trim().is_empty()
+            || tool.function.name.len() > 64
+            || !tool.function.parameters.is_object()
+        {
+            return Err(ProviderError::Invalid("工具定义无效。".to_string()));
         }
     }
     if let Some(temperature) = temperature {
@@ -684,6 +890,8 @@ struct AiDone {
     stream_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     usage: Option<TokenUsage>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tool_calls: Vec<ToolCall>,
 }
 
 #[derive(Clone, Serialize)]
@@ -864,6 +1072,7 @@ async fn drive(
     let consumer = async {
         let mut finished = false;
         let mut usage = None;
+        let mut tool_calls = Vec::new();
         while let Some(event) = rx.recv().await {
             match event {
                 StreamEvent::Delta(delta) => {
@@ -871,6 +1080,9 @@ async fn drive(
                 }
                 StreamEvent::Reasoning(delta) => {
                     emit_token(&app, &stream_id, &delta, "reasoning");
+                }
+                StreamEvent::ToolCalls(calls) => {
+                    tool_calls = calls;
                 }
                 StreamEvent::Done(tokens) => {
                     finished = true;
@@ -880,14 +1092,15 @@ async fn drive(
                         AiDone {
                             stream_id: stream_id.clone(),
                             usage: usage.clone(),
+                            tool_calls: tool_calls.clone(),
                         },
                     );
                 }
             }
         }
-        (finished, usage)
+        (finished, usage, tool_calls)
     };
-    let (result, (finished, usage)) = tokio::join!(producer, consumer);
+    let (result, (finished, usage, tool_calls)) = tokio::join!(producer, consumer);
     let elapsed = started.elapsed().as_millis();
     match &result {
         Ok(()) => {
@@ -899,7 +1112,8 @@ async fn drive(
             ai_log(
                 &app,
                 &format!(
-                    "done id={stream_id} elapsed_ms={elapsed} prompt_tokens={prompt} completion_tokens={completion}"
+                    "done id={stream_id} elapsed_ms={elapsed} prompt_tokens={prompt} completion_tokens={completion} tool_calls={}",
+                    tool_calls.len()
                 ),
             );
         }
@@ -939,6 +1153,7 @@ pub fn ai_start(
     api_key: Option<String>,
     model: String,
     messages: Vec<ChatMessage>,
+    tools: Option<Vec<ToolDefinition>>,
     max_tokens: Option<u32>,
     temperature: Option<f32>,
     profile_id: Option<String>,
@@ -946,7 +1161,8 @@ pub fn ai_start(
     if provider_id != PROVIDER_ID {
         return Err(format!("不支持的模型服务：{provider_id}"));
     }
-    validate_request(&model, &messages, temperature, max_tokens)
+    let tools = tools.unwrap_or_default();
+    validate_request(&model, &messages, &tools, temperature, max_tokens)
         .map_err(|error| error.message())?;
     let stored = if api_key.as_ref().is_some_and(|key| !key.trim().is_empty()) {
         Ok(None)
@@ -961,6 +1177,7 @@ pub fn ai_start(
     let request = ChatRequest {
         model: model.trim().to_string(),
         messages,
+        tools,
         max_tokens,
         temperature,
     };
@@ -1033,7 +1250,10 @@ pub async fn probe_model(
         messages: vec![ChatMessage {
             role: "user".to_string(),
             content: "ping".to_string(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
         }],
+        tools: Vec::new(),
         max_tokens: None,
         temperature: None,
     };
@@ -1047,6 +1267,7 @@ pub async fn probe_model(
                     StreamEvent::Delta(delta) | StreamEvent::Reasoning(delta) => {
                         text.push_str(&delta)
                     }
+                    StreamEvent::ToolCalls(_) => {}
                     StreamEvent::Done(_) => break,
                 }
             }
@@ -1078,7 +1299,10 @@ pub async fn ai_probe(
         &[ChatMessage {
             role: "user".into(),
             content: "ping".into(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
         }],
+        &[],
         None,
         None,
     )
@@ -1174,6 +1398,8 @@ mod tests {
         ChatMessage {
             role: role.to_string(),
             content: content.to_string(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
         }
     }
 
@@ -1181,8 +1407,24 @@ mod tests {
         ChatRequest {
             model: "demo".to_string(),
             messages: vec![message("user", "改短一点")],
+            tools: Vec::new(),
             max_tokens: Some(32),
             temperature: Some(0.2),
+        }
+    }
+
+    fn outline_tool() -> ToolDefinition {
+        ToolDefinition {
+            kind: "function".to_string(),
+            function: ToolFunctionDefinition {
+                name: "outline".to_string(),
+                description: "Read headings.".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": { "path": { "type": "string" } },
+                    "required": ["path"],
+                }),
+            },
         }
     }
 
@@ -1207,6 +1449,48 @@ mod tests {
         let error = chat_completions_url("file:///tmp/model").unwrap_err();
         assert_eq!(error.message(), "服务地址只支持 http 或 https。");
         assert!(chat_completions_url("not a url").is_err());
+    }
+
+    #[test]
+    fn serializes_native_tools_and_tool_result_messages() {
+        let mut request = sample_request();
+        request.tools = vec![outline_tool()];
+        request.messages.push(ChatMessage {
+            role: "assistant".to_string(),
+            content: "".to_string(),
+            tool_calls: vec![ToolCall {
+                id: "call-1".to_string(),
+                kind: "function".to_string(),
+                function: ToolFunctionCall {
+                    name: "outline".to_string(),
+                    arguments: r#"{"path":"README.md"}"#.to_string(),
+                },
+            }],
+            tool_call_id: None,
+        });
+        request.messages.push(ChatMessage {
+            role: "tool".to_string(),
+            content: "# Readme".to_string(),
+            tool_calls: Vec::new(),
+            tool_call_id: Some("call-1".to_string()),
+        });
+
+        let body = request_body(&request);
+        assert_eq!(
+            body.pointer("/tools/0/function/name")
+                .and_then(Value::as_str),
+            Some("outline")
+        );
+        assert_eq!(
+            body.pointer("/messages/1/tool_calls/0/function/name")
+                .and_then(Value::as_str),
+            Some("outline")
+        );
+        assert_eq!(
+            body.pointer("/messages/2/tool_call_id")
+                .and_then(Value::as_str),
+            Some("call-1")
+        );
     }
 
     #[test]
@@ -1244,15 +1528,17 @@ mod tests {
 
     #[test]
     fn rejects_an_empty_prompt_and_a_bad_temperature() {
-        let error = validate_request("", &[message("user", "hi")], None, None).unwrap_err();
+        let error = validate_request("", &[message("user", "hi")], &[], None, None).unwrap_err();
         assert_eq!(error.message(), "模型名称不能为空。");
-        let error = validate_request("m", &[], None, None).unwrap_err();
+        let error = validate_request("m", &[], &[], None, None).unwrap_err();
         assert_eq!(error.message(), "消息不能为空。");
-        let error = validate_request("m", &[message("tool", "hi")], None, None).unwrap_err();
-        assert!(error.message().contains("tool"));
-        let error = validate_request("m", &[message("user", "hi")], Some(3.0), None).unwrap_err();
+        let error = validate_request("m", &[message("tool", "hi")], &[], None, None).unwrap_err();
+        assert!(error.message().contains("调用标识"));
+        let error =
+            validate_request("m", &[message("user", "hi")], &[], Some(3.0), None).unwrap_err();
         assert_eq!(error.message(), "温度必须在 0 到 2 之间。");
-        let error = validate_request("m", &[message("user", "hi")], None, Some(0)).unwrap_err();
+        let error =
+            validate_request("m", &[message("user", "hi")], &[], None, Some(0)).unwrap_err();
         assert_eq!(error.message(), "生成长度必须大于 0。");
     }
 
@@ -1389,6 +1675,34 @@ mod tests {
                 .unwrap();
         assert_eq!(both.reasoning, "想");
         assert_eq!(both.content, "答");
+    }
+
+    #[test]
+    fn combines_fragmented_native_tool_calls() {
+        let first = interpret_chunk(
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","type":"function","function":{"name":"outline","arguments":"{\"path\":\""}}]}}]}"#,
+        )
+        .unwrap();
+        let second = interpret_chunk(
+            r#"{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"README.md\"}"}}]},"finish_reason":"tool_calls"}]}"#,
+        )
+        .unwrap();
+        let mut calls = Vec::new();
+        merge_tool_call_deltas(&mut calls, first.tool_calls);
+        merge_tool_call_deltas(&mut calls, second.tool_calls);
+
+        assert!(stream_outcome(second.finish.as_deref(), true).is_ok());
+        assert_eq!(
+            completed_tool_calls(calls),
+            vec![ToolCall {
+                id: "call-1".to_string(),
+                kind: "function".to_string(),
+                function: ToolFunctionCall {
+                    name: "outline".to_string(),
+                    arguments: r#"{"path":"README.md"}"#.to_string(),
+                },
+            }]
+        );
     }
 
     #[test]
@@ -1536,7 +1850,7 @@ mod tests {
         for event in events {
             match event {
                 StreamEvent::Delta(delta) => text.push_str(&delta),
-                StreamEvent::Reasoning(_) => {}
+                StreamEvent::Reasoning(_) | StreamEvent::ToolCalls(_) => {}
                 StreamEvent::Done(tokens) => usage = tokens,
             }
         }
@@ -1550,6 +1864,33 @@ mod tests {
         assert!(lower.contains("authorization: bearer test-key"));
         assert!(raw.contains("\"stream\":true"));
         assert!(raw.contains("改短一点"));
+    }
+
+    #[tokio::test]
+    async fn streams_native_tool_calls_from_an_openai_compatible_server() {
+        let body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"outline\",\"arguments\":\"{\\\"path\\\":\\\"\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"README.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}\n\n",
+            "data: [DONE]\n\n",
+        );
+        let provider = OpenAiCompatible::new(&spawn_sse(body), None).unwrap();
+        let events = collect(&provider, CancellationToken::new()).await.unwrap();
+        let calls = events.into_iter().find_map(|event| match event {
+            StreamEvent::ToolCalls(calls) => Some(calls),
+            _ => None,
+        });
+
+        assert_eq!(
+            calls,
+            Some(vec![ToolCall {
+                id: "call-1".to_string(),
+                kind: "function".to_string(),
+                function: ToolFunctionCall {
+                    name: "outline".to_string(),
+                    arguments: r#"{"path":"README.md"}"#.to_string(),
+                },
+            }])
+        );
     }
 
     #[tokio::test]
@@ -1631,6 +1972,11 @@ mod tests {
         let next = without_rejected_parameters(&sample_request(), cloud).unwrap();
         assert_eq!(next.max_tokens, None);
         assert_eq!(next.temperature, Some(0.2));
+        let mut with_tools = sample_request();
+        with_tools.tools = vec![outline_tool()];
+        let next = without_rejected_parameters(&with_tools, "tools are not supported").unwrap();
+        assert!(next.tools.is_empty());
+        assert_eq!(next.max_tokens, Some(32));
     }
 
     #[tokio::test]
@@ -1672,7 +2018,9 @@ mod tests {
             .iter()
             .filter_map(|event| match event {
                 StreamEvent::Delta(delta) => Some(delta.as_str()),
-                StreamEvent::Reasoning(_) | StreamEvent::Done(_) => None,
+                StreamEvent::Reasoning(_) | StreamEvent::ToolCalls(_) | StreamEvent::Done(_) => {
+                    None
+                }
             })
             .collect();
         assert_eq!(text, "pong");
@@ -1781,6 +2129,7 @@ mod tests {
                     StreamEvent::Delta(delta) | StreamEvent::Reasoning(delta) => {
                         text.push_str(&delta)
                     }
+                    StreamEvent::ToolCalls(_) => {}
                     StreamEvent::Done(_) => {
                         done = true;
                         break;

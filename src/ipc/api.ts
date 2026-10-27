@@ -139,6 +139,7 @@ export async function aiStart(request: AiStartRequest): Promise<string> {
     apiKey: request.apiKey,
     model: request.model,
     messages: request.messages,
+    tools: request.tools,
     maxTokens: request.maxTokens,
     temperature: request.temperature,
     profileId: request.profileId,

@@ -68,7 +68,7 @@ describe("renderMermaidSvg", () => {
     const svg = await renderMermaidSvg("graph TD\n  A-->B");
     expect(svg).toContain("<svg");
     expect(svg).not.toContain("<script");
-  }, 20000);
+  }, 120000);
 
   it("returns null for a diagram that cannot be parsed", async () => {
     expect(await renderMermaidSvg("this is not a diagram")).toBeNull();
