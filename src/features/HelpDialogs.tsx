@@ -121,6 +121,8 @@ const SHORTCUTS: { group: string; items: [string, string][] }[] = [
       ["shortcuts.grep", "Ctrl+Shift+F"],
       ["shortcuts.tree", "Ctrl+Shift+E"],
       ["shortcuts.preview", "Ctrl+Shift+M"],
+      ["shortcuts.aiPanel", "Ctrl+Shift+A"],
+      ["shortcuts.settings", "Ctrl+,"],
     ],
   },
 ];

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
-import { useWorkspace } from "../stores/workspace";
+import { SETTINGS_TAB_ID, useWorkspace } from "../stores/workspace";
+import { ActionIcon } from "./MenuBar";
 
 interface Props {
   onClose: (id: string) => void;
@@ -18,6 +19,8 @@ export default function TabBar({ onClose, onRename }: Props) {
   const activeId = useWorkspace((s) => s.activeId);
   const setActive = useWorkspace((s) => s.setActive);
   const newTab = useWorkspace((s) => s.newTab);
+  const settingsOpen = useWorkspace((s) => s.settingsOpen);
+  const closeSettings = useWorkspace((s) => s.closeSettings);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const { t } = useI18n();
 
@@ -39,7 +42,8 @@ export default function TabBar({ onClose, onRename }: Props) {
     };
   }, [menu]);
 
-  if (tabs.length === 0) return null;
+  if (tabs.length === 0 && !settingsOpen) return null;
+  const settingsActive = activeId === SETTINGS_TAB_ID;
 
   const menuTab = menu ? tabs.find((tab) => tab.id === menu.tabId) : undefined;
 
@@ -81,6 +85,34 @@ export default function TabBar({ onClose, onRename }: Props) {
             </button>
           </div>
         ))}
+        {settingsOpen && (
+          <div
+            role="tab"
+            aria-selected={settingsActive}
+            className={`tab tab--settings ${settingsActive ? "tab--active" : ""}`}
+            onClick={() => setActive(SETTINGS_TAB_ID)}
+            onMouseDown={(e) => {
+              if (e.button === 1) {
+                e.preventDefault();
+                closeSettings();
+              }
+            }}
+          >
+            <ActionIcon kind="model" size={13} />
+            <span className="tab__name">{t("settings.title")}</span>
+            <button
+              type="button"
+              className="tab__close"
+              aria-label={t("tab.close")}
+              onClick={(e) => {
+                e.stopPropagation();
+                closeSettings();
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
       </div>
       <button type="button" className="tabbar__new" title={t("tab.new")} onClick={newTab}>
         +

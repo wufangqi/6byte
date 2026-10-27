@@ -13,7 +13,7 @@ import {
 } from "./features/splitPane";
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
-import AiSettingsDialog from "./features/AiSettingsDialog";
+import SettingsPage from "./features/SettingsPage";
 import { AboutDialog, ShortcutsDialog } from "./features/HelpDialogs";
 import AiSelectionAction from "./features/AiSelectionAction";
 import AiStreamPanel from "./features/AiStreamPanel";
@@ -67,7 +67,13 @@ import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/ex
 import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
 import { isMarkdownFile } from "./features/markdown";
-import { selectActiveTab, tabFromFile, tabFromLarge, useWorkspace } from "./stores/workspace";
+import {
+  SETTINGS_TAB_ID,
+  selectActiveTab,
+  tabFromFile,
+  tabFromLarge,
+  useWorkspace,
+} from "./stores/workspace";
 
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
@@ -96,10 +102,10 @@ const EOL_LABEL: Record<string, string> = { lf: "LF", crlf: "CRLF", cr: "CR" };
 
 export default function App() {
   const active = useWorkspace(selectActiveTab);
+  const settingsActive = useWorkspace((state) => state.activeId === SETTINGS_TAB_ID);
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [helpDialog, setHelpDialog] = useState<"about" | "shortcuts" | null>(null);
   const [streamOpen, setStreamOpen] = useState(false);
   const [aiFloatingMarkerEnabled, setAiFloatingMarkerEnabled] = useState(() => {
@@ -776,7 +782,7 @@ export default function App() {
     if (!tab || tab.mode !== "text") return;
     const settings = activeModel(loadAiSettings());
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
-      setModelSettingsOpen(true);
+      useWorkspace.getState().openSettings("models");
       return;
     }
     setStreamOpen(true);
@@ -792,7 +798,7 @@ export default function App() {
     }
     const settings = activeModel(loadAiSettings());
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
-      setModelSettingsOpen(true);
+      useWorkspace.getState().openSettings("models");
       return;
     }
     setStreamOpen(true);
@@ -832,6 +838,12 @@ export default function App() {
       } else if (key === "m" && event.shiftKey) {
         event.preventDefault();
         togglePreview();
+      } else if (key === "a" && event.shiftKey) {
+        event.preventDefault();
+        toggleAiPanel();
+      } else if (key === "," && !event.shiftKey) {
+        event.preventDefault();
+        useWorkspace.getState().openSettings("general");
       } else if (key === "o") {
         event.preventDefault();
         void openViaDialog();
@@ -848,7 +860,8 @@ export default function App() {
       } else if (key === "w") {
         event.preventDefault();
         const store = useWorkspace.getState();
-        if (store.activeId) void requestCloseTab(store.activeId);
+        if (store.activeId === SETTINGS_TAB_ID) store.closeSettings();
+        else if (store.activeId) void requestCloseTab(store.activeId);
       }
     };
 
@@ -862,6 +875,7 @@ export default function App() {
     requestCloseTab,
     requestRenameTab,
     togglePreview,
+    toggleAiPanel,
     openRewrite,
     openFolder,
     toggleTree,
@@ -980,7 +994,10 @@ export default function App() {
           const tab = selectActiveTab(useWorkspace.getState());
           if (tab) void requestRenameTab(tab.id);
         }}
-        onOpenModelSettings={() => setModelSettingsOpen(true)}
+        onOpenModelSettings={() => useWorkspace.getState().openSettings("models")}
+        onOpenSettings={() => useWorkspace.getState().openSettings("general")}
+        aiPanelOpen={streamOpen}
+        onToggleAiPanel={toggleAiPanel}
         onAbout={() => setHelpDialog("about")}
         onShortcuts={() => setHelpDialog("shortcuts")}
         onFeedback={() => {
@@ -1032,7 +1049,9 @@ export default function App() {
           )}
 
           <div className="workspace__body">
-            {active ? (
+            {settingsActive ? (
+              <SettingsPage />
+            ) : active ? (
               active.mode === "large" ? (
                 <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
               ) : (
@@ -1142,7 +1161,7 @@ export default function App() {
               onOpenMatch={(path, line) => void openMatch(path, line)}
               onNeedSettings={() => {
                 setStreamOpen(false);
-                setModelSettingsOpen(true);
+                useWorkspace.getState().openSettings("models");
               }}
             />
           </>
@@ -1153,7 +1172,7 @@ export default function App() {
         <AiSelectionAction
           key={active.id}
           tabId={active.id}
-          visible={showSource && aiFloatingMarkerEnabled && !streamOpen && !modelSettingsOpen}
+          visible={showSource && aiFloatingMarkerEnabled && !streamOpen}
           onRewrite={openRewrite}
         />
       )}
@@ -1198,7 +1217,6 @@ export default function App() {
         </div>
       )}
 
-      {modelSettingsOpen && <AiSettingsDialog onClose={() => setModelSettingsOpen(false)} />}
       {helpDialog === "about" && <AboutDialog onClose={() => setHelpDialog(null)} />}
       {helpDialog === "shortcuts" && <ShortcutsDialog onClose={() => setHelpDialog(null)} />}
       <RenameDialog />

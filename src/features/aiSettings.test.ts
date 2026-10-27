@@ -1,12 +1,16 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { completionChoices } from "./completionSettings";
 import {
   AI_SETTINGS_KEY,
+  EMPTY_AI_CATALOG,
   LEGACY_PROFILE_ID,
   isSavedKeyMask,
   addModel,
   addProvider,
+  keepActiveModel,
   loadAiSettings,
+  type AiCatalog,
   parseAiSettings,
   removeModel,
   removeProvider,
@@ -36,7 +40,7 @@ describe("ai settings persistence", () => {
         id: LEGACY_PROFILE_ID,
         name: "demo",
         baseUrl: "https://api.example.com/v1",
-        models: [{ id: "default-model", name: "demo", model: "demo" }],
+        models: [{ id: "default-model", name: "demo", model: "demo", enabled: true }],
       },
     ]);
     expect(parsed.activeProviderId).toBe(LEGACY_PROFILE_ID);
@@ -78,7 +82,7 @@ describe("ai settings persistence", () => {
           id: LEGACY_PROFILE_ID,
           name: " llama ",
           baseUrl: "  http://127.0.0.1:11434/v1  ",
-          models: [{ id: "default-model", name: " llama ", model: " llama3.2 " }],
+          models: [{ id: "default-model", name: " llama ", model: " llama3.2 ", enabled: true }],
         },
       ],
     });
@@ -91,7 +95,7 @@ describe("ai settings persistence", () => {
             id: LEGACY_PROFILE_ID,
             name: "llama",
             baseUrl: "http://127.0.0.1:11434/v1",
-            models: [{ id: "default-model", name: "llama", model: "llama3.2" }],
+            models: [{ id: "default-model", name: "llama", model: "llama3.2", enabled: true }],
           },
         ],
       })
@@ -118,7 +122,9 @@ describe("ai settings persistence", () => {
         ],
       })
     );
-    expect(parsed.providers[0].models).toEqual([{ id: "fast", name: "快", model: "demo" }]);
+    expect(parsed.providers[0].models).toEqual([
+      { id: "fast", name: "快", model: "demo", enabled: true },
+    ]);
     expect(serializeAiSettings(parsed)).not.toContain("sk-");
   });
 
@@ -158,5 +164,62 @@ describe("ai settings persistence", () => {
     const removed = removeProvider(removedModel, providerId);
     expect(removed.providers).toHaveLength(1);
     expect(removed.activeProviderId).toBe(added.activeProviderId);
+  });
+
+  it("enables stored models unless they were switched off", () => {
+    const parsed = parseAiSettings(
+      JSON.stringify({
+        providers: [
+          {
+            id: "p",
+            baseUrl: "https://api.example.com/v1",
+            models: [
+              { id: "a", model: "a" },
+              { id: "b", model: "b", enabled: false },
+            ],
+          },
+        ],
+      })
+    );
+    expect(parsed.providers[0].models.map((model) => model.enabled)).toEqual([true, false]);
+    expect(serializeAiSettings(parsed)).toContain('"enabled":false');
+  });
+
+  it("keeps the chat model when a provider or model is added", () => {
+    const base = addProvider(EMPTY_AI_CATALOG, "p");
+    const start = addModel(base, base.activeProviderId, "chat", "chat");
+    const added = keepActiveModel(start, addProvider(start, "q"));
+    expect(added.providers).toHaveLength(2);
+    expect(added.activeProviderId).toBe(start.activeProviderId);
+    expect(added.activeModelId).toBe(start.activeModelId);
+    const preset = keepActiveModel(start, withOllamaPreset(start));
+    expect(preset.activeModelId).toBe(start.activeModelId);
+  });
+});
+
+describe("model pickers", () => {
+  const catalog: AiCatalog = {
+    activeProviderId: "p",
+    activeModelId: "on",
+    providers: [
+      {
+        id: "p",
+        name: "P",
+        baseUrl: "https://api.example.com/v1",
+        models: [
+          { id: "on", name: "On", model: "on", enabled: true },
+          { id: "off", name: "Off", model: "off", enabled: false },
+        ],
+      },
+    ],
+  };
+
+  it("leaves disabled models out unless they are the current pick", () => {
+    expect(completionChoices(catalog).map((choice) => choice.modelId)).toEqual(["on"]);
+    expect(
+      completionChoices(catalog, { providerId: "p", modelId: "off" }).map(
+        (choice) => choice.modelId
+      )
+    ).toEqual(["on", "off"]);
   });
 });

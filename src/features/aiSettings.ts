@@ -15,6 +15,8 @@ export interface ProviderModel {
   id: string;
   name: string;
   model: string;
+  /** Disabled models stay configured but are left out of model pickers. */
+  enabled: boolean;
 }
 
 /** A service endpoint. Its API key lives in the keychain under `id`, shared by every model. */
@@ -82,13 +84,13 @@ export function activeModel(catalog: AiCatalog): ActiveEndpoint | null {
 
 function cleanModel(value: unknown): ProviderModel | null {
   if (!value || typeof value !== "object") return null;
-  const record = value as { id?: unknown; name?: unknown; model?: unknown };
+  const record = value as { id?: unknown; name?: unknown; model?: unknown; enabled?: unknown };
   const id = typeof record.id === "string" ? record.id.trim() : "";
   if (!id) return null;
   const model = typeof record.model === "string" ? record.model.trim() : "";
   const name =
     typeof record.name === "string" && record.name.trim() ? record.name.trim() : model || "模型";
-  return { id, name, model };
+  return { id, name, model, enabled: record.enabled !== false };
 }
 
 function cleanProvider(value: unknown): Provider | null {
@@ -121,7 +123,9 @@ function migrateProfile(value: unknown, fallbackId: string): Provider | null {
   if (!id || (!baseUrl && !model)) return null;
   const name =
     typeof record.name === "string" && record.name.trim() ? record.name.trim() : model || "服务商";
-  const models: ProviderModel[] = model ? [{ id: `${id}-model`, name: name || model, model }] : [];
+  const models: ProviderModel[] = model
+    ? [{ id: `${id}-model`, name: name || model, model, enabled: true }]
+    : [];
   return { id, name, baseUrl, models };
 }
 
@@ -196,6 +200,7 @@ export function serializeAiSettings(catalog: AiCatalog): string {
         id: model.id,
         name: model.name.trim() || model.model.trim() || "模型",
         model: model.model.trim(),
+        enabled: model.enabled,
       })),
     })),
   });
@@ -256,7 +261,7 @@ export function addModel(
   name = "新模型",
   apiModel = ""
 ): AiCatalog {
-  const model: ProviderModel = { id: newProfileId(), name, model: apiModel };
+  const model: ProviderModel = { id: newProfileId(), name, model: apiModel, enabled: true };
   let added = false;
   const providers = catalog.providers.map((provider) => {
     if (provider.id !== providerId) return provider;
@@ -298,6 +303,17 @@ export function updateModel(
   };
 }
 
+/** Keep the previous chat model selected after `next` added a provider or model. */
+export function keepActiveModel(previous: AiCatalog, next: AiCatalog): AiCatalog {
+  const provider = next.providers.find((item) => item.id === previous.activeProviderId);
+  if (!provider?.models.some((model) => model.id === previous.activeModelId)) return next;
+  return {
+    ...next,
+    activeProviderId: previous.activeProviderId,
+    activeModelId: previous.activeModelId,
+  };
+}
+
 /** Adds local Ollama, or selects the provider that already uses that address. */
 export function withOllamaPreset(catalog: AiCatalog): AiCatalog {
   const existing = catalog.providers.find((provider) => provider.baseUrl.trim() === OLLAMA_URL);
@@ -317,7 +333,7 @@ export function withOllamaPreset(catalog: AiCatalog): AiCatalog {
     id: providerId,
     name: "本地 Ollama",
     baseUrl: OLLAMA_URL,
-    models: [{ id: modelId, name: OLLAMA_MODEL, model: OLLAMA_MODEL }],
+    models: [{ id: modelId, name: OLLAMA_MODEL, model: OLLAMA_MODEL, enabled: true }],
   };
   return {
     activeProviderId: providerId,

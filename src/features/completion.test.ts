@@ -12,8 +12,8 @@ const catalog: AiCatalog = {
       name: "云端",
       baseUrl: "https://example.com/v1",
       models: [
-        { id: "rewrite", name: "改写", model: "thinker" },
-        { id: "fast", name: "补全", model: "fast-text" },
+        { id: "rewrite", name: "改写", model: "thinker", enabled: true },
+        { id: "fast", name: "补全", model: "fast-text", enabled: true },
       ],
     },
   ],

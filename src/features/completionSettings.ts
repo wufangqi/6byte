@@ -76,12 +76,20 @@ export interface CompletionChoice {
   label: string;
 }
 
-/** Every configured model, labeled with its provider so the completion pick is independent. */
-export function completionChoices(catalog: AiCatalog): CompletionChoice[] {
+/**
+ * Every usable enabled model, labeled with its provider so the completion pick is independent.
+ * `keep` stays listed even when disabled, so a current pick never vanishes from its picker.
+ */
+export function completionChoices(
+  catalog: AiCatalog,
+  keep?: { providerId: string; modelId: string }
+): CompletionChoice[] {
   const choices: CompletionChoice[] = [];
   for (const provider of catalog.providers) {
     for (const model of provider.models) {
       if (!provider.baseUrl.trim() || !model.model.trim()) continue;
+      const kept = keep?.providerId === provider.id && keep.modelId === model.id;
+      if (!model.enabled && !kept) continue;
       const modelLabel = model.name.trim() || model.model.trim();
       const providerLabel = provider.name.trim() || provider.baseUrl.trim();
       choices.push({

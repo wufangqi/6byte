@@ -24,7 +24,7 @@
 - **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
 - **AI (v0.2.0)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. Candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize, follow-up prompts, workspace command palette (`Ctrl+P`), `@` references, read-only ask mode and autocomplete (off by default) are also available.
-- **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually. The Help menu has About (version / platform / Tauri) and the keyboard shortcut reference.
+- **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually. Settings (`Ctrl+,`) is a tab with General / Models / Providers / Access / Usage sections; the Help menu has About (version / platform / Tauri) and the keyboard shortcut reference.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
 
 ## Install
