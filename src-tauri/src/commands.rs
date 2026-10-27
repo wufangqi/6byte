@@ -42,6 +42,13 @@ pub struct FileStat {
     pub mtime_ms: u64,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameFileResponse {
+    pub path: String,
+    pub name: String,
+}
+
 /// Result of `open_document`: either a fully loaded text buffer or a read-only
 /// large-file descriptor whose content is streamed through `read_range`.
 #[derive(Debug, Serialize)]
@@ -315,6 +322,64 @@ pub fn stat_file(path: String) -> Result<FileStat, String> {
     })
 }
 
+/// Validate a user-supplied file name. Only the last segment is accepted, so a
+/// rename can never move a file out of its folder.
+fn sanitize_file_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        return Err("文件名不能为空。".to_string());
+    }
+    if trimmed == "." || trimmed == ".." {
+        return Err("文件名无效。".to_string());
+    }
+    if trimmed.contains(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) {
+        return Err("文件名不能包含 \\ / : * ? \" < > | 这些字符。".to_string());
+    }
+    if trimmed.chars().any(|character| character.is_control()) {
+        return Err("文件名包含无效字符。".to_string());
+    }
+    if trimmed.len() > 255 {
+        return Err("文件名过长。".to_string());
+    }
+    Ok(trimmed.to_string())
+}
+
+/// Rename a file inside its current folder. The open buffer is untouched; the
+/// caller keeps editing and saving through the returned path.
+#[tauri::command]
+pub fn rename_file(path: String, name: String) -> Result<RenameFileResponse, String> {
+    let source = PathBuf::from(&path);
+    let metadata =
+        fs::metadata(&source).map_err(|error| format!("文件不存在或无法访问：{error}"))?;
+    if !metadata.is_file() {
+        return Err("所选路径不是文件。".to_string());
+    }
+
+    let new_name = sanitize_file_name(&name)?;
+    let parent = source
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| "无法定位文件所在目录。".to_string())?;
+    let target = parent.join(&new_name);
+
+    if target == source {
+        return Ok(RenameFileResponse {
+            path: path.clone(),
+            name: new_name,
+        });
+    }
+    if target.exists() {
+        return Err(format!("「{new_name}」已存在。"));
+    }
+
+    fs::rename(&source, &target).map_err(|error| format!("重命名失败：{error}"))?;
+
+    Ok(RenameFileResponse {
+        path: target.to_string_lossy().to_string(),
+        name: new_name,
+    })
+}
+
 fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let parent = path
         .parent()
@@ -425,6 +490,53 @@ mod tests {
         assert_eq!(stat.size, 5);
         assert!(stat.mtime_ms > 0);
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn sanitize_file_name_rejects_paths_and_dot_names() {
+        assert_eq!(sanitize_file_name("  笔记.md ").unwrap(), "笔记.md");
+        assert!(sanitize_file_name("").is_err());
+        assert!(sanitize_file_name("..").is_err());
+        assert!(sanitize_file_name("../escape.md").is_err());
+        assert!(sanitize_file_name("sub/name.md").is_err());
+        assert!(sanitize_file_name("bad:name.md").is_err());
+    }
+
+    #[test]
+    fn rename_file_keeps_the_file_in_its_folder() {
+        let path = temp_path("rename");
+        fs::write(&path, b"hello").unwrap();
+        let folder = path.parent().unwrap();
+
+        let response =
+            rename_file(path.to_string_lossy().to_string(), "renamed.md".into()).unwrap();
+        let renamed = folder.join("renamed.md");
+        assert_eq!(response.name, "renamed.md");
+        assert_eq!(PathBuf::from(&response.path), renamed);
+        assert!(!path.exists());
+        assert_eq!(fs::read(&renamed).unwrap(), b"hello");
+
+        let collision = rename_file(renamed.to_string_lossy().to_string(), "renamed.md".into())
+            .expect("renaming to the same name is a no-op");
+        assert_eq!(collision.path, renamed.to_string_lossy().to_string());
+
+        let _ = fs::remove_file(renamed);
+    }
+
+    #[test]
+    fn rename_file_refuses_to_overwrite_an_existing_file() {
+        let first = temp_path("rename-a");
+        let second = temp_path("rename-b");
+        fs::write(&first, b"a").unwrap();
+        fs::write(&second, b"b").unwrap();
+        let target_name = second.file_name().unwrap().to_string_lossy().to_string();
+
+        let error = rename_file(first.to_string_lossy().to_string(), target_name).unwrap_err();
+        assert!(error.contains("已存在"), "{error}");
+        assert_eq!(fs::read(&second).unwrap(), b"b");
+
+        let _ = fs::remove_file(first);
+        let _ = fs::remove_file(second);
     }
 
     #[test]

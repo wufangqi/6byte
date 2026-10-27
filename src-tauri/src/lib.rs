@@ -30,6 +30,7 @@ pub fn run() {
             commands::read_file,
             commands::write_file,
             commands::stat_file,
+            commands::rename_file,
             commands::open_document,
             commands::read_range,
             commands::grep_files,

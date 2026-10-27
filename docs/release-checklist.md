@@ -1,4 +1,4 @@
-# 发布验收清单（v0.1.0）
+# 发布验收清单
 
 > 用途：每次发版前按本清单逐项验收，全部通过才允许打 tag。
 > 回归命令见 [CONTRIBUTING.md](../CONTRIBUTING.md) 与 [docs/perf.md](./perf.md)。
@@ -12,6 +12,8 @@
 - [ ] `scripts/e2e-smoke.ps1` 在安装版上全绿（需 WebView2 远程调试端口）
 - [ ] 版本号三处一致：`package.json` / `src-tauri/Cargo.toml` / `src-tauri/tauri.conf.json`
 - [ ] `CHANGELOG.md` 的 `[Unreleased]` 已归档为本次版本
+- [ ] `node scripts/release-notes.mjs vX.Y.Z` 只从对应版本段生成 Notes；缺少该段必须失败，不能回退使用 `[Unreleased]`
+- [ ] README、中英文 README、待办和 Release Notes 明确区分“已发布安装包”与 `[Unreleased]`；不得把仅在 `master` 的能力写成当前 Release 已具备
 - [ ] `node scripts/check-version.mjs vX.Y.Z` 通过（Release workflow 也会校验，不一致直接失败）
 
 ## 1. 数据安全（最高优先级）
@@ -35,7 +37,7 @@
   - ✅ E2E 断言：打开面板 → 输入 → 命中高亮 → 替换全部 → 内容变更且标签变脏
 - ✅ 跨文件搜索（Ctrl+Shift+F）：正则、大小写开关、点击跳转、结果截断提示
 - ✅ Markdown 默认预览（T55，Ctrl+Shift+M）：打开 md 直接渲染；状态栏/预览头 `<>` 显示源码，源码可见时双向滚动同步；原始 HTML 不执行
-- ✅ 导出 HTML：自包含文件写到源目录，内容与预览一致、标题正确转义
+- ✅ 导出 HTML：自包含文件写到源目录，标题正确转义；共享一致性样例覆盖标题锚点、Shiki、KaTeX（MathML）、Mermaid 与本地图片；图表 / 公式无法渲染、或本地图片无法嵌入时明确显示降级说明，不能静默留下占位内容或坏链接
 - ✅ 大纲：标题条目与层级正确、跳过代码块、点击可跳转到预览对应位置
 - ✅ 分屏宽度：分隔条可拖拽（20%–85%）、双击恢复 50/50、方向键微调，重启后比例保留
 - ✅ 图片粘贴：图片写入 `assets/`、光标处插入引用、预览与导出路径正确
@@ -108,6 +110,13 @@
 - [ ] 「补全」默认关闭；开启后停笔约半秒出现建议，Tab 接受后一次撤销可去掉，Esc 取消，接受不保存文件
 - [ ] `.txt` 与未命名笔记视觉换行且不写入换行符；markdown / log / json 不换行
 - [ ] 标题栏右上角三个入口（补全 / 模型 / 模型服务）在文本标签上出现，开启时强调色描边
+
+## 7.1 AI 信任与发布真实度（v0.2.0 起）
+
+- [ ] 在真实 Ollama 环境各完成一轮改写与只读询问：记录目标主机、首 token 延迟，以及原生 tool calling 或 JSON 回退实际走到的路径
+- [ ] 未配置服务、取消、超预算、隐藏 / 密钥 / 禁读名单路径四种情形均有可理解反馈，且不会写入正文或磁盘
+- [ ] 安装版运行 `scripts/e2e-smoke.ps1` 与 `scripts/e2e-ai-smoke.ps1`；mock 通过不能替代真实 Ollama 点验
+- [ ] Release Notes、README、CHANGELOG、待办与实际安装包的能力边界逐项核对，`[Unreleased]` 归档后再打 tag
 
 ## 8. 发布动作（自动化，M-08）
 

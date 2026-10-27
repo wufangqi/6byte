@@ -5,7 +5,8 @@
 import { appendFileSync, readFileSync, writeFileSync } from "node:fs";
 
 const tag = process.argv[2] ?? "";
-const version = tag.replace(/^v/, "").split("-")[0];
+const releaseName = tag.replace(/^v/, "");
+const version = releaseName.split("-")[0];
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const changelog = readFileSync(new URL("../CHANGELOG.md", import.meta.url), "utf8");
@@ -23,15 +24,21 @@ const section = (heading) => {
   return text || null;
 };
 
-let body = section(new RegExp(`^## \\[v?${escape(version)}\\]`));
-let source = `CHANGELOG ${version}`;
-if (!body) {
-  body = section(/^## \[Unreleased\]/);
-  source = "CHANGELOG Unreleased";
+const changelogVersions = [...new Set([releaseName, version])];
+let body = null;
+let changelogVersion = null;
+for (const candidate of changelogVersions) {
+  body = section(new RegExp(`^## \\[v?${escape(candidate)}\\]`));
+  if (body) {
+    changelogVersion = candidate;
+    break;
+  }
 }
 if (!body) {
-  body = `Release ${tag}.`;
-  source = "fallback";
+  console.error(
+    `CHANGELOG.md has no non-empty [${changelogVersions.join("] or [")}] section for ${tag}; archive [Unreleased] before releasing.`
+  );
+  process.exit(1);
 }
 
 const notes = [
@@ -47,7 +54,7 @@ if (notesFile) {
   writeFileSync(notesFile, `${notes}\n`, "utf8");
 }
 
-console.log(`release notes from ${source}:\n${notes}`);
+console.log(`release notes from CHANGELOG ${changelogVersion}:\n${notes}`);
 if (process.env.GITHUB_OUTPUT) {
   appendFileSync(
     process.env.GITHUB_OUTPUT,

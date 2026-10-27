@@ -16,6 +16,11 @@ export interface RewritePreview {
   text: string;
   originalLabel: string;
   rewriteLabel: string;
+  /** Available only after the full proposal is ready. */
+  onAccept?(): void;
+  onDiscard?(): void;
+  acceptLabel?: string;
+  discardLabel?: string;
 }
 
 const setRewritePreview = StateEffect.define<RewritePreview | null>();
@@ -47,17 +52,28 @@ class LabelWidget extends WidgetType {
 class RewriteWidget extends WidgetType {
   constructor(
     readonly text: string,
-    readonly label: string
+    readonly label: string,
+    readonly onAccept?: () => void,
+    readonly onDiscard?: () => void,
+    readonly acceptLabel?: string,
+    readonly discardLabel?: string
   ) {
     super();
   }
 
   eq(other: RewriteWidget): boolean {
-    return other.text === this.text && other.label === this.label;
+    return (
+      other.text === this.text &&
+      other.label === this.label &&
+      other.onAccept === this.onAccept &&
+      other.onDiscard === this.onDiscard &&
+      other.acceptLabel === this.acceptLabel &&
+      other.discardLabel === this.discardLabel
+    );
   }
 
-  ignoreEvent(): boolean {
-    return true;
+  ignoreEvent(event: Event): boolean {
+    return !(event.target instanceof HTMLButtonElement);
   }
 
   toDOM(): HTMLElement {
@@ -70,6 +86,32 @@ class RewriteWidget extends WidgetType {
     body.className = "cm-ai-proposal__text";
     body.textContent = this.text;
     wrap.append(tag, body);
+    if (this.onAccept && this.onDiscard && this.acceptLabel && this.discardLabel) {
+      const actions = document.createElement("span");
+      actions.className = "cm-ai-proposal__actions";
+      const accept = document.createElement("button");
+      accept.type = "button";
+      accept.className = "cm-ai-proposal__action cm-ai-proposal__action--accept";
+      accept.textContent = this.acceptLabel;
+      accept.addEventListener("mousedown", (event) => event.preventDefault());
+      accept.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onAccept?.();
+      });
+      const discard = document.createElement("button");
+      discard.type = "button";
+      discard.className = "cm-ai-proposal__action";
+      discard.textContent = this.discardLabel;
+      discard.addEventListener("mousedown", (event) => event.preventDefault());
+      discard.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        this.onDiscard?.();
+      });
+      actions.append(accept, discard);
+      wrap.append(actions);
+    }
     return wrap;
   }
 }
@@ -87,7 +129,14 @@ function previewDecorations(preview: RewritePreview): DecorationSet {
   if (preview.text) {
     marks.push(
       Decoration.widget({
-        widget: new RewriteWidget(preview.text, preview.rewriteLabel),
+        widget: new RewriteWidget(
+          preview.text,
+          preview.rewriteLabel,
+          preview.onAccept,
+          preview.onDiscard,
+          preview.acceptLabel,
+          preview.discardLabel
+        ),
         side: 1,
       }).range(preview.to)
     );

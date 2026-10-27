@@ -17,6 +17,7 @@ import type {
   LineRange,
   OpenDocument,
   OpenedFile,
+  RenameResult,
   WriteResult,
 } from "./types";
 
@@ -104,6 +105,12 @@ export async function writeFile(
 export async function statFile(path: string): Promise<FileStat> {
   requireTauri("ipc.stat");
   return invoke<FileStat>("stat_file", { path });
+}
+
+/** Rename a file in its own folder; returns the new path and file name. */
+export async function renameFile(path: string, name: string): Promise<RenameResult> {
+  requireTauri("ipc.rename");
+  return invoke<RenameResult>("rename_file", { path, name });
 }
 
 /** Ask Rust to watch a file for external changes (emits `file-changed`). */

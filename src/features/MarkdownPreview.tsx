@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { getDocText, getScrollElement, subscribeDocChanges } from "../editor/registry";
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
+import { enhanceMermaidDiagram } from "./diagramViewport";
 import { renderKatexHtml, renderMermaidSvg } from "./diagrams";
 import { useI18n } from "../i18n";
 import { useResolvedTheme } from "./theme";
@@ -127,6 +128,7 @@ export default function MarkdownPreview({
     const root = scrollerRef.current;
     if (!root) return;
     let cancelled = false;
+    const cleanups: Array<() => void> = [];
 
     const mathNodes = Array.from(root.querySelectorAll<HTMLElement>(".math-inline, .math-block"));
     const mermaidNodes = Array.from(
@@ -154,13 +156,24 @@ export default function MarkdownPreview({
         diagram.className = "mermaid-diagram";
         diagram.innerHTML = svg;
         pre.replaceWith(diagram);
+        cleanups.push(
+          enhanceMermaidDiagram(diagram, {
+            viewport: t("preview.diagram.viewport"),
+            zoomOut: t("preview.diagram.zoomOut"),
+            zoomIn: t("preview.diagram.zoomIn"),
+            zoomReset: t("preview.diagram.zoomReset"),
+            zoomLevel: (percent) => t("preview.diagram.zoomLevel", { percent }),
+            zoomHint: t("preview.diagram.zoomHint"),
+          })
+        );
       }
     })();
 
     return () => {
       cancelled = true;
+      cleanups.forEach((cleanup) => cleanup());
     };
-  }, [html, resolvedTheme]);
+  }, [html, resolvedTheme, t]);
 
   // Bidirectional, fraction-based scroll sync; the editor remains the source of truth.
   useEffect(() => {
