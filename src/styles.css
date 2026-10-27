@@ -1543,7 +1543,15 @@ code {
 .titlebar__brand {
   display: flex;
   align-items: center;
-  padding: 0 8px 0 12px;
+  align-self: center;
+  margin: 0 4px 0 8px;
+  padding: 3px;
+  border-radius: var(--radius-md);
+  transition: background 120ms ease;
+}
+
+.titlebar__brand:hover {
+  background: var(--bg-elevated);
 }
 
 .titlebar__logo {
@@ -1587,44 +1595,186 @@ code {
 .titlebar__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   padding-right: 8px;
 }
 
-.titlebar__chip {
-  height: 24px;
-  padding: 0 10px;
+.titlebar__icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 26px;
   border-radius: var(--radius-md);
   color: var(--fg-dim);
-  font-size: var(--text-sm);
   transition:
     background 120ms ease,
-    color 120ms ease,
-    box-shadow 120ms ease;
+    color 120ms ease;
 }
 
-.titlebar__chip:hover {
+.titlebar__icon:hover {
   background: var(--bg-elevated);
   color: var(--fg);
 }
 
-.titlebar__chip--outline {
-  box-shadow: inset 0 0 0 1px var(--border);
+.titlebar__icon--on {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.titlebar__chip--outline:hover {
+.titlebar__icon--on:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent-dim);
 }
 
-.titlebar__chip--on {
-  background: var(--accent-soft);
-  color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+/* Tooltips open leftward: the buttons sit against the window controls. */
+.titlebar__icon[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 50;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--fg);
+  color: var(--bg-editor);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
-.titlebar__chip--on:hover {
-  background: var(--accent);
-  color: #fff;
+.titlebar__icon[data-tip]:hover::after,
+.titlebar__icon[data-tip]:focus-visible::after {
+  opacity: 1;
+  transform: none;
+  transition-delay: 300ms;
+}
+
+.titlebar__sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--border);
+}
+
+/* ---------- about / shortcuts ---------- */
+
+.about {
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 24px;
+}
+
+.about__logo {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 10px;
+}
+
+.about__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.about__version {
+  margin: 4px 0 0;
+  color: var(--fg-dim);
+  font-size: var(--text-md);
+  user-select: text;
+}
+
+.about__meta {
+  align-self: stretch;
+  display: grid;
+  gap: 4px;
+  margin: 16px 0 18px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: var(--code-bg);
+  font-size: var(--text-sm);
+  user-select: text;
+}
+
+.about__meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.about__meta dt {
+  color: var(--fg-dim);
+}
+
+.about__meta dd {
+  margin: 0;
+  font-family: var(--font-mono);
+}
+
+.about .dialog__actions {
+  align-self: stretch;
+}
+
+.shortcuts {
+  width: min(460px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.shortcuts__group + .shortcuts__group {
+  margin-top: 14px;
+}
+
+.shortcuts__title {
+  margin: 0 0 6px;
+  color: var(--fg-dim);
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.shortcuts__list {
+  display: grid;
+  margin: 0;
+}
+
+.shortcuts__list div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-md);
+}
+
+.shortcuts__list div:last-child {
+  border-bottom: 0;
+}
+
+.shortcuts__list dd {
+  display: flex;
+  gap: 4px;
+  margin: 0;
+}
+
+.shortcuts__list kbd {
+  min-width: 22px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-editor);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-align: center;
 }
 
 .titlebar__controls {

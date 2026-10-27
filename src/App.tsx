@@ -14,6 +14,7 @@ import {
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
 import AiSettingsDialog from "./features/AiSettingsDialog";
+import { AboutDialog, ShortcutsDialog } from "./features/HelpDialogs";
 import AiSelectionAction from "./features/AiSelectionAction";
 import AiStreamPanel from "./features/AiStreamPanel";
 import {
@@ -44,6 +45,7 @@ import {
   onCloseRequested,
   onFileDrop,
   openDocument,
+  openFeedback,
   openNewWindow,
   pickDirectory,
   pickOpenPaths,
@@ -98,6 +100,7 @@ export default function App() {
   const [grepOpen, setGrepOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
+  const [helpDialog, setHelpDialog] = useState<"about" | "shortcuts" | null>(null);
   const [streamOpen, setStreamOpen] = useState(false);
   const [aiFloatingMarkerEnabled, setAiFloatingMarkerEnabled] = useState(() => {
     try {
@@ -978,6 +981,11 @@ export default function App() {
           if (tab) void requestRenameTab(tab.id);
         }}
         onOpenModelSettings={() => setModelSettingsOpen(true)}
+        onAbout={() => setHelpDialog("about")}
+        onShortcuts={() => setHelpDialog("shortcuts")}
+        onFeedback={() => {
+          openFeedback().catch((e) => useWorkspace.getState().setError(localizeError(e)));
+        }}
         canAsk={active?.mode === "text"}
         aiMarkerEnabled={aiFloatingMarkerEnabled}
         onToggleAiMarker={() => setAiFloatingMarkerEnabled((enabled) => !enabled)}
@@ -1191,6 +1199,8 @@ export default function App() {
       )}
 
       {modelSettingsOpen && <AiSettingsDialog onClose={() => setModelSettingsOpen(false)} />}
+      {helpDialog === "about" && <AboutDialog onClose={() => setHelpDialog(null)} />}
+      {helpDialog === "shortcuts" && <ShortcutsDialog onClose={() => setHelpDialog(null)} />}
       <RenameDialog />
       <DialogHost />
     </div>

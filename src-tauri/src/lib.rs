@@ -1,3 +1,4 @@
+mod about;
 mod ai;
 mod bigfile;
 mod codec;
@@ -47,6 +48,8 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_has_key,
             ai::ai_probe,
+            about::app_platform,
+            about::open_feedback,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

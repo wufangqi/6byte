@@ -1,6 +1,6 @@
 [package]
 name = "aneditor"
-version = "0.1.8"
+version = "0.2.0"
 description = "AI-native lightweight text editor"
 authors = ["aneditor contributors"]
 edition = "2021"

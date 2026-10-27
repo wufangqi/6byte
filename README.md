@@ -8,7 +8,7 @@
 
 [中文](./README.zh.md) · **English**
 
-**Status**: v0.1.8 (2026-10-26) is out with M0–M3, the workspace file tree and Markdown-first preview. Installers are now built for Windows, Linux and macOS.
+**Status**: v0.2.0 (2026-10-27) is out: M0–M3, AI review-first rewriting, workspace file tree, Markdown-first preview and export parity. Installers cover Windows, Linux and macOS.
 
 > The app UI is bilingual (switch under **View → Language**). The detailed docs under `docs/` are written in Chinese.
 
@@ -23,31 +23,27 @@
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
 - **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
-- **AI (v0.1.8)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. On `master` (Unreleased): candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize and autocomplete (off by default) are also available.
-- **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually.
+- **AI (v0.2.0)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. Candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize, follow-up prompts, workspace command palette (`Ctrl+P`), `@` references, read-only ask mode and autocomplete (off by default) are also available.
+- **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually. The Help menu has About (version / platform / Tauri) and the keyboard shortcut reference.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
-
-## On `master` — not in the v0.1.8 installers
-
-T56–T68 are merged on `master` but remain **Unreleased**: review-first rewrite candidates and block-level diffs, contextual rewrite, workspace command palette / `@` references / read-only ask, local aggregate AI metrics, the selection **AI Rewrite** entry, follow-up prompts, answer actions, and native tool calling with a constrained JSON fallback. The current Unreleased work also makes HTML exports render Shiki code, Mermaid diagrams and MathML formulas instead of silently leaving placeholders. Automated checks and local mock E2E passed; a real Ollama run remains a release gate. See [CHANGELOG](./CHANGELOG.md) and [the backlog](./docs/待办清单.md) for the exact boundary.
 
 ## Install
 
 Download from [Releases](https://github.com/wufangqi/6byte/releases/latest):
 
-- `6byte_0.1.8_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
-- `6byte_0.1.8_x64_en-US.msi` — MSI, for enterprise / silent install
+- `6byte_0.2.0_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
+- `6byte_0.2.0_x64_en-US.msi` — MSI, for enterprise / silent install
 
 **Linux**
 
-- `6byte_0.1.8_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.1.8_amd64.deb`
-- `6byte_0.1.8_amd64.AppImage` — portable: `chmod +x 6byte_0.1.8_amd64.AppImage && ./6byte_0.1.8_amd64.AppImage`
+- `6byte_0.2.0_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.2.0_amd64.deb`
+- `6byte_0.2.0_amd64.AppImage` — portable: `chmod +x 6byte_0.2.0_amd64.AppImage && ./6byte_0.2.0_amd64.AppImage`
 
 Needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Ubuntu 22.04+ / Debian 12+).
 
 **macOS**
 
-- `6byte_0.1.8_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
+- `6byte_0.2.0_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 
@@ -78,7 +74,7 @@ Frontend unit tests **241**, Rust **107** (+4 ignored). The latest installed-bui
 
 ## Roadmap
 
-Next: complete the real Ollama release gate and align v0.2.0 release notes with the installed build, then finish Markdown preview / export parity. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: long-Markdown preview benchmarks (T71), a shared DocumentModel (T72), and the remaining AI review/lifecycle polish (T73–T76). v0.2.0 ships the AI trust loop, workspace context, Markdown-first preview/export parity, file rename, diagram zoom and multi-platform installers. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 

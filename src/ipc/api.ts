@@ -281,6 +281,30 @@ export async function revealInOs(path: string): Promise<void> {
   return invoke<void>("reveal_in_os", { path });
 }
 
+export interface AppInfo {
+  version: string;
+  tauriVersion: string;
+  platform: string;
+}
+
+/** Version details for the About dialog. Outside Tauri every field is empty. */
+export async function appInfo(): Promise<AppInfo> {
+  if (!isTauri) return { version: "", tauriVersion: "", platform: "" };
+  const { getTauriVersion, getVersion } = await import("@tauri-apps/api/app");
+  const [version, tauriVersion, platform] = await Promise.all([
+    getVersion(),
+    getTauriVersion(),
+    invoke<string>("app_platform"),
+  ]);
+  return { version, tauriVersion, platform };
+}
+
+/** Open the project's issue chooser in the system browser. */
+export async function openFeedback(): Promise<void> {
+  requireTauri("ipc.feedback");
+  return invoke<void>("open_feedback");
+}
+
 /** Open a fresh editor window. It does not reopen the files in this window. */
 export async function openNewWindow(): Promise<void> {
   requireTauri("ipc.newWindow");
