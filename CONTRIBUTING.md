@@ -102,11 +102,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 
 1. 更新 `CHANGELOG.md`（把 `[Unreleased]` 归档为本次版本）与三个版本号
    （`package.json`、`src-tauri/Cargo.toml`、`src-tauri/tauri.conf.json`），本地验证：
-   `node scripts/check-version.mjs vX.Y.Z`。
+   `node scripts/check-version.mjs vX.Y.Z` 与 `node scripts/release-notes.mjs vX.Y.Z`。
+   后者只接受对应版本的非空 CHANGELOG 段，不能用 `[Unreleased]` 代替。
 2. （可选）本地 `pnpm tauri build` + 安装验证；CI 也会在 tag 上重新构建。
 3. 打 tag 并推送：`git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`。
-   这会触发 `Release` workflow，在 Windows 上构建 MSI/NSIS 并创建 **draft** Release
-   （版本号不匹配会直接失败；含 `-` 的 tag 标记为 prerelease）。
+   这会触发 `Release` workflow，创建 **draft** Release，并并行构建 Windows（NSIS/MSI）、
+   Linux（deb/AppImage）和 macOS（universal DMG）资产（版本号或 CHANGELOG 版本段不匹配会直接失败；
+   含 `-` 的 tag 标记为 prerelease）。
 4. 核对 draft 资产与 Release Notes，然后发布：
    `gh release edit vX.Y.Z --draft=false`，
    或在 Actions 里手动运行 `Release` 并勾选 `publish: true`。

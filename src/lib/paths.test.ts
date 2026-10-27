@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileName, samePath } from "./paths";
+import { fileName, joinPath, parentDir, samePath } from "./paths";
 
 describe("samePath", () => {
   it("matches identical paths", () => {
@@ -30,5 +30,24 @@ describe("fileName", () => {
   it("keeps bare names and falls back to the input", () => {
     expect(fileName("README.md")).toBe("README.md");
     expect(fileName("D:\\docs\\")).toBe("docs");
+  });
+});
+
+describe("parentDir", () => {
+  it("returns the folder for both separator styles", () => {
+    expect(parentDir("D:\\docs\\a.md")).toBe("D:\\docs");
+    expect(parentDir("/home/user/a.md")).toBe("/home/user");
+  });
+
+  it("returns null when there is no parent", () => {
+    expect(parentDir("a.md")).toBeNull();
+    expect(parentDir("/a.md")).toBeNull();
+  });
+});
+
+describe("joinPath", () => {
+  it("keeps the folder separator style and avoids doubling it", () => {
+    expect(joinPath("D:\\docs\\", "a.md")).toBe("D:\\docs\\a.md");
+    expect(joinPath("/home/user", "a.md")).toBe("/home/user/a.md");
   });
 });

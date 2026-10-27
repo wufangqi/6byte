@@ -46,8 +46,11 @@ export function texSource(visible: string, display: boolean): string {
   return text;
 }
 
-/** KaTeX HTML, or null when the formula cannot be parsed. */
-export async function renderKatexHtml(visible: string, display: boolean): Promise<string | null> {
+async function renderKatex(
+  visible: string,
+  display: boolean,
+  output: "htmlAndMathml" | "mathml" = "htmlAndMathml"
+): Promise<string | null> {
   const tex = texSource(visible, display);
   if (!tex) return null;
   const katex = await loadKatex();
@@ -57,10 +60,25 @@ export async function renderKatexHtml(visible: string, display: boolean): Promis
       displayMode: display,
       throwOnError: true,
       trust: false,
+      output,
     });
   } catch {
     return null;
   }
+}
+
+/** KaTeX HTML for the live preview, or null when the formula cannot be parsed. */
+export function renderKatexHtml(visible: string, display: boolean): Promise<string | null> {
+  return renderKatex(visible, display);
+}
+
+/**
+ * Portable MathML for a self-contained export. This deliberately avoids KaTeX's
+ * external font assets, which would otherwise make a saved HTML file depend on
+ * the application's bundle.
+ */
+export function renderKatexMathml(visible: string, display: boolean): Promise<string | null> {
+  return renderKatex(visible, display, "mathml");
 }
 
 /** Mermaid SVG, or null when the diagram cannot be parsed. */

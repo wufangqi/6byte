@@ -53,6 +53,10 @@ interface WorkspaceState {
     id: string,
     patch: { path: string; content: string; meta: FileMeta; size: number; mtimeMs: number }
   ): void;
+  /** Point an open tab at a renamed file. The buffer and its dirty flag stay as they are. */
+  renameTab(id: string, patch: { path: string; name: string; mtimeMs: number }): void;
+  /** Update a tab's name only (unsaved buffer renamed in place). */
+  setName(id: string, name: string): void;
   reloadTab(id: string, file: OpenedFile): void;
   /** Refresh a read-only large-file tab after the file changed on disk. */
   reloadLargeTab(id: string, info: LargeFileInfo): void;
@@ -139,7 +143,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
         ...state.tabs,
         {
           id,
-          name: t("tab.untitled", { n: state.tabs.length + 1 }),
+          name: `${t("tab.untitled", { n: state.tabs.length + 1 })}.md`,
           path: null,
           mode: "text",
           content: "",
@@ -150,7 +154,7 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
           lines: 1,
           chars: 0,
           version: 0,
-          preview: false,
+          preview: true,
           source: true,
         },
       ],
@@ -226,6 +230,35 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
           : t
       ),
       recent: dedupe([patch.path, ...state.recent]),
+    })),
+
+  renameTab: (id, patch) =>
+    set((state) => {
+      const previous = state.tabs.find((tab) => tab.id === id)?.path ?? null;
+      return {
+        tabs: state.tabs.map((t) =>
+          t.id === id
+            ? {
+                ...t,
+                path: patch.path,
+                name: patch.name,
+                mtimeMs: patch.mtimeMs,
+                preview: isMarkdownFile(patch.name) ? t.preview : false,
+              }
+            : t
+        ),
+        recent: dedupe([
+          patch.path,
+          ...state.recent.filter((item) => !(previous !== null && samePath(item, previous))),
+        ]),
+      };
+    }),
+
+  setName: (id, name) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) =>
+        t.id === id ? { ...t, name, preview: isMarkdownFile(name) ? t.preview : false } : t
+      ),
     })),
 
   reloadTab: (id, file) =>

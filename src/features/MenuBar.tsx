@@ -28,10 +28,11 @@ interface Props {
   onSave(): void;
   onSaveAs(): void;
   onSaveAll(): void;
+  onRename(): void;
   onOpenModelSettings(): void;
   canAsk?: boolean;
-  asking?: boolean;
-  onAsk?: () => void;
+  aiMarkerEnabled?: boolean;
+  onToggleAiMarker?: () => void;
 }
 
 /** Window caption: File and View on the left. Model controls sit at the top-right. */
@@ -49,10 +50,11 @@ export default function MenuBar({
   onSave,
   onSaveAs,
   onSaveAll,
+  onRename,
   onOpenModelSettings,
   canAsk = false,
-  asking = false,
-  onAsk,
+  aiMarkerEnabled = true,
+  onToggleAiMarker,
 }: Props) {
   const preference = useThemePreference();
   const active = useWorkspace(selectActiveTab);
@@ -243,6 +245,13 @@ export default function MenuBar({
                 onClick={onSaveAll}
                 close={() => setMenu(null)}
               />
+              <FileItem
+                label={t("tab.rename")}
+                shortcut="F2"
+                disabled={!active}
+                onClick={onRename}
+                close={() => setMenu(null)}
+              />
             </div>
           )}
         </div>
@@ -334,18 +343,18 @@ export default function MenuBar({
             {t("status.complete")}
           </button>
         )}
-        {canAsk && onAsk && (
+        {canAsk && onToggleAiMarker && (
           <button
             type="button"
-            className={`titlebar__chip ${asking ? "titlebar__chip--on" : ""}`}
-            title={t("status.model.title")}
-            aria-pressed={asking}
+            className={`titlebar__chip ${aiMarkerEnabled ? "titlebar__chip--on" : ""}`}
+            title={t("status.aiMarker.title")}
+            aria-pressed={aiMarkerEnabled}
             onClick={() => {
               setMenu(null);
-              onAsk();
+              onToggleAiMarker();
             }}
           >
-            {t("status.model")}
+            {t("status.aiMarker")}
           </button>
         )}
         <button

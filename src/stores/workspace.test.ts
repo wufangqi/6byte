@@ -25,6 +25,18 @@ describe("countLines", () => {
   });
 });
 
+describe("newTab", () => {
+  it("starts a Markdown document that is ready to edit and preview", () => {
+    useWorkspace.getState().newTab();
+
+    const tab = selectActiveTab(useWorkspace.getState());
+    expect(tab?.name).toMatch(/\.md$/);
+    expect(tab?.path).toBeNull();
+    expect(tab?.preview).toBe(true);
+    expect(tab?.source).toBe(true);
+  });
+});
+
 describe("addTab", () => {
   it("activates the new tab and records the recent file", () => {
     const tab = tabFromFile(makeFile("D:/tmp/a.md", "hello"));
@@ -94,6 +106,55 @@ describe("markSaved", () => {
     expect(saved?.path).toBe("D:/tmp/renamed.md");
     expect(saved?.dirty).toBe(false);
     expect(saved?.content).toBe("hello world");
+  });
+});
+
+describe("renameTab", () => {
+  it("moves the tab to the new path and keeps the buffer dirty", () => {
+    const tab = tabFromFile(makeFile("D:/tmp/a.md", "hello"));
+    useWorkspace.getState().addTab(tab);
+    useWorkspace.getState().markEdited(tab.id, { lines: 1, chars: 5 });
+
+    useWorkspace.getState().renameTab(tab.id, {
+      path: "D:/tmp/draft.md",
+      name: "draft.md",
+      mtimeMs: 1_700_000_000_500,
+    });
+
+    const renamed = selectActiveTab(useWorkspace.getState());
+    expect(renamed?.path).toBe("D:/tmp/draft.md");
+    expect(renamed?.name).toBe("draft.md");
+    expect(renamed?.dirty).toBe(true);
+    expect(renamed?.content).toBe("hello");
+    expect(useWorkspace.getState().recent[0]).toBe("D:/tmp/draft.md");
+    expect(useWorkspace.getState().recent).not.toContain("D:/tmp/a.md");
+  });
+
+  it("turns off the preview when a Markdown file is renamed to plain text", () => {
+    const tab = tabFromFile(makeFile("D:/tmp/a.md", "# Title"));
+    useWorkspace.getState().addTab(tab);
+
+    useWorkspace.getState().renameTab(tab.id, {
+      path: "D:/tmp/a.txt",
+      name: "a.txt",
+      mtimeMs: 1,
+    });
+
+    expect(selectActiveTab(useWorkspace.getState())?.preview).toBe(false);
+  });
+});
+
+describe("setName", () => {
+  it("renames an unsaved buffer without touching its path", () => {
+    useWorkspace.getState().newTab();
+    const tab = selectActiveTab(useWorkspace.getState());
+    expect(tab).not.toBeNull();
+
+    useWorkspace.getState().setName(tab!.id, "笔记.md");
+
+    const renamed = selectActiveTab(useWorkspace.getState());
+    expect(renamed?.name).toBe("笔记.md");
+    expect(renamed?.path).toBeNull();
   });
 });
 

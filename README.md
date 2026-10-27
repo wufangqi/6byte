@@ -17,15 +17,19 @@
 
 ## What it does
 
-- **Writing**: tabs, session restore, recent files, per-tab undo history, drag & drop, middle-click close.
-- **Markdown**: opens rendered by default; `<>` (or `Ctrl+Shift+M`) reveals the source. Split preview, HTML export, outline, Mermaid / KaTeX, Shiki highlighting, image paste, draggable divider.
+- **Writing**: tabs, session restore, recent files, per-tab undo history, drag & drop, middle-click close, rename from a tab's context menu or `F2`.
+- **Markdown**: opens rendered by default; `<>` (or `Ctrl+Shift+M`) reveals the source. Split preview, HTML export, outline, Mermaid / KaTeX, Shiki highlighting, image paste, draggable divider; Mermaid diagrams zoom (25–300%), pan and reset in the preview.
 - **Large files**: ≤5 MB full editing; 5–20 MB reduced decorations; 20–100 MB read-only virtual scrolling; >100 MB read-only memmap (512 MB cap).
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
 - **File tree**: open one folder and browse one level at a time; click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
-- **AI**: model services (providers → models, API keys in the OS keychain); selecting text reveals an **AI Rewrite** entry (as do `Ctrl+K` and the title-bar **Model** chip). A rewrite stays beside the selection until **Tab** accepts; saving or discarding drops it. Long rewrites can be reviewed and applied block by block from a line-level diff, and a candidate can be followed up on (for example, “make it shorter”) without reselecting, with the last four local turns available for review. The settings page shows device-local aggregate token, failure, first-token latency and acceptance metrics—never content, paths, endpoints or keys. One-click Polish / Translate / Summarize; `Ctrl+P` opens a command palette for workspace files, recent files and headings; `@` references and a read-only ask mode look things up in the workspace without writing (hidden files, key files and a user denylist are never sent; workspace `file:line` references in answers are navigable, and an answer can be inserted at the caret or turned into a rewrite instruction; **Esc** or Cancel stops the run, and one question has a ~12k-character send budget shown in the panel). Compatible providers use native function calling first and fall back to the constrained JSON-text protocol; autocomplete (off by default).
+- **AI (v0.1.8)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. On `master` (Unreleased): candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize and autocomplete (off by default) are also available.
 - **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
+
+## On `master` — not in the v0.1.8 installers
+
+T56–T68 are merged on `master` but remain **Unreleased**: review-first rewrite candidates and block-level diffs, contextual rewrite, workspace command palette / `@` references / read-only ask, local aggregate AI metrics, the selection **AI Rewrite** entry, follow-up prompts, answer actions, and native tool calling with a constrained JSON fallback. The current Unreleased work also makes HTML exports render Shiki code, Mermaid diagrams and MathML formulas instead of silently leaving placeholders. Automated checks and local mock E2E passed; a real Ollama run remains a release gate. See [CHANGELOG](./CHANGELOG.md) and [the backlog](./docs/待办清单.md) for the exact boundary.
 
 ## Install
 
@@ -60,7 +64,7 @@ Full commands, directory rules, commit conventions and the release process live 
 
 ## Verified
 
-Frontend unit tests **236**, Rust **107** (+4 ignored). The latest installed-build E2E is **107/107 across 24 steps** (2026-10-27, includes the file-tree steps). A freshly rebuilt release binary passed **6/6** isolated local-SSE-mock AI E2E checks for rewrite review, native read-only tool calling, and answer navigation/insertion. CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
+Frontend unit tests **241**, Rust **107** (+4 ignored). The latest installed-build E2E is **107/107 across 24 steps** (2026-10-27, includes the file-tree steps). A freshly rebuilt release binary passed **6/6** isolated local-SSE-mock AI E2E checks for rewrite review, native read-only tool calling, and answer navigation/insertion. CI covers Windows / macOS / Ubuntu. Performance numbers are in [docs/perf.md](./docs/perf.md).
 
 ## Known limitations
 
@@ -69,12 +73,12 @@ Frontend unit tests **236**, Rust **107** (+4 ignored). The latest installed-bui
 - Files with mixed line endings are normalized to the dominant EOL on save (confirmed first).
 - AI needs your own OpenAI-compatible endpoint and API key; the key goes to the OS keychain, never a config file.
 - No auto-update, no portable build, no Explorer context menu (M4).
-- The file tree is read-only: no create, rename or delete, no Git status, no watch of the whole tree (open files are still watched), and symlinks are skipped. A single folder lists at most 2000 entries.
+- The file tree is read-only: no create or delete, no Git status, no watch of the whole tree (open files are still watched), and symlinks are skipped. A single folder lists at most 2000 entries. Rename a file from its tab context menu or with `F2`.
 - The custom title bar has only been verified on Windows. Linux and macOS installers are built by CI; they have not been smoke-tested on real machines yet.
 
 ## Roadmap
 
-Next: review and submit T60–T68, then run the real Ollama ask path on a machine with Ollama installed and execute the new AI E2E script. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: complete the real Ollama release gate and align v0.2.0 release notes with the installed build, then finish Markdown preview / export parity. The workspace file tree, Markdown-first preview and multi-platform installers ship in v0.1.8. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 

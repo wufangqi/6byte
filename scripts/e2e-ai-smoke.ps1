@@ -1,4 +1,4 @@
-#requires -version 5.1
+﻿#requires -version 5.1
 <#
 .SYNOPSIS
   AI smoke test for an installed debug-enabled 6byte build.
@@ -231,10 +231,11 @@ location.reload();
 })()
 '@
   $rewriteSend = (Invoke-CdpEval $socket ($clickRewrite -replace "`r`n", ' ')) | ConvertFrom-Json
-  $reviewVisible = Wait-For $socket "document.querySelector('.rewrite-review') !== null" 8
+  $proposalVisible = Wait-For $socket "document.querySelector('.cm-ai-proposal') !== null" 8
   $rewriteState = @'
 JSON.stringify({
-  review: document.querySelector('.rewrite-review') !== null,
+  proposal: document.querySelector('.cm-ai-proposal') !== null,
+  proposalText: document.querySelector('.cm-ai-proposal__text')?.textContent ?? '',
   original: document.querySelector('.cm-content')?.innerText ?? '',
   status: document.querySelector('.ai-stream__status')?.textContent ?? '',
   controls: [...document.querySelectorAll('.ai-stream__actions button')].map((button) => ({
@@ -249,15 +250,24 @@ JSON.stringify({
     $rewriteInput.ok -and
     $null -ne $rewriteSend -and
     -not $rewriteSend.disabled -and
-    $reviewVisible -and
-    $rewrite.review -and
+    $proposalVisible -and
+    $rewrite.proposal -and
+    $rewrite.proposalText.Contains('rewritten text') -and
     $rewrite.original.Contains('original text')
   Assert-True $rewriteReady 'rewrite is reviewed before document mutation' "$($rewrite | ConvertTo-Json -Compress)"
 
   if ($rewriteReady) {
-    Invoke-CdpEval $socket "document.querySelector('.rewrite-review__actions .btn--primary')?.click(); 'ok'" | Out-Null
-    Start-Sleep -Milliseconds 100
-    Invoke-CdpEval $socket "[...document.querySelectorAll('.ai-stream__actions button')][1]?.click(); 'ok'" | Out-Null
+    Invoke-CdpEval $socket @'
+(() => {
+  const inline = document.querySelector('.cm-ai-proposal__actions button');
+  if (inline) { inline.click(); return 'inline accept'; }
+  const all = [...document.querySelectorAll('.ai-stream__actions button')].find((button) =>
+    /Accept all|全部接受/i.test(button.textContent ?? '')
+  );
+  if (all) { all.click(); return 'accept all'; }
+  return 'no accept control';
+})()
+'@ | Out-Null
     Start-Sleep -Milliseconds 500
     $rewritten = Invoke-CdpEval $socket "document.querySelector('.cm-content')?.innerText ?? ''"
     Assert-True ($null -ne $rewritten -and $rewritten.Contains('rewritten text')) 'selected rewrite block applies once' "$rewritten"

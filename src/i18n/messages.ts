@@ -169,6 +169,9 @@ export const zh: MessageCatalog = {
   "ai.entry.rewriteTitle": "用 AI 改写选中的文字（Ctrl+K）",
   "ai.stream.title": "模型回复",
   "ai.stream.close": "关闭",
+  "ai.stream.collapse": "收起 AI 面板",
+  "ai.stream.expand": "展开 AI 面板",
+  "ai.stream.resize": "调整 AI 面板宽度",
   "ai.stream.hint":
     "选中文字后按 Ctrl+K（或点右上角「模型」）唤起。改写显示在选区旁边，文档在接受前不会改变。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
   "ai.stream.instruction": "想怎么改",
@@ -196,6 +199,10 @@ export const zh: MessageCatalog = {
   "ai.stream.send": "发送",
   "ai.stream.cancel": "取消",
   "ai.stream.accept": "接受",
+  "ai.stream.acceptAll": "全部接受",
+  "ai.stream.modelEmpty": "未配置模型",
+  "ai.stream.removeSelection": "移除选区上下文",
+  "ai.stream.toolCalls": "工具调用（{count}）",
   "ai.stream.followup": "继续改写",
   "ai.stream.discard": "放弃",
   "ai.stream.waiting": "正在等待第一个字…",
@@ -238,6 +245,17 @@ export const zh: MessageCatalog = {
   "tab.unsaved": "未保存",
   "tab.close": "关闭",
   "tab.new": "新建 (Ctrl+N)",
+  "tab.rename": "重命名",
+  "tab.renameLabel": "文件名",
+  "tab.rename.confirm": "重命名",
+  "tab.rename.done": "已重命名为「{name}」。",
+
+  // Rename dialog validation
+  "name.error.empty": "文件名不能为空。",
+  "name.error.dot": "文件名不能是 . 或 ..。",
+  "name.error.separator": '文件名不能包含 \\ / : * ? " < > | 这些字符。',
+  "name.error.control": "文件名包含无效字符。",
+  "name.error.tooLong": "文件名过长（最多 255 字节）。",
 
   // Welcome screen
   "welcome.sub": "打开 md / txt / log，随时让 AI 帮你改写。数据留在本机，默认不上传。",
@@ -284,6 +302,10 @@ export const zh: MessageCatalog = {
   "status.model": "模型",
   "status.model.title":
     "Ctrl+K 或点这里：用选区向模型提问。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
+  "status.aiPanel": "AI",
+  "status.aiPanel.title": "打开或关闭 AI 面板",
+  "status.aiMarker": "悬浮标",
+  "status.aiMarker.title": "开启或关闭选中文字后的 AI 改写悬浮入口",
   "status.complete": "补全",
   "status.complete.title": "开启或关闭自动补全。未选补全模型时会打开模型服务。",
   "status.lines": "{count} 行",
@@ -332,6 +354,12 @@ export const zh: MessageCatalog = {
   "preview.export": "导出 HTML",
   "preview.empty": "没有可预览的内容。",
   "preview.externalLink": "预览暂不支持在应用内打开外部链接（M2 后续接入系统浏览器）。",
+  "preview.diagram.viewport": "图表查看器",
+  "preview.diagram.zoomOut": "缩小图表",
+  "preview.diagram.zoomIn": "放大图表",
+  "preview.diagram.zoomReset": "重置图表缩放",
+  "preview.diagram.zoomLevel": "缩放 {percent}%",
+  "preview.diagram.zoomHint": "可按住 Ctrl 并滚动缩放；放大后可拖动查看图表。",
 
   // CodeMirror search panel
   "editor.search.find": "查找",
@@ -355,10 +383,15 @@ export const zh: MessageCatalog = {
   // Export / IPC
   "export.untitled": "未命名文档",
   "export.htmlLang": "zh-CN",
+  "export.mathFallback": "公式无法渲染，保留原始 TeX：",
+  "export.mermaidFallback": "图表无法渲染，以下保留 Mermaid 源码：",
+  "export.imageFallback": "本地图片无法嵌入，导出文件未包含：{path}",
+  "export.imageUnknown": "未命名本地图片",
   "ipc.requireTauri": "{action}需要 Tauri 运行时（请使用 pnpm tauri dev 或安装版）",
   "ipc.read": "文件读取",
   "ipc.save": "文件保存",
   "ipc.stat": "文件状态读取",
+  "ipc.rename": "文件重命名",
   "ipc.watch": "文件监听",
   "ipc.grep": "跨文件搜索",
   "ipc.ai": "模型请求",
@@ -539,6 +572,9 @@ export const en: MessageCatalog = {
   "ai.entry.rewriteTitle": "Rewrite selected text with AI (Ctrl+K)",
   "ai.stream.title": "Model reply",
   "ai.stream.close": "Close",
+  "ai.stream.collapse": "Collapse AI panel",
+  "ai.stream.expand": "Expand AI panel",
+  "ai.stream.resize": "Resize AI panel",
   "ai.stream.hint":
     "Press Ctrl+K (or the top-right Model chip) after selecting text. The rewrite sits beside the selection, and the document stays unchanged until you accept. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
   "ai.stream.instruction": "How to change it",
@@ -567,6 +603,10 @@ export const en: MessageCatalog = {
   "ai.stream.send": "Send",
   "ai.stream.cancel": "Cancel",
   "ai.stream.accept": "Accept",
+  "ai.stream.acceptAll": "Accept all",
+  "ai.stream.modelEmpty": "No model configured",
+  "ai.stream.removeSelection": "Remove selected-text context",
+  "ai.stream.toolCalls": "Tool calls ({count})",
   "ai.stream.followup": "Continue rewriting",
   "ai.stream.discard": "Discard",
   "ai.stream.waiting": "Waiting for the first word…",
@@ -612,6 +652,15 @@ export const en: MessageCatalog = {
   "tab.unsaved": "Unsaved",
   "tab.close": "Close",
   "tab.new": "New (Ctrl+N)",
+  "tab.rename": "Rename",
+  "tab.renameLabel": "File name",
+  "tab.rename.confirm": "Rename",
+  "tab.rename.done": "Renamed to “{name}”.",
+  "name.error.empty": "The file name cannot be empty.",
+  "name.error.dot": "The file name cannot be . or ..",
+  "name.error.separator": 'A file name cannot contain \\ / : * ? " < > |',
+  "name.error.control": "The file name contains invalid characters.",
+  "name.error.tooLong": "The file name is too long (255 bytes maximum).",
 
   // Welcome screen
   "welcome.sub":
@@ -659,6 +708,10 @@ export const en: MessageCatalog = {
   "status.model": "Model",
   "status.model.title":
     "Ctrl+K or click here to rewrite the selection. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
+  "status.aiPanel": "AI",
+  "status.aiPanel.title": "Open or close the AI panel",
+  "status.aiMarker": "AI marker",
+  "status.aiMarker.title": "Turn the selected-text AI rewrite marker on or off",
   "status.complete": "Complete",
   "status.complete.title":
     "Turn autocomplete on or off. Opens model settings when no completion model is chosen.",
@@ -713,6 +766,12 @@ export const en: MessageCatalog = {
   "preview.export": "Export HTML",
   "preview.empty": "Nothing to preview.",
   "preview.externalLink": "Opening external links inside the app is not supported yet.",
+  "preview.diagram.viewport": "Diagram viewer",
+  "preview.diagram.zoomOut": "Zoom out",
+  "preview.diagram.zoomIn": "Zoom in",
+  "preview.diagram.zoomReset": "Reset diagram zoom",
+  "preview.diagram.zoomLevel": "Zoom {percent}%",
+  "preview.diagram.zoomHint": "Hold Ctrl while scrolling to zoom; drag a zoomed diagram to pan.",
 
   // CodeMirror search panel
   "editor.search.find": "Find",
@@ -736,11 +795,16 @@ export const en: MessageCatalog = {
   // Export / IPC
   "export.untitled": "Untitled document",
   "export.htmlLang": "en",
+  "export.mathFallback": "Formula could not be rendered; original TeX:",
+  "export.mermaidFallback": "Diagram could not be rendered; Mermaid source follows:",
+  "export.imageFallback": "Local image could not be embedded; export omits: {path}",
+  "export.imageUnknown": "unnamed local image",
   "ipc.requireTauri":
     "{action} requires the Tauri runtime (run pnpm tauri dev or use the installed app)",
   "ipc.read": "File read",
   "ipc.save": "File save",
   "ipc.stat": "File status read",
+  "ipc.rename": "File rename",
   "ipc.watch": "File watching",
   "ipc.grep": "Cross-file search",
   "ipc.ai": "Model request",

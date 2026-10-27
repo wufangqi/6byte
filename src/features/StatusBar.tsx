@@ -27,6 +27,8 @@ interface Props {
   hasWorkspace?: boolean;
   treeHidden?: boolean;
   onToggleTree?: () => void;
+  aiPanelOpen?: boolean;
+  onToggleAiPanel?: () => void;
 }
 
 export default function StatusBar({
@@ -37,6 +39,8 @@ export default function StatusBar({
   hasWorkspace = false,
   treeHidden = false,
   onToggleTree,
+  aiPanelOpen = false,
+  onToggleAiPanel,
 }: Props) {
   const tab = useWorkspace(selectActiveTab);
   const workspaceName = useFileTree((state) => (state.rootPath ? state.rootName : ""));
@@ -111,6 +115,18 @@ export default function StatusBar({
           onClick={onTogglePreview}
         >
           {sourceToggle ? "</>" : t("status.preview")}
+        </button>
+      )}
+
+      {onToggleAiPanel && (
+        <button
+          type="button"
+          className={`statusbar__action${aiPanelOpen ? " statusbar__action--on" : ""}`}
+          aria-pressed={aiPanelOpen}
+          title={t("status.aiPanel.title")}
+          onClick={onToggleAiPanel}
+        >
+          {t("status.aiPanel")}
         </button>
       )}
 

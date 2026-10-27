@@ -16,6 +16,11 @@ import MarkdownPreview from "./features/MarkdownPreview";
 import AiSettingsDialog from "./features/AiSettingsDialog";
 import AiSelectionAction from "./features/AiSelectionAction";
 import AiStreamPanel from "./features/AiStreamPanel";
+import {
+  AI_PANEL_DEFAULT_WIDTH,
+  AI_PANEL_KEYBOARD_STEP,
+  clampAiPanelWidth,
+} from "./features/aiPanelLayout";
 import { activeModel, loadAiSettings } from "./features/aiSettings";
 import MenuBar from "./features/MenuBar";
 import StatusBar from "./features/StatusBar";
@@ -24,6 +29,9 @@ import FileTree from "./features/WorkspaceTree";
 import Welcome from "./features/Welcome";
 import { clampTreeWidth } from "./features/fileTree";
 import { ask } from "./features/dialogStore";
+import { askName } from "./features/renamePrompt";
+import RenameDialog from "./features/RenameDialog";
+import { extensionOf, withExtension } from "./features/fileName";
 import { duplicateTab, isWatcherEcho, statConflicts } from "./features/fileSafety";
 import CommandPalette from "./features/CommandPalette";
 import { isAppShortcutBlocked } from "./features/shortcuts";
@@ -40,6 +48,7 @@ import {
   pickDirectory,
   pickOpenPaths,
   pickSavePath,
+  renameFile,
   saveAsset,
   statFile,
   writeFile,
@@ -50,7 +59,7 @@ import { dropDocStatesExcept } from "./editor/docStates";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { localizeError, t as tr, useI18n } from "./i18n";
 import { formatSize, formatTime } from "./lib/format";
-import { samePath } from "./lib/paths";
+import { joinPath, parentDir, samePath } from "./lib/paths";
 import { useFileTree } from "./stores/fileTree";
 import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
 import { getResolvedTheme } from "./features/theme";
@@ -61,6 +70,8 @@ import { selectActiveTab, tabFromFile, tabFromLarge, useWorkspace } from "./stor
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
 const SPLIT_KEY = "ainative.splitPercent";
+const AI_PANEL_WIDTH_KEY = "ainative.aiPanelWidth";
+const AI_FLOATING_MARKER_KEY = "ainative.aiFloatingMarker";
 const SESSION_DEBOUNCE_MS = 500;
 
 const errorMessage = (error: unknown): string =>
@@ -88,6 +99,21 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [modelSettingsOpen, setModelSettingsOpen] = useState(false);
   const [streamOpen, setStreamOpen] = useState(false);
+  const [aiFloatingMarkerEnabled, setAiFloatingMarkerEnabled] = useState(() => {
+    try {
+      return localStorage.getItem(AI_FLOATING_MARKER_KEY) !== "false";
+    } catch {
+      return true;
+    }
+  });
+  const [aiPanelWidth, setAiPanelWidth] = useState(() => {
+    try {
+      const stored = localStorage.getItem(AI_PANEL_WIDTH_KEY);
+      return stored === null ? AI_PANEL_DEFAULT_WIDTH : clampAiPanelWidth(Number(stored));
+    } catch {
+      return AI_PANEL_DEFAULT_WIDTH;
+    }
+  });
   const markdown = Boolean(active?.mode === "text" && isMarkdownFile(active.name));
   const previewOn = Boolean(active?.mode === "text" && active.preview);
   const showSource = markdown ? Boolean(active?.source) : true;
@@ -120,6 +146,22 @@ export default function App() {
       /* ignore storage errors */
     }
   }, [splitPercent]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_PANEL_WIDTH_KEY, String(aiPanelWidth));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [aiPanelWidth]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(AI_FLOATING_MARKER_KEY, String(aiFloatingMarkerEnabled));
+    } catch {
+      /* ignore storage errors */
+    }
+  }, [aiFloatingMarkerEnabled]);
 
   const startSplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     const container = splitRef.current;
@@ -322,7 +364,10 @@ export default function App() {
           ? htmlPathFor(tab.path)
           : await pickSavePath(`${title.replace(/[\\/:*?"<>|]/g, "-")}.html`);
         if (!target) return;
-        const html = buildHtmlDocument(title, content, { baseDir, theme: getResolvedTheme() });
+        const html = await buildHtmlDocument(title, content, {
+          baseDir,
+          theme: getResolvedTheme(),
+        });
         const portable = await inlineLocalImages(html, loadImageDataUrl);
         await writeFile(target, portable, { ...DEFAULT_META });
         store.setNotice(tr("app.export.done", { path: target }));
@@ -363,7 +408,7 @@ export default function App() {
 
       let path = tab.path;
       if (!path || saveAs) {
-        const suggested = /\.\w+$/.test(tab.name) ? tab.name : `${tab.name}.txt`;
+        const suggested = /\.\w+$/.test(tab.name) ? tab.name : `${tab.name}.md`;
         try {
           path = await pickSavePath(suggested);
         } catch (e) {
@@ -467,6 +512,63 @@ export default function App() {
       if (!saved) return;
     }
   }, [saveTab]);
+
+  /**
+   * Rename a tab: files on disk are renamed in place, unsaved buffers only get a
+   * new default name (the real rename happens on the next save).
+   */
+  const requestRenameTab = useCallback(async (tabId: string) => {
+    const store = useWorkspace.getState();
+    const tab = store.tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+
+    const extension = extensionOf(tab.name) || ".md";
+    if (!tab.path) {
+      const name = await askName({
+        title: tr("tab.rename"),
+        label: tr("tab.renameLabel"),
+        initial: tab.name,
+        confirmLabel: tr("tab.rename.confirm"),
+        cancelLabel: tr("dialog.cancel"),
+      });
+      if (!name) return;
+      store.setName(tab.id, withExtension(name, extension));
+      return;
+    }
+
+    const name = await askName({
+      title: tr("tab.rename"),
+      label: tr("tab.renameLabel"),
+      initial: tab.name,
+      confirmLabel: tr("tab.rename.confirm"),
+      cancelLabel: tr("dialog.cancel"),
+      validate: (value) => {
+        const next = withExtension(value, extension);
+        const folder = parentDir(tab.path as string);
+        const target = folder ? joinPath(folder, next) : next;
+        if (samePath(target, tab.path as string)) return null;
+        const clash = duplicateTab(store.tabs, tab.id, target);
+        return clash ? tr("app.duplicate", { name: clash.name }) : null;
+      },
+    });
+    if (!name) return;
+
+    try {
+      const result = await renameFile(tab.path, withExtension(name, extension));
+      const disk = await statFile(result.path).catch(() => null);
+      store.renameTab(tab.id, {
+        path: result.path,
+        name: result.name,
+        mtimeMs: disk?.mtimeMs ?? tab.mtimeMs,
+      });
+      store.setNotice(tr("tab.rename.done", { name: result.name }));
+      // Refresh the containing folder if it is currently expanded in the tree.
+      const folder = parentDir(result.path);
+      if (folder) void useFileTree.getState().retryDir(folder);
+    } catch (e) {
+      store.setError(localizeError(e));
+    }
+  }, []);
 
   const requestCloseTab = useCallback(
     async (tabId: string) => {
@@ -677,10 +779,33 @@ export default function App() {
     setStreamOpen(true);
   }, []);
 
+  /** The AI console behaves like the file tree: the status bar owns its visibility. */
+  const toggleAiPanel = useCallback(() => {
+    const tab = selectActiveTab(useWorkspace.getState());
+    if (!tab || tab.mode !== "text") return;
+    if (streamOpen) {
+      setStreamOpen(false);
+      return;
+    }
+    const settings = activeModel(loadAiSettings());
+    if (!settings?.baseUrl.trim() || !settings.model.trim()) {
+      setModelSettingsOpen(true);
+      return;
+    }
+    setStreamOpen(true);
+  }, [streamOpen]);
+
   // Global shortcuts.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isAppShortcutBlocked(event)) return;
+      if (event.key === "F2" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        const tab = selectActiveTab(useWorkspace.getState());
+        if (!tab) return;
+        event.preventDefault();
+        void requestRenameTab(tab.id);
+        return;
+      }
       const mod = event.ctrlKey || event.metaKey;
       if (!mod || event.altKey) return;
       const key = event.key.toLowerCase();
@@ -732,6 +857,7 @@ export default function App() {
     openPaths,
     createWindow,
     requestCloseTab,
+    requestRenameTab,
     togglePreview,
     openRewrite,
     openFolder,
@@ -767,6 +893,57 @@ export default function App() {
     window.addEventListener("pointercancel", onUp);
   }, []);
 
+  const availableAiPanelWidth = useCallback(() => {
+    const workspaceWidth = workspaceRef.current?.getBoundingClientRect().width;
+    if (!workspaceWidth) return Number.POSITIVE_INFINITY;
+    return workspaceWidth - (showTree ? treeWidth + 6 : 0);
+  }, [showTree, treeWidth]);
+
+  const startAiPanelDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const container = workspaceRef.current;
+      if (!container || event.button !== 0) return;
+      event.preventDefault();
+
+      const rect = container.getBoundingClientRect();
+      const previousCursor = document.body.style.cursor;
+      const previousSelect = document.body.style.userSelect;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+
+      const onMove = (moveEvent: PointerEvent) => {
+        setAiPanelWidth(clampAiPanelWidth(rect.right - moveEvent.clientX, availableAiPanelWidth()));
+      };
+      const onUp = () => {
+        document.body.style.cursor = previousCursor;
+        document.body.style.userSelect = previousSelect;
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    },
+    [availableAiPanelWidth]
+  );
+
+  useEffect(() => {
+    const workspace = workspaceRef.current;
+    if (!workspace) return;
+
+    const fitPanel = () => {
+      setAiPanelWidth((current) => {
+        const next = clampAiPanelWidth(current, availableAiPanelWidth());
+        return next === current ? current : next;
+      });
+    };
+    fitPanel();
+    const observer = new ResizeObserver(fitPanel);
+    observer.observe(workspace);
+    return () => observer.disconnect();
+  }, [availableAiPanelWidth]);
+
   // Grep prefers the workspace root. Image paths still use the file's own folder.
   const lastSeparator = active?.path
     ? Math.max(active.path.lastIndexOf("/"), active.path.lastIndexOf("\\"))
@@ -796,17 +973,14 @@ export default function App() {
           if (tab) void saveTab(tab.id, true);
         }}
         onSaveAll={() => void saveAll()}
+        onRename={() => {
+          const tab = selectActiveTab(useWorkspace.getState());
+          if (tab) void requestRenameTab(tab.id);
+        }}
         onOpenModelSettings={() => setModelSettingsOpen(true)}
         canAsk={active?.mode === "text"}
-        asking={streamOpen}
-        onAsk={() => {
-          const settings = activeModel(loadAiSettings());
-          if (!settings?.baseUrl.trim() || !settings.model.trim()) {
-            setModelSettingsOpen(true);
-            return;
-          }
-          setStreamOpen((open) => !open);
-        }}
+        aiMarkerEnabled={aiFloatingMarkerEnabled}
+        onToggleAiMarker={() => setAiFloatingMarkerEnabled((enabled) => !enabled)}
       />
       <div className="workspace" ref={workspaceRef}>
         {showTree && (
@@ -827,7 +1001,10 @@ export default function App() {
           </>
         )}
         <div className="workspace__main">
-          <TabBar onClose={(id) => void requestCloseTab(id)} />
+          <TabBar
+            onClose={(id) => void requestCloseTab(id)}
+            onRename={(id) => void requestRenameTab(id)}
+          />
 
           {(error || notice) && (
             <div className={`banner ${notice && !error ? "banner--ok" : ""}`} role="status">
@@ -919,26 +1096,57 @@ export default function App() {
             )}
           </div>
         </div>
+
+        {streamOpen && active?.mode === "text" && (
+          <>
+            <div
+              className="split__divider ai-stream__divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("ai.stream.resize")}
+              aria-valuemin={300}
+              aria-valuemax={640}
+              aria-valuenow={aiPanelWidth}
+              tabIndex={0}
+              title={t("ai.stream.resize")}
+              onPointerDown={startAiPanelDrag}
+              onDoubleClick={() =>
+                setAiPanelWidth(clampAiPanelWidth(AI_PANEL_DEFAULT_WIDTH, availableAiPanelWidth()))
+              }
+              onKeyDown={(event) => {
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  setAiPanelWidth((width) =>
+                    clampAiPanelWidth(width + AI_PANEL_KEYBOARD_STEP, availableAiPanelWidth())
+                  );
+                } else if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  setAiPanelWidth((width) =>
+                    clampAiPanelWidth(width - AI_PANEL_KEYBOARD_STEP, availableAiPanelWidth())
+                  );
+                }
+              }}
+            />
+            <AiStreamPanel
+              tabId={active.id}
+              panelWidth={aiPanelWidth}
+              onClose={() => setStreamOpen(false)}
+              onOpenMatch={(path, line) => void openMatch(path, line)}
+              onNeedSettings={() => {
+                setStreamOpen(false);
+                setModelSettingsOpen(true);
+              }}
+            />
+          </>
+        )}
       </div>
 
       {active?.mode === "text" && (
         <AiSelectionAction
           key={active.id}
           tabId={active.id}
-          visible={showSource && !streamOpen && !modelSettingsOpen}
+          visible={showSource && aiFloatingMarkerEnabled && !streamOpen && !modelSettingsOpen}
           onRewrite={openRewrite}
-        />
-      )}
-
-      {streamOpen && active?.mode === "text" && (
-        <AiStreamPanel
-          tabId={active.id}
-          onClose={() => setStreamOpen(false)}
-          onOpenMatch={(path, line) => void openMatch(path, line)}
-          onNeedSettings={() => {
-            setStreamOpen(false);
-            setModelSettingsOpen(true);
-          }}
         />
       )}
 
@@ -950,6 +1158,8 @@ export default function App() {
         hasWorkspace={Boolean(treeRoot)}
         treeHidden={treeHidden}
         onToggleTree={toggleTree}
+        aiPanelOpen={streamOpen}
+        onToggleAiPanel={toggleAiPanel}
       />
 
       {grepOpen && (
@@ -981,6 +1191,7 @@ export default function App() {
       )}
 
       {modelSettingsOpen && <AiSettingsDialog onClose={() => setModelSettingsOpen(false)} />}
+      <RenameDialog />
       <DialogHost />
     </div>
   );

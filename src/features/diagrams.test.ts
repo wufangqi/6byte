@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { beforeAll, describe, expect, it } from "vitest";
-import { renderKatexHtml, renderMermaidSvg, texSource } from "./diagrams";
+import { renderKatexHtml, renderKatexMathml, renderMermaidSvg, texSource } from "./diagrams";
 
 /** Mermaid measures SVG in the DOM. Node has none, so the diagram cases borrow jsdom. */
 function installDom(): void {
@@ -58,6 +58,12 @@ describe("renderKatexHtml", () => {
   it("does not let the formula inject markup", async () => {
     const html = await renderKatexHtml("$<script>alert(1)</script>$", false);
     expect(html ?? "").not.toContain("<script>");
+  });
+
+  it("renders portable MathML for self-contained exports", async () => {
+    const mathml = await renderKatexMathml("$$a^2+b^2$$", true);
+    expect(mathml).toContain("<math");
+    expect(mathml).not.toContain("katex-html");
   });
 });
 

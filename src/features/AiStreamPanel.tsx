@@ -14,7 +14,7 @@ import { abandonAiStream, claimAiStream, type AiStreamClaim } from "../ipc/aiStr
 import type { AiMessage, AiUsage } from "../ipc/types";
 import { useFileTree } from "../stores/fileTree";
 import { useWorkspace } from "../stores/workspace";
-import { activeModel, loadAiSettings } from "./aiSettings";
+import { activeModel, loadAiSettings, saveAiSettings, type AiCatalog } from "./aiSettings";
 import {
   recordAiAcceptance,
   recordAiCancellation,
@@ -43,14 +43,6 @@ import {
   followupRewriteMessages,
   type RewriteTurn,
 } from "./rewriteConversation";
-import RewriteReviewPanel from "./RewriteReviewPanel";
-import {
-  acceptedRewriteCount,
-  acceptedRewriteText,
-  createRewriteReview,
-  updateRewriteHunk,
-  type RewriteReview as RewriteReviewState,
-} from "./rewriteReview";
 import { loadDenylist } from "./agentAccess";
 import { AGENT_SEND_BUDGET, runReadAgent, type AgentTrace } from "./readAgent";
 import { completeAgentTurn, workspaceAgentTools } from "./readAgentHost";
@@ -72,6 +64,7 @@ interface Props {
   onClose(): void;
   onNeedSettings(): void;
   onOpenMatch(path: string, line: number): void;
+  panelWidth?: number;
 }
 
 interface PendingRewrite {
@@ -80,7 +73,8 @@ interface PendingRewrite {
   to: number;
   original: string;
   text: string;
-  review: RewriteReviewState | null;
+  onAccept?(): void;
+  onDiscard?(): void;
 }
 
 interface RewriteSession {
@@ -99,7 +93,6 @@ interface ActiveRewrite {
   instruction: string;
   /** Existing candidate preserved while a follow-up is in flight. */
   previousText: string | null;
-  previousReview: RewriteReviewState | null;
   replacedPrevious: boolean;
   metric: RewriteMetric;
 }
@@ -125,6 +118,15 @@ function same(item: PendingRewrite): boolean {
   return view.state.sliceDoc(item.from, item.to) === item.original;
 }
 
+function selectionKey(span: { from: number; to: number; text: string }): string {
+  return `${span.from}:${span.to}:${span.text}`;
+}
+
+function selectionExcerpt(text: string): string {
+  const compact = text.replace(/\s+/g, " ").trim();
+  return compact.length > 88 ? `${compact.slice(0, 88)}…` : compact;
+}
+
 /** Remove the proposal decoration. The buffer itself was never changed. */
 function clearProposal(item: PendingRewrite | null): void {
   if (!item) return;
@@ -132,25 +134,30 @@ function clearProposal(item: PendingRewrite | null): void {
   if (view) clearRewritePreview(view);
 }
 
-/** Left: the instruction. Right: collapsible thinking. The reply is typed into the open editor. */
-export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMatch }: Props) {
+/** The reply is typed into the open editor; this dock only gathers and reviews AI work. */
+export default function AiStreamPanel({
+  tabId,
+  onClose,
+  onNeedSettings,
+  onOpenMatch,
+  panelWidth = 420,
+}: Props) {
   const { t } = useI18n();
   const [instruction, setInstruction] = useState("");
+  const [catalog, setCatalog] = useState<AiCatalog>(loadAiSettings);
   const [mode, setMode] = useState<"rewrite" | "ask">("rewrite");
   const [asking, setAsking] = useState(false);
   const [agentAnswer, setAgentAnswer] = useState<string | null>(null);
   const [agentTrace, setAgentTrace] = useState<AgentTrace[]>([]);
   const [agentSent, setAgentSent] = useState(0);
   const [action, setAction] = useState<QuickActionId | null>(null);
-  const [selection, setSelection] = useState("");
   const [view, setView] = useState<StreamView>(IDLE_STREAM);
-  const [thinkingOpen, setThinkingOpen] = useState(true);
+  const [thinkingOpen, setThinkingOpen] = useState(false);
   const [offer, setOffer] = useState(false);
   const [note, setNote] = useState<Note>(null);
   const [usage, setUsage] = useState<AiUsage | null>(null);
   const [rewriteSession, setRewriteSession] = useState<RewriteSession | null>(null);
   const [proposal, setProposal] = useState("");
-  const [review, setReview] = useState<RewriteReviewState | null>(null);
   const [excluded, setExcluded] = useState<ContextPartId[]>([]);
   const [span, setSpan] = useState<{ from: number; to: number; text: string } | null>(null);
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
@@ -171,12 +178,29 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
   const pending = useRef<PendingRewrite | null>(null);
   const sessionRef = useRef<RewriteSession | null>(null);
   const activeRewrite = useRef<ActiveRewrite | null>(null);
+  const dismissedSelection = useRef<string | null>(null);
   const viewRef = useRef(view);
   const thinkingRef = useRef<HTMLPreElement | null>(null);
   const followThinking = useRef(true);
-  const settings = activeModel(loadAiSettings());
+  const settings = activeModel(catalog);
   const host = modelHost(settings?.baseUrl ?? "");
   const running = view.phase === "waiting" || view.phase === "streaming";
+  const modelChoices = catalog.providers.flatMap((provider) =>
+    provider.models.map((model) => ({
+      value: `${provider.id}|${model.id}`,
+      label: `${provider.name || provider.baseUrl || "服务商"} · ${model.name || model.model}`,
+    }))
+  );
+  const modelValue = `${catalog.activeProviderId}|${catalog.activeModelId}`;
+  const switchModel = (value: string) => {
+    if (running || asking) return;
+    const [providerId, modelId] = value.split("|");
+    const provider = catalog.providers.find((item) => item.id === providerId);
+    if (!provider?.models.some((model) => model.id === modelId)) return;
+    const next = { ...catalog, activeProviderId: providerId, activeModelId: modelId };
+    saveAiSettings(next);
+    setCatalog(next);
+  };
   const assembled = span
     ? assembleRewrite(
         span.text,
@@ -216,7 +240,6 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     sessionRef.current = null;
     setRewriteSession(null);
     setProposal("");
-    setReview(null);
   }, []);
 
   const settleRewriteMetric = useCallback(
@@ -242,12 +265,19 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
         setNote("stale");
         return;
       }
+      const canDecide = Boolean(
+        item.text && activeRewrite.current === null && streamId.current === null
+      );
       showRewritePreview(editor, {
         from: item.from,
         to: item.to,
         text: item.text,
         originalLabel: t("ai.stream.original"),
         rewriteLabel: t("ai.stream.proposal"),
+        onAccept: canDecide ? item.onAccept : undefined,
+        onDiscard: canDecide ? item.onDiscard : undefined,
+        acceptLabel: canDecide ? t("ai.review.acceptBlock") : undefined,
+        discardLabel: canDecide ? t("ai.review.keepOriginal") : undefined,
       });
     },
     [t]
@@ -258,10 +288,8 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     const item = pending.current;
     if (!request || request.previousText === null || !item || !same(item)) return false;
     item.text = request.previousText;
-    item.review = request.previousReview;
     paint(item);
     setProposal(item.text);
-    setReview(item.review);
     setOffer(true);
     setNote("followupRestored");
     return true;
@@ -280,8 +308,6 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     let request = activeRewrite.current;
     if (request && request.previousText !== null && !request.replacedPrevious) {
       item.text = "";
-      item.review = null;
-      setReview(null);
       request = { ...request, replacedPrevious: true };
       activeRewrite.current = request;
     }
@@ -299,7 +325,14 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
   useEffect(() => {
     const read = () => {
       const next = getSelectionSpan(tabId);
-      setSelection(next?.text ?? "");
+      if (!next) {
+        dismissedSelection.current = null;
+        setSpan(null);
+        return;
+      }
+      const key = selectionKey(next);
+      if (dismissedSelection.current === key) return;
+      dismissedSelection.current = null;
       setSpan(next);
     };
     read();
@@ -384,9 +417,9 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
       if (next.text && request) {
         const item = pending.current;
         if (item && same(item)) {
-          const nextReview = createRewriteReview(item.original, item.text);
-          item.review = nextReview;
-          setReview(nextReview);
+          activeRewrite.current = null;
+          streamId.current = null;
+          paint(item);
         }
         const session = sessionRef.current;
         if (session) {
@@ -485,11 +518,6 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     }
     if (id) void aiCancel(id).catch(() => {});
   }, [clearRewriteSession, settleRewriteMetric]);
-  const discardRef = useRef(discard);
-  useLayoutEffect(() => {
-    discardRef.current = discard;
-  }, [discard]);
-
   /** Cancelling a follow-up keeps the last stable draft available for review. */
   const cancelRewrite = useCallback(() => {
     const request = activeRewrite.current;
@@ -514,16 +542,12 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     }
     if (id) void aiCancel(id).catch(() => {});
   }, [discard, restorePreviousProposal, settleRewriteMetric]);
-  const cancelRewriteRef = useRef(cancelRewrite);
-  useLayoutEffect(() => {
-    cancelRewriteRef.current = cancelRewrite;
-  }, [cancelRewrite]);
 
   // Drop the highlight before the editor swaps documents. The shared view still
   // shows this tab during layout; the swap itself happens in a later effect.
   useLayoutEffect(() => {
-    return () => discardRef.current();
-  }, [tabId]);
+    return () => discard();
+  }, [discard, tabId]);
 
   // Closing the panel stops a running question; it must not keep sending files.
   useEffect(() => {
@@ -543,17 +567,17 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
         event.preventDefault();
         event.stopPropagation();
         if (streamId.current || activeRewrite.current?.previousText != null) {
-          cancelRewriteRef.current();
-        } else discardRef.current();
+          cancelRewrite();
+        } else discard();
         return;
       }
       if (rootRef.current?.contains(event.target as Node)) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [cancelRewrite, discard, onClose]);
 
-  const accept = () => {
+  const accept = useCallback(() => {
     const item = pending.current;
     if (!item?.text) return;
     const editor = getEditorView(item.tabId);
@@ -569,40 +593,7 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     }
     recordAiAcceptance("rewrite");
     setNote("accepted");
-  };
-
-  const decideReviewHunk = (id: string, accepted: boolean) => {
-    const item = pending.current;
-    if (!item?.review) return;
-    const next = updateRewriteHunk(item.review, id, accepted ? "accepted" : "discarded");
-    item.review = next;
-    setReview(next);
-  };
-
-  const applyAcceptedHunks = () => {
-    const item = pending.current;
-    const currentReview = item?.review;
-    if (!item || !currentReview || acceptedRewriteCount(currentReview) === 0) return;
-    const editor = getEditorView(item.tabId);
-    const replacement = acceptedRewriteText(currentReview);
-    pending.current = null;
-    disarmRewriteGate(item.tabId);
-    setOffer(false);
-    setAction(null);
-    clearRewriteSession();
-    if (!editor || !same(item) || !commitRewrite(editor, item.from, item.to, replacement)) {
-      clearProposal(item);
-      setNote("stale");
-      return;
-    }
-    recordAiAcceptance("rewrite");
-    setNote("accepted");
-  };
-
-  const acceptRef = useRef(accept);
-  useLayoutEffect(() => {
-    acceptRef.current = accept;
-  });
+  }, [clearRewriteSession]);
 
   // Tab accepts the highlighted rewrite while the editor still has focus.
   // Capture phase so CodeMirror never indents the line first (T37).
@@ -615,34 +606,34 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
       if (!target || !editor?.contains(target)) return;
       event.preventDefault();
       event.stopPropagation();
-      acceptRef.current();
+      accept();
     };
     window.addEventListener("keydown", onTab, true);
     return () => window.removeEventListener("keydown", onTab, true);
-  }, []);
+  }, [accept]);
 
   const send = async (prompt?: string) => {
-    const span = getSelectionSpan(tabId);
-    const current = span?.text ?? "";
+    const selected = span;
+    const current = selected?.text ?? "";
     const request = (prompt ?? instruction).trim();
-    setSelection(current);
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
       onNeedSettings();
       return;
     }
-    if (!span || selectionTooLarge(current) || !request) return;
+    if (!selected || selectionTooLarge(current) || !request) return;
     if (pending.current) discard();
     const ticket = epoch.current;
     const item: PendingRewrite = {
       tabId,
-      from: span.from,
-      to: span.to,
-      original: span.text,
+      from: selected.from,
+      to: selected.to,
+      original: selected.text,
       text: "",
-      review: null,
+      onAccept: () => accept(),
+      onDiscard: () => discard(),
     };
     pending.current = item;
-    armRewriteGate(tabId, () => discardRef.current());
+    armRewriteGate(tabId, () => discard());
     paint(item);
     clearRewriteSession();
     setOffer(false);
@@ -669,8 +660,8 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
           ? {
               filename: tab.name,
               document,
-              from: span.from,
-              to: span.to,
+              from: selected.from,
+              to: selected.to,
             }
           : null,
         { exclude: excluded, references }
@@ -687,7 +678,6 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
       activeRewrite.current = {
         instruction: request,
         previousText: null,
-        previousReview: null,
         replacedPrevious: false,
         metric,
       };
@@ -743,7 +733,6 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
     activeRewrite.current = {
       instruction: request,
       previousText: item.text,
-      previousReview: item.review,
       replacedPrevious: false,
       metric,
     };
@@ -921,7 +910,12 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
                     : null;
 
   return (
-    <section className="ai-stream" ref={rootRef} aria-label={t("ai.stream.title")}>
+    <section
+      className="ai-stream"
+      ref={rootRef}
+      aria-label={t("ai.stream.title")}
+      style={{ flexBasis: panelWidth }}
+    >
       <div className="ai-stream__head">
         <strong>{t("ai.stream.title")}</strong>
         <div className="ai-stream__modes" role="group" aria-label={t("ai.mode.label")}>
@@ -942,274 +936,321 @@ export default function AiStreamPanel({ tabId, onClose, onNeedSettings, onOpenMa
             {t("ai.mode.ask")}
           </button>
         </div>
-        <span className="ai-stream__host">{host}</span>
+        <label className="ai-stream__model-picker">
+          <span className="sr-only">{t("ai.models")}</span>
+          <select
+            value={modelChoices.some((choice) => choice.value === modelValue) ? modelValue : ""}
+            aria-label={t("ai.models")}
+            disabled={running || asking || modelChoices.length === 0}
+            onChange={(event) => switchModel(event.target.value)}
+          >
+            {modelChoices.length === 0 && <option value="">{t("ai.stream.modelEmpty")}</option>}
+            {modelChoices.map((choice) => (
+              <option key={choice.value} value={choice.value}>
+                {choice.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <span className="ai-stream__host" title={host}>
+          {host}
+        </span>
         <button type="button" className="ai-stream__close" onClick={onClose}>
           {t("ai.stream.close")}
         </button>
       </div>
-      <div className="ai-stream__columns">
-        <div className="ai-stream__input-col">
-          <p className="ai-stream__hint">
-            {mode === "ask" ? t("ai.mode.askHint") : t("ai.stream.hint")}
-          </p>
-          {mode === "rewrite" && (
-            <div className="ai-stream__presets" role="group" aria-label={t("ai.stream.actions")}>
-              {QUICK_ACTIONS.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`btn ai-stream__preset${action === item.id ? " is-on" : ""}`}
-                  title={t(item.promptKey)}
-                  disabled={running || offer || !selection || selectionTooLarge(selection)}
-                  onClick={() => {
-                    const prompt = t(item.promptKey);
-                    setInstruction(prompt);
-                    setAction(item.id);
-                    void send(prompt);
-                  }}
-                >
-                  {t(item.labelKey)}
-                </button>
-              ))}
-            </div>
-          )}
-          <label className="ai-stream__field">
-            <span>
-              {t(
-                rewriteTurns.length > 0 ? "ai.stream.followupInstruction" : "ai.stream.instruction"
-              )}
-            </span>
-            <textarea
-              className="ai-stream__input"
-              rows={3}
-              value={instruction}
-              placeholder={
-                mode === "ask"
-                  ? t("ai.mode.askPlaceholder")
-                  : rewriteTurns.length > 0
-                    ? t("ai.stream.followupPlaceholder")
-                    : t("ai.stream.placeholder")
-              }
-              onChange={(event) => {
-                const value = event.target.value;
-                const caret = event.target.selectionStart ?? value.length;
-                setInstruction(value);
-                setMentionCaret(caret);
-                setMentionQuery(activeMentionQuery(value, caret));
-                if (action) setAction(null);
-              }}
-              onKeyUp={(event) => {
-                const caret = event.currentTarget.selectionStart ?? instruction.length;
-                setMentionCaret(caret);
-                setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
-              }}
-              onClick={(event) => {
-                const caret = event.currentTarget.selectionStart ?? instruction.length;
-                setMentionCaret(caret);
-                setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
-              }}
-            />
-            {mentionQuery !== null && (
-              <ul className="ai-stream__mentions" role="listbox" aria-label={t("ai.mention.list")}>
-                {mentionChoices.length === 0 ? (
-                  <li className="ai-stream__mention-empty">{t("ai.mention.empty")}</li>
-                ) : (
-                  mentionChoices.map((choice) => (
-                    <li key={choice.key}>
-                      <button
-                        type="button"
-                        role="option"
-                        className="ai-stream__mention"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          const next = insertMention(
-                            instruction,
-                            mentionCaret,
-                            mentionQuery,
-                            choice.token
-                          );
-                          setInstruction(next.text);
-                          setMentionQuery(null);
-                          if (action) setAction(null);
-                        }}
-                      >
-                        <span>{choice.label}</span>
-                        <span className="ai-stream__mention-detail">{choice.detail}</span>
-                      </button>
-                    </li>
-                  ))
-                )}
-              </ul>
-            )}
-          </label>
-          <div className="ai-stream__meta">
-            {mode === "rewrite" && !selection && <span>{t("ai.stream.selectionEmpty")}</span>}
-            {mode === "rewrite" && selection && selectionTooLarge(selection) && (
-              <span>{t("ai.stream.tooLarge")}</span>
-            )}
-            {mode === "rewrite" && count > 0 && !selectionTooLarge(selection) && (
-              <span>{t("ai.stream.budget", { count, host })}</span>
-            )}
-            {mode === "ask" && workspaceRoot && agentSent === 0 && !asking && (
-              <span>{t("ai.mode.askBudget", { budget: AGENT_SEND_BUDGET, host })}</span>
-            )}
-            {mode === "ask" && agentSent > 0 && (
-              <span>
-                {t(asking ? "ai.mode.askSending" : "ai.mode.askSent", {
-                  count: agentSent,
-                  budget: AGENT_SEND_BUDGET,
-                  host,
-                })}
-              </span>
-            )}
-          </div>
-          {mode === "rewrite" &&
-            selection &&
-            !selectionTooLarge(selection) &&
-            contextParts.length > 0 && (
-              <div className="ai-stream__context" role="group" aria-label={t("ai.context.list")}>
-                {contextParts.map((part) => (
+      <div className="ai-stream__body">
+        <div className="ai-stream__columns">
+          <div className="ai-stream__input-col">
+            <p className="ai-stream__hint">
+              {mode === "ask" ? t("ai.mode.askHint") : t("ai.stream.hint")}
+            </p>
+            {mode === "rewrite" && (
+              <div className="ai-stream__presets" role="group" aria-label={t("ai.stream.actions")}>
+                {QUICK_ACTIONS.map((item) => (
                   <button
-                    key={part.id}
+                    key={item.id}
                     type="button"
-                    className={`ai-stream__chip${part.included ? " is-on" : ""}`}
-                    aria-pressed={part.included}
-                    disabled={running || offer || part.id === "selection"}
-                    title={part.dropped ? t("ai.context.dropped") : t(PART_LABEL[part.id])}
+                    className={`btn ai-stream__preset${action === item.id ? " is-on" : ""}`}
+                    title={t(item.promptKey)}
+                    disabled={running || offer || !span || selectionTooLarge(span.text)}
                     onClick={() => {
-                      if (part.id === "selection") return;
-                      setExcluded((current) =>
-                        current.includes(part.id)
-                          ? current.filter((item) => item !== part.id)
-                          : [...current, part.id]
-                      );
+                      const prompt = t(item.promptKey);
+                      setInstruction(prompt);
+                      setAction(item.id);
+                      void send(prompt);
                     }}
                   >
-                    {t(PART_LABEL[part.id])}
+                    {t(item.labelKey)}
                   </button>
                 ))}
               </div>
             )}
-          <div className="ai-stream__actions">
-            {mode === "ask" && asking ? (
-              <button type="button" className="btn" onClick={cancelAsk}>
-                {t("ai.mode.askCancel")}
-              </button>
-            ) : mode === "ask" ? (
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={running || !workspaceRoot || !instruction.trim()}
-                onClick={() => void askWorkspace()}
-              >
-                {t("ai.mode.askSend")}
-              </button>
-            ) : running ? (
-              <button type="button" className="btn" onClick={cancelRewrite}>
-                {t("ai.stream.cancel")}
-              </button>
-            ) : offer ? (
-              <>
-                <button type="button" className="btn btn--primary" onClick={accept}>
-                  {t("ai.stream.accept")}
-                </button>
-                {review && acceptedRewriteCount(review) > 0 && (
-                  <button type="button" className="btn" onClick={applyAcceptedHunks}>
-                    {t("ai.review.applyAccepted", {
-                      count: acceptedRewriteCount(review),
-                    })}
-                  </button>
+            <label className="ai-stream__field">
+              <span>
+                {t(
+                  rewriteTurns.length > 0
+                    ? "ai.stream.followupInstruction"
+                    : "ai.stream.instruction"
                 )}
+              </span>
+              <div className="ai-stream__composer">
+                {mode === "rewrite" && span && (
+                  <span
+                    className="ai-stream__selection-chip"
+                    title={span.text}
+                    aria-label={`${t("ai.context.selection")}: ${selectionExcerpt(span.text)}`}
+                  >
+                    <span className="ai-stream__selection-chip-label">
+                      {t("ai.context.selection")}
+                    </span>
+                    <span className="ai-stream__selection-chip-text">
+                      {selectionExcerpt(span.text)}
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t("ai.stream.removeSelection")}
+                      disabled={running || offer}
+                      onClick={() => {
+                        dismissedSelection.current = selectionKey(span);
+                        setSpan(null);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                <textarea
+                  className="ai-stream__input"
+                  rows={3}
+                  value={instruction}
+                  placeholder={
+                    mode === "ask"
+                      ? t("ai.mode.askPlaceholder")
+                      : rewriteTurns.length > 0
+                        ? t("ai.stream.followupPlaceholder")
+                        : t("ai.stream.placeholder")
+                  }
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    const caret = event.target.selectionStart ?? value.length;
+                    setInstruction(value);
+                    setMentionCaret(caret);
+                    setMentionQuery(activeMentionQuery(value, caret));
+                    if (action) setAction(null);
+                  }}
+                  onKeyUp={(event) => {
+                    const caret = event.currentTarget.selectionStart ?? instruction.length;
+                    setMentionCaret(caret);
+                    setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+                  }}
+                  onClick={(event) => {
+                    const caret = event.currentTarget.selectionStart ?? instruction.length;
+                    setMentionCaret(caret);
+                    setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+                  }}
+                />
+              </div>
+              {mentionQuery !== null && (
+                <ul
+                  className="ai-stream__mentions"
+                  role="listbox"
+                  aria-label={t("ai.mention.list")}
+                >
+                  {mentionChoices.length === 0 ? (
+                    <li className="ai-stream__mention-empty">{t("ai.mention.empty")}</li>
+                  ) : (
+                    mentionChoices.map((choice) => (
+                      <li key={choice.key}>
+                        <button
+                          type="button"
+                          role="option"
+                          className="ai-stream__mention"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => {
+                            const next = insertMention(
+                              instruction,
+                              mentionCaret,
+                              mentionQuery,
+                              choice.token
+                            );
+                            setInstruction(next.text);
+                            setMentionQuery(null);
+                            if (action) setAction(null);
+                          }}
+                        >
+                          <span>{choice.label}</span>
+                          <span className="ai-stream__mention-detail">{choice.detail}</span>
+                        </button>
+                      </li>
+                    ))
+                  )}
+                </ul>
+              )}
+            </label>
+            <div className="ai-stream__meta">
+              {mode === "rewrite" && !span && <span>{t("ai.stream.selectionEmpty")}</span>}
+              {mode === "rewrite" && span && selectionTooLarge(span.text) && (
+                <span>{t("ai.stream.tooLarge")}</span>
+              )}
+              {mode === "rewrite" && count > 0 && span && !selectionTooLarge(span.text) && (
+                <span>{t("ai.stream.budget", { count, host })}</span>
+              )}
+              {mode === "ask" && workspaceRoot && agentSent === 0 && !asking && (
+                <span>{t("ai.mode.askBudget", { budget: AGENT_SEND_BUDGET, host })}</span>
+              )}
+              {mode === "ask" && agentSent > 0 && (
+                <span>
+                  {t(asking ? "ai.mode.askSending" : "ai.mode.askSent", {
+                    count: agentSent,
+                    budget: AGENT_SEND_BUDGET,
+                    host,
+                  })}
+                </span>
+              )}
+            </div>
+            {mode === "rewrite" &&
+              span &&
+              !selectionTooLarge(span.text) &&
+              contextParts.length > 0 && (
+                <div className="ai-stream__context" role="group" aria-label={t("ai.context.list")}>
+                  {contextParts.map((part) => (
+                    <button
+                      key={part.id}
+                      type="button"
+                      className={`ai-stream__chip${part.included ? " is-on" : ""}`}
+                      aria-pressed={part.included}
+                      disabled={running || offer || part.id === "selection"}
+                      title={part.dropped ? t("ai.context.dropped") : t(PART_LABEL[part.id])}
+                      onClick={() => {
+                        if (part.id === "selection") return;
+                        setExcluded((current) =>
+                          current.includes(part.id)
+                            ? current.filter((item) => item !== part.id)
+                            : [...current, part.id]
+                        );
+                      }}
+                    >
+                      {t(PART_LABEL[part.id])}
+                    </button>
+                  ))}
+                </div>
+              )}
+            <div className="ai-stream__actions">
+              {mode === "ask" && asking ? (
+                <button type="button" className="btn" onClick={cancelAsk}>
+                  {t("ai.mode.askCancel")}
+                </button>
+              ) : mode === "ask" ? (
                 <button
                   type="button"
-                  className="btn"
-                  disabled={!instruction.trim()}
-                  onClick={() => void continueRewrite()}
+                  className="btn btn--primary"
+                  disabled={running || !workspaceRoot || !instruction.trim()}
+                  onClick={() => void askWorkspace()}
                 >
-                  {t("ai.stream.followup")}
+                  {t("ai.mode.askSend")}
                 </button>
-                <button type="button" className="btn" onClick={discard}>
-                  {t("ai.stream.discard")}
+              ) : running ? (
+                <button type="button" className="btn" onClick={cancelRewrite}>
+                  {t("ai.stream.cancel")}
                 </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="btn btn--primary"
-                disabled={!selection || selectionTooLarge(selection) || !instruction.trim()}
-                onClick={() => {
-                  setAction(null);
-                  void send();
-                }}
+              ) : offer ? (
+                <>
+                  <button type="button" className="btn btn--primary" onClick={accept}>
+                    {t("ai.stream.acceptAll")}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn"
+                    disabled={!instruction.trim()}
+                    onClick={() => void continueRewrite()}
+                  >
+                    {t("ai.stream.followup")}
+                  </button>
+                  <button type="button" className="btn" onClick={discard}>
+                    {t("ai.stream.discard")}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  disabled={!span || selectionTooLarge(span.text) || !instruction.trim()}
+                  onClick={() => {
+                    setAction(null);
+                    void send();
+                  }}
+                >
+                  {t("ai.stream.send")}
+                </button>
+              )}
+            </div>
+            <div className="ai-stream__conversation" aria-live="polite">
+              {mode === "ask" && !workspaceRoot && (
+                <p className="ai-stream__status">{t("ai.mode.needWorkspace")}</p>
+              )}
+              {mode === "rewrite" && rewriteTurns.length > 0 && (
+                <ol className="ai-stream__history" aria-label={t("ai.stream.history")}>
+                  {rewriteTurns.map((turn, index) => (
+                    <li key={`${index}-${turn.instruction}`}>
+                      <strong>{t("ai.stream.historyTurn", { count: index + 1 })}</strong>
+                      <span>{turn.instruction}</span>
+                      <small>{turn.proposal.slice(0, 180)}</small>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {mode === "ask" && agentTrace.length > 0 && (
+                <details className="ai-stream__agent-event">
+                  <summary>{t("ai.stream.toolCalls", { count: agentTrace.length })}</summary>
+                  <ol className="ai-stream__trace">
+                    {agentTrace.map((step, index) => (
+                      <li key={`${step.name}-${index}`}>
+                        <strong>{step.name}</strong>
+                        {step.detail ? <span>{step.detail}</span> : null}
+                      </li>
+                    ))}
+                  </ol>
+                </details>
+              )}
+              {mode === "ask" && agentAnswer && (
+                <AgentAnswer
+                  answer={agentAnswer}
+                  workspaceRoot={workspaceRoot}
+                  onOpenMatch={onOpenMatch}
+                  onInsert={insertAgentAnswer}
+                  onConvertToRewrite={convertAgentAnswerToRewrite}
+                />
+              )}
+              {status && <p className="ai-stream__status">{status}</p>}
+              {usage && (
+                <p className="ai-stream__status">
+                  {t("ai.stream.usage", {
+                    prompt: usage.promptTokens,
+                    completion: usage.completionTokens,
+                  })}
+                </p>
+              )}
+              <details
+                className="ai-stream__thinking"
+                open={thinkingOpen}
+                onToggle={(event) => setThinkingOpen(event.currentTarget.open)}
               >
-                {t("ai.stream.send")}
-              </button>
-            )}
+                <summary>{t("ai.stream.thinking")}</summary>
+                <pre
+                  ref={thinkingRef}
+                  onScroll={(event) => {
+                    const node = event.currentTarget;
+                    followThinking.current =
+                      node.scrollHeight - node.scrollTop - node.clientHeight < 48;
+                  }}
+                >
+                  {view.thinking || t("ai.stream.thinkingEmpty")}
+                </pre>
+              </details>
+            </div>
           </div>
-          {mode === "ask" && !workspaceRoot && (
-            <p className="ai-stream__status">{t("ai.mode.needWorkspace")}</p>
-          )}
-          {mode === "rewrite" && rewriteTurns.length > 0 && (
-            <ol className="ai-stream__history" aria-label={t("ai.stream.history")}>
-              {rewriteTurns.map((turn, index) => (
-                <li key={`${index}-${turn.instruction}`}>
-                  <strong>{t("ai.stream.historyTurn", { count: index + 1 })}</strong>
-                  <span>{turn.instruction}</span>
-                  <small>{turn.proposal.slice(0, 180)}</small>
-                </li>
-              ))}
-            </ol>
-          )}
-          {mode === "rewrite" && offer && review && (
-            <RewriteReviewPanel review={review} onDecide={decideReviewHunk} />
-          )}
-          {mode === "ask" && agentTrace.length > 0 && (
-            <ol className="ai-stream__trace">
-              {agentTrace.map((step, index) => (
-                <li key={`${step.name}-${index}`}>
-                  <span>{step.name}</span>
-                  {step.detail ? (
-                    <span className="ai-stream__mention-detail"> {step.detail}</span>
-                  ) : null}
-                </li>
-              ))}
-            </ol>
-          )}
-          {mode === "ask" && agentAnswer && (
-            <AgentAnswer
-              answer={agentAnswer}
-              workspaceRoot={workspaceRoot}
-              onOpenMatch={onOpenMatch}
-              onInsert={insertAgentAnswer}
-              onConvertToRewrite={convertAgentAnswerToRewrite}
-            />
-          )}
-          {status && <p className="ai-stream__status">{status}</p>}
-          {usage && (
-            <p className="ai-stream__status">
-              {t("ai.stream.usage", {
-                prompt: usage.promptTokens,
-                completion: usage.completionTokens,
-              })}
-            </p>
-          )}
         </div>
-        <details
-          className="ai-stream__thinking"
-          open={thinkingOpen}
-          onToggle={(event) => setThinkingOpen(event.currentTarget.open)}
-        >
-          <summary>{t("ai.stream.thinking")}</summary>
-          <pre
-            ref={thinkingRef}
-            onScroll={(event) => {
-              const node = event.currentTarget;
-              followThinking.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
-            }}
-          >
-            {view.thinking || t("ai.stream.thinkingEmpty")}
-          </pre>
-        </details>
       </div>
     </section>
   );

@@ -33,6 +33,12 @@ export interface FileStat {
   mtimeMs: number;
 }
 
+/** Result of renaming a file in place. */
+export interface RenameResult {
+  path: string;
+  name: string;
+}
+
 /** `text` documents are edited in CodeMirror; `large` ones are read-only ranges. */
 export type DocumentMode = "text" | "large";
 
