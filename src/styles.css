@@ -1706,7 +1706,9 @@ code {
   padding: 4px 8px;
   border: 1px solid var(--accent);
   border-radius: var(--radius-md);
-  background: var(--bg-panel);
+  /* `--bg-panel` is not a defined token; use an opaque surface so the action
+     remains legible when it overlaps selected editor text. */
+  background: var(--bg-elevated);
   box-shadow: 0 5px 16px rgb(0 0 0 / 18%);
   color: var(--fg);
   font-size: var(--text-sm);
@@ -1716,7 +1718,7 @@ code {
 
 .ai-selection-action:hover {
   border-color: var(--accent);
-  background: var(--bg-active-line);
+  background: var(--bg-editor);
 }
 
 .ai-selection-action > span {
