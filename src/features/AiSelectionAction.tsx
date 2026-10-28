@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { getEditorView, getSelectionSpan, subscribeDocChanges } from "../editor/registry";
+import {
+  getEditorView,
+  getSelectionSpan,
+  subscribeDocChanges,
+  subscribeSourceSelection,
+} from "../editor/registry";
 import { useI18n } from "../i18n";
 
 interface Props {
@@ -14,11 +19,25 @@ interface Position {
   top: number;
 }
 
+/** End of a selection made in the Markdown preview, which mirrors into the editor. */
+function previewSelectionEnd(): { left: number; bottom: number } | null {
+  const selection = document.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = selection.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+  const element = container instanceof Element ? container : container.parentElement;
+  if (!element?.closest(".markdown-preview__body")) return null;
+  const rects = range.getClientRects();
+  const last = rects[rects.length - 1];
+  return last ? { left: last.right, bottom: last.bottom } : null;
+}
+
 function nextPosition(tabId: string): Position | null {
   const view = getEditorView(tabId);
   const selection = getSelectionSpan(tabId);
   if (!view || !selection) return null;
-  const coords = view.coordsAtPos(selection.to);
+  const editorShown = view.dom.getClientRects().length > 0;
+  const coords = previewSelectionEnd() ?? (editorShown ? view.coordsAtPos(selection.to) : null);
   if (!coords) return null;
   // The action is centered under the selection endpoint and held inside the viewport.
   return {
@@ -44,22 +63,24 @@ export default function AiSelectionAction({ tabId, visible, onRewrite }: Props) 
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => setPosition(nextPosition(tabId)));
     };
-    const view = getEditorView(tabId);
     update();
     window.addEventListener("keyup", update);
     window.addEventListener("mouseup", update);
     window.addEventListener("resize", update);
     document.addEventListener("selectionchange", update);
-    view?.scrollDOM.addEventListener("scroll", update, { passive: true });
+    // Capture catches the preview scroller as well as the editor.
+    document.addEventListener("scroll", update, { capture: true, passive: true });
     const stop = subscribeDocChanges(tabId, update);
+    const stopSource = subscribeSourceSelection(tabId, update);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("keyup", update);
       window.removeEventListener("mouseup", update);
       window.removeEventListener("resize", update);
       document.removeEventListener("selectionchange", update);
-      view?.scrollDOM.removeEventListener("scroll", update);
+      document.removeEventListener("scroll", update, { capture: true });
       stop();
+      stopSource();
     };
   }, [tabId, visible]);
 

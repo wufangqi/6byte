@@ -53,12 +53,27 @@ export function plainHeadingText(text: string): string {
 interface RenderEnv extends Record<string, unknown> {
   tracker: SlugTracker;
   baseDir?: string;
+  sourceLines?: boolean;
 }
 
 export interface RenderOptions {
   /** Directory of the document, used to resolve relative image paths. */
   baseDir?: string;
+  /**
+   * Tag block elements with `data-src="start:end"` (0-based lines, end exclusive)
+   * so the preview can map a selection back to the source. Off for export.
+   */
+  sourceLines?: boolean;
 }
+
+md.core.ruler.push("source_lines", (state) => {
+  if (!(state.env as Partial<RenderEnv> | undefined)?.sourceLines) return;
+  for (const token of state.tokens) {
+    if (token.nesting === 1 && token.map) {
+      token.attrSet("data-src", `${token.map[0]}:${token.map[1]}`);
+    }
+  }
+});
 
 md.renderer.rules.heading_open = (tokens, index, options, env, self) => {
   const inline = tokens[index + 1];
@@ -311,7 +326,11 @@ md.renderer.rules.math_inline = (tokens, index) => {
 md.renderer.rules.math_block = (tokens, index) => mathHtml(tokens[index].content, true);
 
 export function renderMarkdown(source: string, options: RenderOptions = {}): string {
-  const env: RenderEnv = { tracker: createSlugTracker(), baseDir: options.baseDir };
+  const env: RenderEnv = {
+    tracker: createSlugTracker(),
+    baseDir: options.baseDir,
+    sourceLines: options.sourceLines,
+  };
   return md.render(source, env as unknown as Record<string, unknown>);
 }
 

@@ -1,5 +1,6 @@
 import type { AiMessage, AiToolCall, AiToolDefinition } from "../ipc/types";
 import { BLOCKED_MESSAGE, blockedReason } from "./agentAccess";
+import { ContextOverflowError, MIN_REPLY_TOKENS, messageTokens, replyTokens } from "./aiLimits";
 import { pathInsideRoot } from "./fileTree";
 
 /** The only tools a read-only agent may call. */
@@ -10,6 +11,7 @@ export const AGENT_RESULT_CHARS = 2_000;
 export const READ_RANGE_MAX = 40;
 /** Total characters one question may send to the model, summed over every request. */
 export const AGENT_SEND_BUDGET = 12_000;
+export const AGENT_MAX_TOKENS = 1_024;
 
 /** Native schemas for providers that support OpenAI-style function calling. */
 export const AGENT_TOOL_DEFINITIONS: AiToolDefinition[] = [
@@ -120,18 +122,21 @@ type AgentTurn =
   | { kind: "invalid"; message: string }
   | { kind: "empty" };
 
-const AGENT_PREAMBLE = `你是只读助手。只能查看工作区，不能创建、修改或删除文件。
+const agentPreamble = (
+  readLines: number
+) => `你是只读助手。只能查看工作区，不能创建、修改或删除文件。
 每次只输出一个 JSON 对象，不要加别的文字。
 查找目录：{"tool":"list_dir","path":"."}
 搜索：{"tool":"grep","pattern":"正则","path":"."}
-读行：{"tool":"read_range","path":"文件","start":1,"count":40}
+读行：{"tool":"read_range","path":"文件","start":1,"count":${Math.min(40, readLines)}}
 读大纲：{"tool":"outline","path":"文件"}
 回答：{"answer":"给用户的回答"}
-count 最大 ${READ_RANGE_MAX}。路径必须留在工作区内。隐藏文件、密钥文件和用户禁读的路径读不到。
-如果服务支持 function calling，每轮至多调用一个已提供的只读函数；否则按上面的 JSON 文本格式输出。`;
+count 最大 ${readLines}。路径必须留在工作区内。隐藏文件、密钥文件和用户禁读的路径读不到。
+如果服务支持 function calling，每轮至多调用一个已提供的只读函数；否则按上面的 JSON 文本格式输出。
+前面的问答只是对话上下文；回答当前问题时，需要的内容仍要用工具重新查。`;
 
-export function agentSystem(root: string): string {
-  return `${AGENT_PREAMBLE}\n工作区：${root}`;
+export function agentSystem(root: string, readLines = READ_RANGE_MAX): string {
+  return `${agentPreamble(readLines)}\n工作区：${root}`;
 }
 
 /** Join a user path onto the workspace root. `..` and outside paths are refused. */
@@ -163,7 +168,7 @@ export function resolveWorkspacePath(root: string, input: string): string | null
   return pathInsideRoot(rootPath, joined) ? joined : null;
 }
 
-export function parseAgentTurn(text: string): AgentTurn {
+export function parseAgentTurn(text: string, readLines = READ_RANGE_MAX): AgentTurn {
   const trimmed = text.trim();
   if (!trimmed) return { kind: "empty" };
   const start = trimmed.indexOf("{");
@@ -178,14 +183,14 @@ export function parseAgentTurn(text: string): AgentTurn {
   if (!value || typeof value !== "object") return { kind: "answer", answer: trimmed };
   const record = value as Record<string, unknown>;
   const tool = typeof record.tool === "string" ? record.tool : "";
-  if (tool) return toolTurn(tool, record);
+  if (tool) return toolTurn(tool, record, readLines);
   if (typeof record.answer === "string" && record.answer.trim()) {
     return { kind: "answer", answer: record.answer.trim() };
   }
   return { kind: "answer", answer: trimmed };
 }
 
-function toolTurn(tool: string, record: Record<string, unknown>): AgentTurn {
+function toolTurn(tool: string, record: Record<string, unknown>, readLines: number): AgentTurn {
   if (!AGENT_TOOLS.includes(tool as AgentToolName)) return { kind: "rejected", tool };
   return {
     kind: "call",
@@ -194,12 +199,12 @@ function toolTurn(tool: string, record: Record<string, unknown>): AgentTurn {
       path: typeof record.path === "string" ? record.path : ".",
       pattern: typeof record.pattern === "string" ? record.pattern : "",
       start: positiveInt(record.start, 1),
-      count: Math.min(READ_RANGE_MAX, positiveInt(record.count, READ_RANGE_MAX)),
+      count: Math.min(readLines, positiveInt(record.count, readLines)),
     },
   };
 }
 
-export function parseNativeAgentCall(call: AiToolCall): AgentTurn {
+export function parseNativeAgentCall(call: AiToolCall, readLines = READ_RANGE_MAX): AgentTurn {
   if (call.type !== "function" || !call.function?.name) {
     return { kind: "invalid", message: "模型返回了无效的工具调用。" };
   }
@@ -208,7 +213,7 @@ export function parseNativeAgentCall(call: AiToolCall): AgentTurn {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return { kind: "invalid", message: "模型返回的工具参数不是对象。" };
     }
-    return toolTurn(call.function.name, value as Record<string, unknown>);
+    return toolTurn(call.function.name, value as Record<string, unknown>, readLines);
   } catch {
     return { kind: "invalid", message: "模型返回的工具参数不是有效 JSON。" };
   }
@@ -220,9 +225,9 @@ function positiveInt(value: unknown, fallback: number): number {
   return Math.floor(number);
 }
 
-export function clipAgentResult(text: string): string {
-  if (text.length <= AGENT_RESULT_CHARS) return text;
-  return `${text.slice(0, AGENT_RESULT_CHARS)}\n…已截断`;
+export function clipAgentResult(text: string, max = AGENT_RESULT_CHARS): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max)}\n…已截断`;
 }
 
 function requestSize(messages: AiMessage[]): number {
@@ -269,14 +274,51 @@ function appendToolResult(
   }
 }
 
+/**
+ * Earlier questions and answers of this conversation, oldest first, as
+ * alternating user/assistant messages. Keeps the newest `turns` pairs that fit
+ * in `chars`.
+ */
+export function askHistory(
+  pairs: readonly { question: string; answer: string }[],
+  turns: number,
+  chars: number
+): AiMessage[] {
+  const kept: { question: string; answer: string }[] = [];
+  let size = 0;
+  for (const pair of [...pairs].reverse()) {
+    if (kept.length >= turns) break;
+    const next = pair.question.length + pair.answer.length;
+    if (size + next > chars) break;
+    size += next;
+    kept.unshift(pair);
+  }
+  return kept.flatMap((pair) => [
+    { role: "user" as const, content: pair.question },
+    { role: "assistant" as const, content: pair.answer },
+  ]);
+}
+
 export async function runReadAgent(input: {
   question: string;
   root: string;
-  complete(messages: AiMessage[], signal?: AbortSignal): Promise<string | AgentCompletion>;
+  /** `maxTokens` is the reply size that still fits the model window. */
+  complete(
+    messages: AiMessage[],
+    signal?: AbortSignal,
+    maxTokens?: number
+  ): Promise<string | AgentCompletion>;
   tools: AgentTools;
   maxSteps?: number;
   /** Characters allowed over all requests. Defaults to `AGENT_SEND_BUDGET`. */
   budget?: number;
+  readLines?: number;
+  resultChars?: number;
+  /** Earlier rounds from `askHistory`; dropped oldest-first when the window is tight. */
+  history?: readonly AiMessage[];
+  maxTokens?: number;
+  /** Model context window in tokens. Unset means no extra limit. */
+  contextTokens?: number;
   /** Extra paths the agent may not open, on top of hidden and key files. */
   denylist?: readonly string[];
   signal?: AbortSignal;
@@ -284,10 +326,15 @@ export async function runReadAgent(input: {
 }): Promise<AgentResult> {
   const maxSteps = input.maxSteps ?? AGENT_MAX_STEPS;
   const budget = input.budget ?? AGENT_SEND_BUDGET;
+  const readLines = input.readLines ?? READ_RANGE_MAX;
+  const resultChars = input.resultChars ?? AGENT_RESULT_CHARS;
+  const maxTokens = input.maxTokens ?? AGENT_MAX_TOKENS;
   const messages: AiMessage[] = [
-    { role: "system", content: agentSystem(input.root) },
+    { role: "system", content: agentSystem(input.root, readLines) },
+    ...(input.history ?? []),
     { role: "user", content: input.question.trim() },
   ];
+  let historyLeft = input.history?.length ?? 0;
   const trace: AgentTrace[] = [];
   let sent = 0;
   const finish = (answer: string, stop: AgentStop): AgentResult => ({
@@ -301,6 +348,25 @@ export async function runReadAgent(input: {
 
   for (let step = 0; step < maxSteps; step += 1) {
     if (input.signal?.aborted) return cancelled();
+    const window = input.contextTokens;
+    while (
+      historyLeft >= 2 &&
+      ((window && messageTokens(messages) + MIN_REPLY_TOKENS > window) ||
+        sent + requestSize(messages) > budget)
+    ) {
+      messages.splice(1, 2);
+      historyLeft -= 2;
+    }
+    let reply: number;
+    try {
+      reply = replyTokens(messageTokens(messages), maxTokens, window);
+    } catch (error) {
+      if (!(error instanceof ContextOverflowError)) throw error;
+      return finish(
+        `内容超出模型的上下文长度（约 ${error.promptTokens} / ${error.contextTokens} token），没有得出回答。可以在设置里调低查找结果上限，或给模型设更大的上下文长度。文件没有被修改。`,
+        "budget"
+      );
+    }
     const size = requestSize(messages);
     if (sent + size > budget) {
       return finish(
@@ -312,7 +378,7 @@ export async function runReadAgent(input: {
     report();
     let completion: AgentCompletion;
     try {
-      completion = normalizeCompletion(await input.complete(messages, input.signal));
+      completion = normalizeCompletion(await input.complete(messages, input.signal, reply));
     } catch (error) {
       if (input.signal?.aborted) return cancelled();
       throw error;
@@ -322,8 +388,8 @@ export async function runReadAgent(input: {
     const nativeCalls = completion.toolCalls ?? [];
     const turn =
       nativeCalls.length > 0
-        ? parseNativeAgentCall(nativeCalls[0])
-        : parseAgentTurn(completion.text);
+        ? parseNativeAgentCall(nativeCalls[0], readLines)
+        : parseAgentTurn(completion.text, readLines);
     if (turn.kind === "answer") return finish(turn.answer, "answered");
     if (turn.kind === "empty") {
       messages.push({ role: "user", content: "请输出一个 JSON 对象。" });
@@ -343,7 +409,8 @@ export async function runReadAgent(input: {
       continue;
     }
     const result = clipAgentResult(
-      await dispatchTool(input.root, turn.call, input.tools, input.denylist ?? [])
+      await dispatchTool(input.root, turn.call, input.tools, input.denylist ?? []),
+      resultChars
     );
     trace.push({
       name: turn.call.name,

@@ -1157,6 +1157,7 @@ export default function App() {
             <AiStreamPanel
               tabId={active.id}
               panelWidth={aiPanelWidth}
+              sourceShown={showSource}
               onClose={() => setStreamOpen(false)}
               onOpenMatch={(path, line) => void openMatch(path, line)}
               onNeedSettings={() => {
@@ -1172,7 +1173,7 @@ export default function App() {
         <AiSelectionAction
           key={active.id}
           tabId={active.id}
-          visible={showSource && aiFloatingMarkerEnabled && !streamOpen}
+          visible={aiFloatingMarkerEnabled && !streamOpen}
           onRewrite={openRewrite}
         />
       )}

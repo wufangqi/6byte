@@ -17,6 +17,20 @@ export interface ProviderModel {
   model: string;
   /** Disabled models stay configured but are left out of model pickers. */
   enabled: boolean;
+  /**
+   * Context window in tokens, as the user configured it. Requests are trimmed
+   * to fit; it is not sent to the server. Unset means unknown.
+   */
+  contextTokens?: number;
+}
+
+export const CONTEXT_TOKENS_MIN = 1_024;
+export const CONTEXT_TOKENS_MAX = 2_000_000;
+
+export function cleanContextTokens(value: unknown): number | undefined {
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number) || number <= 0) return undefined;
+  return Math.max(CONTEXT_TOKENS_MIN, Math.min(CONTEXT_TOKENS_MAX, Math.round(number)));
 }
 
 /** A service endpoint. Its API key lives in the keychain under `id`, shared by every model. */
@@ -38,6 +52,7 @@ export interface ActiveEndpoint {
   id: string;
   baseUrl: string;
   model: string;
+  contextTokens?: number;
 }
 
 export const EMPTY_AI_CATALOG: AiCatalog = {
@@ -79,18 +94,36 @@ export function activeModel(catalog: AiCatalog): ActiveEndpoint | null {
   const provider = activeProvider(catalog);
   if (!provider) return null;
   const model = activeModelEntry(catalog);
-  return { id: provider.id, baseUrl: provider.baseUrl, model: model?.model ?? "" };
+  return {
+    id: provider.id,
+    baseUrl: provider.baseUrl,
+    model: model?.model ?? "",
+    contextTokens: model?.contextTokens,
+  };
 }
 
 function cleanModel(value: unknown): ProviderModel | null {
   if (!value || typeof value !== "object") return null;
-  const record = value as { id?: unknown; name?: unknown; model?: unknown; enabled?: unknown };
+  const record = value as {
+    id?: unknown;
+    name?: unknown;
+    model?: unknown;
+    enabled?: unknown;
+    contextTokens?: unknown;
+  };
   const id = typeof record.id === "string" ? record.id.trim() : "";
   if (!id) return null;
   const model = typeof record.model === "string" ? record.model.trim() : "";
   const name =
     typeof record.name === "string" && record.name.trim() ? record.name.trim() : model || "模型";
-  return { id, name, model, enabled: record.enabled !== false };
+  const contextTokens = cleanContextTokens(record.contextTokens);
+  return {
+    id,
+    name,
+    model,
+    enabled: record.enabled !== false,
+    ...(contextTokens ? { contextTokens } : {}),
+  };
 }
 
 function cleanProvider(value: unknown): Provider | null {
@@ -201,6 +234,9 @@ export function serializeAiSettings(catalog: AiCatalog): string {
         name: model.name.trim() || model.model.trim() || "模型",
         model: model.model.trim(),
         enabled: model.enabled,
+        ...(cleanContextTokens(model.contextTokens)
+          ? { contextTokens: cleanContextTokens(model.contextTokens) }
+          : {}),
       })),
     })),
   });

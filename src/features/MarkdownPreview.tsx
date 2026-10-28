@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
-import { getDocText, getScrollElement, subscribeDocChanges } from "../editor/registry";
+import {
+  getDocText,
+  getEditorView,
+  getScrollElement,
+  selectSourceRange,
+  subscribeDocChanges,
+} from "../editor/registry";
+import { sourceRangeForPreviewSelection } from "./previewSelection";
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { enhanceMermaidDiagram } from "./diagramViewport";
@@ -28,10 +35,22 @@ interface Props {
 const renderAll = (tabId: string, baseDir: string | null) => {
   const text = getDocText(tabId) ?? "";
   return {
-    html: renderMarkdown(text, baseDir ? { baseDir } : {}),
+    html: renderMarkdown(text, { sourceLines: true, ...(baseDir ? { baseDir } : {}) }),
     headings: extractHeadings(text),
   };
 };
+
+const TARGET_HIGHLIGHT = "ai-target";
+
+/**
+ * Keep the text picked for AI visible after focus moves to the AI panel, which
+ * clears the page selection. Skipped where the CSS Highlight API is missing.
+ */
+function markTarget(range: Range | null): void {
+  if (typeof CSS === "undefined" || !CSS.highlights || typeof Highlight === "undefined") return;
+  if (range) CSS.highlights.set(TARGET_HIGHLIGHT, new Highlight(range));
+  else CSS.highlights.delete(TARGET_HIGHLIGHT);
+}
 
 /**
  * Split preview for Markdown tabs (T19).
@@ -80,6 +99,36 @@ export default function MarkdownPreview({
     // The resolved theme is a dependency so switching themes re-renders the
     // markdown and lets the Shiki/Mermaid effects repaint with the new palette.
   }, [tabId, baseDir, resolvedTheme]);
+
+  // A selection in the preview becomes the editor selection, so Ctrl+K, the
+  // floating AI action and the AI panel work the same with the source hidden.
+  useEffect(() => {
+    const onSelectionChange = () => {
+      const selection = document.getSelection();
+      const body = scrollerRef.current?.querySelector(".markdown-preview__body");
+      if (!selection || selection.rangeCount === 0 || !body) return;
+      const range = selection.getRangeAt(0);
+      if (!body.contains(range.commonAncestorContainer)) return;
+      if (range.collapsed) {
+        markTarget(null);
+        const head = getEditorView(tabId)?.state.selection.main.head;
+        if (head !== undefined) selectSourceRange(tabId, head, head);
+        return;
+      }
+      const mapped = sourceRangeForPreviewSelection(body, range, getDocText(tabId) ?? "");
+      if (!mapped) return;
+      selectSourceRange(tabId, mapped.from, mapped.to);
+      markTarget(range.cloneRange());
+    };
+    document.addEventListener("selectionchange", onSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", onSelectionChange);
+      markTarget(null);
+    };
+  }, [tabId]);
+
+  // A re-render replaces the nodes the highlight pointed at.
+  useEffect(() => () => markTarget(null), [html]);
 
   // Relative images cannot be loaded by the webview directly; read them through
   // Rust and inline them as data URIs after each render (T19 image paste).

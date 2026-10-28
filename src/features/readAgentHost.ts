@@ -20,8 +20,8 @@ import {
 import type { AiMessage, AiToolCall, AiUsage } from "../ipc/types";
 import { extractHeadings } from "./outline";
 import {
+  AGENT_MAX_TOKENS,
   AGENT_TOOL_DEFINITIONS,
-  READ_RANGE_MAX,
   type AgentCompletion,
   type AgentTools,
 } from "./readAgent";
@@ -35,8 +35,11 @@ function clipLine(text: string): string {
   return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
+/** The agent already caps `count` by the active limits; this only guards the reader. */
+const READ_LINES_HARD_MAX = 400;
+
 async function linesOf(path: string, start: number, count: number): Promise<string[]> {
-  const bounded = Math.min(READ_RANGE_MAX, Math.max(1, count));
+  const bounded = Math.min(READ_LINES_HARD_MAX, Math.max(1, count));
   const from = Math.max(1, start);
   try {
     const stat = await statFile(path);
@@ -107,6 +110,7 @@ export function completeAgentTurn(input: {
   model: string;
   profileId: string;
   messages: AiMessage[];
+  maxTokens?: number;
   signal?: AbortSignal;
 }): Promise<AgentCompletion> {
   return new Promise((resolve, reject) => {
@@ -167,7 +171,7 @@ export function completeAgentTurn(input: {
       baseUrl: input.baseUrl,
       model: input.model,
       profileId: input.profileId,
-      maxTokens: 1024,
+      maxTokens: input.maxTokens ?? AGENT_MAX_TOKENS,
       messages: input.messages,
       tools: AGENT_TOOL_DEFINITIONS,
     })

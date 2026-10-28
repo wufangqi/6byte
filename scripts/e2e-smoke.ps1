@@ -59,6 +59,31 @@ function Connect-Cdp {
   $socket
 }
 
+# One whole WebSocket message. CDP replies arrive in several frames once they
+# pass a few KB, and a frame can end inside a multi-byte UTF-8 character.
+function Receive-CdpMessage {
+  param($Socket, [datetime]$Deadline)
+  $remaining = [int]($Deadline - (Get-Date)).TotalMilliseconds
+  if ($remaining -le 0) { throw 'CDP response timed out' }
+  $buffer = New-Object byte[] 65536
+  $segment = [ArraySegment[byte]]::new($buffer)
+  $pending = New-Object IO.MemoryStream
+  $cts = [System.Threading.CancellationTokenSource]::new($remaining)
+  try {
+    do {
+      try {
+        $result = $Socket.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
+      } catch {
+        throw "CDP response timed out or the socket closed: $($_.Exception.Message)"
+      }
+      $pending.Write($buffer, 0, $result.Count)
+    } while (-not $result.EndOfMessage)
+  } finally {
+    $cts.Dispose()
+  }
+  [Text.Encoding]::UTF8.GetString($pending.ToArray())
+}
+
 function Invoke-CdpEval {
   param($Socket, [string]$Expression)
   $payload = @{
@@ -74,16 +99,12 @@ function Invoke-CdpEval {
     [System.Threading.CancellationToken]::None
   ).Wait(10000) | Out-Null
 
-  $buffer = New-Object byte[] 1048576
-  $segment = [ArraySegment[byte]]::new($buffer)
   $deadline = (Get-Date).AddSeconds(20)
-  while ((Get-Date) -lt $deadline) {
-    $result = $Socket.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).Result
-    $text = [Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+  while ($true) {
+    $text = Receive-CdpMessage $Socket $deadline
     try { $message = $text | ConvertFrom-Json } catch { continue }
     if ($message.id -eq 1) { return $message.result.result.value }
   }
-  throw 'CDP evaluate timed out'
 }
 
 # Send an arbitrary CDP command (e.g. Input.insertText / Input.dispatchKeyEvent)
@@ -103,16 +124,12 @@ function Invoke-CdpMethod {
     [System.Threading.CancellationToken]::None
   ).Wait(10000) | Out-Null
 
-  $buffer = New-Object byte[] 1048576
-  $segment = [ArraySegment[byte]]::new($buffer)
   $deadline = (Get-Date).AddSeconds(20)
-  while ((Get-Date) -lt $deadline) {
-    $received = $Socket.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).Result
-    $text = [Text.Encoding]::UTF8.GetString($buffer, 0, $received.Count)
+  while ($true) {
+    $text = Receive-CdpMessage $Socket $deadline
     try { $message = $text | ConvertFrom-Json } catch { continue }
     if ($message.id -eq 1) { return $message.result }
   }
-  throw "CDP $Method timed out"
 }
 
 function Wait-AppReady {

@@ -21,9 +21,31 @@ import {
   type AiMetrics,
 } from "./aiMetrics";
 import {
+  LIMIT_FIELDS,
+  MAX_CUSTOM_LIMITS,
+  PRESET_IDS,
+  PRESET_LIMITS,
+  addCustomLimits,
+  applyLimits,
+  clampLimit,
+  isPresetId,
+  limitsOf,
+  loadLimitsStore,
+  removeCustomLimits,
+  saveLimitsStore,
+  updateCustomLimits,
+  useLimitsStore,
+  type AiLimits,
+  type LimitField,
+} from "./aiLimits";
+import {
+  CONTEXT_TOKENS_MAX,
+  CONTEXT_TOKENS_MIN,
   SAVED_KEY_MASK,
+  activeModel,
   addModel,
   addProvider,
+  cleanContextTokens,
   isSavedKeyMask,
   keepActiveModel,
   loadAiSettings,
@@ -89,6 +111,7 @@ export default function SettingsPage() {
       items: [
         { id: "models", label: t("settings.nav.models") },
         { id: "providers", label: t("settings.nav.providers") },
+        { id: "limits", label: t("settings.nav.limits") },
         { id: "access", label: t("settings.nav.access") },
         { id: "usage", label: t("settings.nav.usage") },
       ],
@@ -141,6 +164,9 @@ export default function SettingsPage() {
             expanded={expanded}
             setExpanded={setExpanded}
           />
+        )}
+        {section === "limits" && (
+          <LimitsSection catalog={catalog} onGoModels={() => setSection("models")} />
         )}
         {section === "access" && <AccessSection />}
         {section === "usage" && <UsageSection />}
@@ -253,7 +279,12 @@ function ModelsSection({
   const [completion, setCompletion] = useState<CompletionSettings>(loadCompletionSettings);
   const [query, setQuery] = useState("");
   const [target, setTarget] = useState(catalog.activeProviderId || catalog.providers[0]?.id || "");
-  const [editing, setEditing] = useState<{ id: string; name: string; model: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string;
+    name: string;
+    model: string;
+    context: string;
+  } | null>(null);
 
   const chatValue = pairOf(catalog.activeProviderId, catalog.activeModelId);
   const chatChoices = completionChoices(catalog, {
@@ -291,6 +322,7 @@ function ModelsSection({
         ...model,
         name: editing.name.trim() || apiModel || t("ai.model.unnamed"),
         model: apiModel,
+        contextTokens: cleanContextTokens(editing.context.trim() || undefined),
       })
     );
     setEditing(null);
@@ -459,6 +491,20 @@ function ModelsSection({
                             setEditing({ ...editing, model: event.target.value })
                           }
                         />
+                        <input
+                          className="settings__input settings__input--number"
+                          type="number"
+                          inputMode="numeric"
+                          min={CONTEXT_TOKENS_MIN}
+                          max={CONTEXT_TOKENS_MAX}
+                          value={editing.context}
+                          aria-label={t("settings.models.context")}
+                          placeholder={t("settings.models.contextPlaceholder")}
+                          title={t("settings.models.contextHint")}
+                          onChange={(event) =>
+                            setEditing({ ...editing, context: event.target.value })
+                          }
+                        />
                         <button type="submit" className="btn btn--primary">
                           {t("settings.models.done")}
                         </button>
@@ -469,6 +515,16 @@ function ModelsSection({
                           {model.name || model.model || t("ai.model.unnamed")}
                           {model.model && model.model !== model.name && (
                             <span className="settings__mono settings__model-id">{model.model}</span>
+                          )}
+                          {model.contextTokens && (
+                            <span
+                              className="settings__tag settings__tag--muted"
+                              title={t("settings.models.contextTag", {
+                                count: model.contextTokens.toLocaleString(),
+                              })}
+                            >
+                              {shortTokens(model.contextTokens)}
+                            </span>
                           )}
                           {pairOf(provider.id, model.id) === chatValue && (
                             <span className="settings__tag">{t("settings.models.tagChat")}</span>
@@ -484,7 +540,12 @@ function ModelsSection({
                             type="button"
                             className="settings__link"
                             onClick={() =>
-                              setEditing({ id: model.id, name: model.name, model: model.model })
+                              setEditing({
+                                id: model.id,
+                                name: model.name,
+                                model: model.model,
+                                context: model.contextTokens ? String(model.contextTokens) : "",
+                              })
                             }
                           >
                             {t("settings.models.edit")}
@@ -892,6 +953,281 @@ function ProviderCard({
   );
 }
 
+function shortTokens(count: number): string {
+  if (count >= 1_000_000) return `${+(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${Math.round(count / 1_000)}K`;
+  return String(count);
+}
+
+const LIMIT_GROUPS = ["history", "rewrite", "ask"] as const;
+
+function LimitsSection({ catalog, onGoModels }: { catalog: AiCatalog; onGoModels(): void }) {
+  const { t } = useI18n();
+  const store = useLimitsStore();
+  const active = limitsOf(store);
+  const activeCustom = store.custom.find((item) => item.id === store.activeId) ?? null;
+  const full = store.custom.length >= MAX_CUSTOM_LIMITS;
+  const contextTokens = activeModel(catalog)?.contextTokens;
+
+  const summary = (limits: AiLimits) =>
+    t("settings.limits.summary", {
+      turns: limits.historyTurns,
+      selection: limits.selectionChars.toLocaleString(),
+      steps: limits.askSteps,
+      budget: limits.askBudget.toLocaleString(),
+    });
+
+  const copyFrom = (name: string, limits: AiLimits) => {
+    const next = addCustomLimits(store, t("settings.limits.copyName", { name }), limits);
+    if (next) saveLimitsStore(next);
+  };
+
+  const remove = async (id: string, name: string) => {
+    const choice = await ask({
+      title: t("settings.limits.remove"),
+      message: t("settings.limits.removeMessage", { name }),
+      buttons: [
+        { label: t("dialog.cancel"), value: "cancel" },
+        { label: t("settings.limits.remove"), value: "confirm", variant: "danger" },
+      ],
+    });
+    if (choice === "confirm") saveLimitsStore(removeCustomLimits(loadLimitsStore(), id));
+  };
+
+  const applyButton = (id: string) =>
+    store.activeId === id ? (
+      <span className="settings__tag">{t("settings.limits.inUse")}</span>
+    ) : (
+      <button type="button" className="btn" onClick={() => saveLimitsStore(applyLimits(store, id))}>
+        {t("settings.limits.apply")}
+      </button>
+    );
+
+  const activeName = activeCustom
+    ? activeCustom.name || t("settings.limits.untitled")
+    : t(`settings.limits.preset.${isPresetId(store.activeId) ? store.activeId : "balanced"}`);
+
+  return (
+    <>
+      <Header title={t("settings.limits.title")} sub={t("settings.limits.sub")} />
+
+      <h2 className="settings__section">{t("settings.limits.presets")}</h2>
+      <div className="settings__card">
+        {PRESET_IDS.map((id) => {
+          const name = t(`settings.limits.preset.${id}`);
+          return (
+            <div key={id} className="settings__row settings__model">
+              <div className="settings__row-text">
+                <div className="settings__row-title">
+                  {name}
+                  <span className="settings__tag settings__tag--muted">
+                    {t("settings.limits.readonly")}
+                  </span>
+                </div>
+                <div className="settings__row-hint">
+                  {t(`settings.limits.presetHint.${id}`)}
+                  {"\n"}
+                  {summary(PRESET_LIMITS[id])}
+                </div>
+              </div>
+              <div className="settings__model-actions">
+                {!full && (
+                  <button
+                    type="button"
+                    className="settings__link"
+                    onClick={() => copyFrom(name, PRESET_LIMITS[id])}
+                  >
+                    {t("settings.limits.copy")}
+                  </button>
+                )}
+                {applyButton(id)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <h2 className="settings__section">
+        {t("settings.limits.custom", { count: store.custom.length, max: MAX_CUSTOM_LIMITS })}
+      </h2>
+      <div className="settings__card">
+        {store.custom.length === 0 ? (
+          <div className="settings__empty">
+            <span>{t("settings.limits.customEmpty")}</span>
+            <button type="button" className="btn" onClick={() => copyFrom(activeName, active)}>
+              {t("settings.limits.new")}
+            </button>
+          </div>
+        ) : (
+          <>
+            {store.custom.map((item) => {
+              const name = item.name || t("settings.limits.untitled");
+              return (
+                <div key={item.id} className="settings__row settings__model">
+                  <div className="settings__row-text">
+                    <div className="settings__row-title">{name}</div>
+                    <div className="settings__row-hint">{summary(item.limits)}</div>
+                  </div>
+                  <div className="settings__model-actions">
+                    {!full && (
+                      <button
+                        type="button"
+                        className="settings__link"
+                        onClick={() => copyFrom(name, item.limits)}
+                      >
+                        {t("settings.limits.copy")}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="settings__link settings__link--danger"
+                      onClick={() => void remove(item.id, name)}
+                    >
+                      {t("settings.limits.remove")}
+                    </button>
+                    {applyButton(item.id)}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="settings__empty">
+              <span>
+                {full
+                  ? t("settings.limits.full", { max: MAX_CUSTOM_LIMITS })
+                  : t("settings.limits.newHint")}
+              </span>
+              <button
+                type="button"
+                className="btn"
+                disabled={full}
+                onClick={() => copyFrom(activeName, active)}
+              >
+                {t("settings.limits.new")}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <h2 className="settings__section">{t("settings.limits.params", { name: activeName })}</h2>
+      <div className="settings__card">
+        {activeCustom ? (
+          <Row title={t("settings.limits.name")}>
+            <input
+              key={activeCustom.id}
+              className="settings__input settings__limits-name"
+              defaultValue={activeCustom.name}
+              maxLength={40}
+              placeholder={t("settings.limits.untitled")}
+              aria-label={t("settings.limits.name")}
+              onBlur={(event) => {
+                const name = event.target.value.trim();
+                if (name !== activeCustom.name) {
+                  saveLimitsStore(updateCustomLimits(store, activeCustom.id, { name }));
+                }
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+          </Row>
+        ) : (
+          <p className="settings__empty">{t("settings.limits.presetLocked")}</p>
+        )}
+        {LIMIT_GROUPS.map((group) => (
+          <div key={group} className="settings__group">
+            <div className="settings__group-head">
+              <span>{t(`settings.limits.group.${group}`)}</span>
+            </div>
+            {LIMIT_FIELDS.filter((field) => field.group === group).map((field) => (
+              <Row
+                key={field.key}
+                title={t(`settings.limits.field.${field.key}`)}
+                hint={t(`settings.limits.hint.${field.key}`, {
+                  min: field.min.toLocaleString(),
+                  max: field.max.toLocaleString(),
+                })}
+              >
+                <LimitInput
+                  field={field}
+                  value={active[field.key]}
+                  disabled={!activeCustom}
+                  onCommit={(value) => {
+                    if (!activeCustom) return;
+                    saveLimitsStore(
+                      updateCustomLimits(store, activeCustom.id, {
+                        limits: { [field.key]: value },
+                      })
+                    );
+                  }}
+                />
+              </Row>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <h2 className="settings__section">{t("settings.limits.context")}</h2>
+      <div className="settings__card">
+        <Row
+          title={
+            contextTokens
+              ? t("settings.limits.contextSet", { count: contextTokens.toLocaleString() })
+              : t("settings.limits.contextUnset")
+          }
+          hint={t("settings.limits.contextHint")}
+        >
+          <button type="button" className="btn" onClick={onGoModels}>
+            {t("settings.limits.goModels")}
+          </button>
+        </Row>
+      </div>
+    </>
+  );
+}
+
+function LimitInput({
+  field,
+  value,
+  disabled,
+  onCommit,
+}: {
+  field: LimitField;
+  value: number;
+  disabled: boolean;
+  onCommit(value: number): void;
+}) {
+  const { t } = useI18n();
+  const commit = (input: HTMLInputElement) => {
+    const parsed = Number(input.value);
+    const next = Number.isFinite(parsed) ? clampLimit(field.key, parsed) : value;
+    input.value = String(next);
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <label className="settings__number">
+      <input
+        key={`${field.key}:${value}:${disabled}`}
+        className="settings__input settings__input--number"
+        type="number"
+        inputMode="numeric"
+        min={field.min}
+        max={field.max}
+        defaultValue={value}
+        disabled={disabled}
+        aria-label={t(`settings.limits.field.${field.key}`)}
+        onBlur={(event) => commit(event.currentTarget)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") commit(event.currentTarget);
+        }}
+      />
+      <span className="settings__unit">{t(`settings.limits.unit.${field.unit}`)}</span>
+    </label>
+  );
+}
+
 function AccessSection() {
   const { t } = useI18n();
   const [denyText, setDenyText] = useState(loadDenylistText);
@@ -1045,6 +1381,12 @@ function NavIcon({ kind }: { kind: SettingsSection }) {
           <rect x="2" y="2.5" width="12" height="4" rx="1" />
           <rect x="2" y="9.5" width="12" height="4" rx="1" />
           <path d="M4.5 4.5h.01M4.5 11.5h.01" />
+        </>
+      )}
+      {kind === "limits" && (
+        <>
+          <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
+          <path d="M5 6h6M5 8h3.5" />
         </>
       )}
       {kind === "access" && <path d="M8 1.8l5 2v4c0 3-2.2 5.2-5 6.4-2.8-1.2-5-3.4-5-6.4v-4z" />}

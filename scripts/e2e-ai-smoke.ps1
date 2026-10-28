@@ -44,6 +44,31 @@ function Connect-Cdp {
   $socket
 }
 
+# One whole WebSocket message. CDP replies arrive in several frames once they
+# pass a few KB, and a frame can end inside a multi-byte UTF-8 character.
+function Receive-CdpMessage {
+  param($Socket, [datetime]$Deadline)
+  $remaining = [int]($Deadline - (Get-Date)).TotalMilliseconds
+  if ($remaining -le 0) { throw 'CDP response timed out' }
+  $buffer = New-Object byte[] 65536
+  $segment = [ArraySegment[byte]]::new($buffer)
+  $pending = New-Object IO.MemoryStream
+  $cts = [System.Threading.CancellationTokenSource]::new($remaining)
+  try {
+    do {
+      try {
+        $result = $Socket.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
+      } catch {
+        throw "CDP response timed out or the socket closed: $($_.Exception.Message)"
+      }
+      $pending.Write($buffer, 0, $result.Count)
+    } while (-not $result.EndOfMessage)
+  } finally {
+    $cts.Dispose()
+  }
+  [Text.Encoding]::UTF8.GetString($pending.ToArray())
+}
+
 function Invoke-CdpEval {
   param($Socket, [string]$Expression)
   $payload = @{
@@ -58,12 +83,9 @@ function Invoke-CdpEval {
     $true,
     [System.Threading.CancellationToken]::None
   ).Wait(10000) | Out-Null
-  $buffer = New-Object byte[] 1048576
-  $segment = [ArraySegment[byte]]::new($buffer)
   $deadline = (Get-Date).AddSeconds(20)
-  while ((Get-Date) -lt $deadline) {
-    $result = $Socket.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).Result
-    $text = [Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+  while ($true) {
+    $text = Receive-CdpMessage $Socket $deadline
     try { $message = $text | ConvertFrom-Json } catch { continue }
     if ($message.id -eq 1) {
       if ($message.error) { throw "CDP evaluate failed: $($message.error.message)" }
@@ -75,7 +97,6 @@ function Invoke-CdpEval {
       return $message.result.result.value
     }
   }
-  throw 'CDP evaluate timed out'
 }
 
 function Invoke-CdpMethod {
@@ -88,16 +109,12 @@ function Invoke-CdpMethod {
     $true,
     [System.Threading.CancellationToken]::None
   ).Wait(10000) | Out-Null
-  $buffer = New-Object byte[] 1048576
-  $segment = [ArraySegment[byte]]::new($buffer)
   $deadline = (Get-Date).AddSeconds(20)
-  while ((Get-Date) -lt $deadline) {
-    $result = $Socket.ReceiveAsync($segment, [System.Threading.CancellationToken]::None).Result
-    $text = [Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+  while ($true) {
+    $text = Receive-CdpMessage $Socket $deadline
     try { $message = $text | ConvertFrom-Json } catch { continue }
     if ($message.id -eq 1) { return $message.result }
   }
-  throw "CDP $Method timed out"
 }
 
 function Wait-For {
@@ -192,7 +209,7 @@ localStorage.setItem('ainative.locale', 'en');
 localStorage.setItem('ainative.ai', $catalogJs);
 localStorage.setItem('ainative.workspace', $rootJs);
 localStorage.setItem('ainative.session', $sessionJs);
-location.reload();
+setTimeout(() => location.reload(), 0);
 'ok'
 "@
   Invoke-CdpEval $socket ($setup -replace "`r`n", ' ') | Out-Null
@@ -223,7 +240,7 @@ location.reload();
   Start-Sleep -Milliseconds 100
   $clickRewrite = @'
 (() => {
-  const send = document.querySelector('.ai-stream__actions .btn--primary');
+  const send = document.querySelector('.ai-stream__send');
   if (!send) return JSON.stringify({ error: 'rewrite send button is missing' });
   const disabled = send.disabled;
   if (!disabled) send.click();
@@ -238,7 +255,7 @@ JSON.stringify({
   proposalText: document.querySelector('.cm-ai-proposal__text')?.textContent ?? '',
   original: document.querySelector('.cm-content')?.innerText ?? '',
   status: document.querySelector('.ai-stream__status')?.textContent ?? '',
-  controls: [...document.querySelectorAll('.ai-stream__actions button')].map((button) => ({
+  controls: [...document.querySelectorAll('.ai-stream__card-actions button')].map((button) => ({
     text: button.textContent?.trim(),
     disabled: button.disabled,
   })),
@@ -261,7 +278,7 @@ JSON.stringify({
 (() => {
   const inline = document.querySelector('.cm-ai-proposal__actions button');
   if (inline) { inline.click(); return 'inline accept'; }
-  const all = [...document.querySelectorAll('.ai-stream__actions button')].find((button) =>
+  const all = [...document.querySelectorAll('.ai-stream__card-actions button')].find((button) =>
     /Accept all|全部接受/i.test(button.textContent ?? '')
   );
   if (all) { all.click(); return 'accept all'; }
@@ -289,7 +306,7 @@ JSON.stringify({
 '@
   $askInput = (Invoke-CdpEval $socket ($setAskInput -replace "`r`n", ' ')) | ConvertFrom-Json
   Start-Sleep -Milliseconds 100
-  Invoke-CdpEval $socket "document.querySelector('.ai-stream__actions .btn--primary')?.click(); 'ok'" | Out-Null
+  Invoke-CdpEval $socket "document.querySelector('.ai-stream__send')?.click(); 'ok'" | Out-Null
   $answerVisible = Wait-For $socket "document.querySelector('.agent-answer__link') !== null" 8
   $answerState = @'
 JSON.stringify({
@@ -302,7 +319,7 @@ JSON.stringify({
   Assert-True ($null -ne $askInput -and $askInput.ok -and $answerVisible -and $answer.link -eq 'e2e-ai.txt:1') 'native tool call yields a navigable answer reference' "$($answer | ConvertTo-Json -Compress)"
   Invoke-CdpEval $socket "document.querySelector('.agent-answer__link')?.click(); 'ok'" | Out-Null
   Start-Sleep -Milliseconds 200
-  Invoke-CdpEval $socket "document.querySelector('.agent-answer__actions .btn')?.click(); 'ok'" | Out-Null
+  Invoke-CdpEval $socket "document.querySelector('.ai-stream__reply-actions button:nth-child(2)')?.click(); 'ok'" | Out-Null
   Start-Sleep -Milliseconds 200
   $answerText = Invoke-CdpEval $socket "document.querySelector('.cm-content')?.innerText ?? ''"
   Assert-True ($null -ne $answerText -and $answerText.Contains('mock answer')) 'answer inserts at the current caret' "$answerText"

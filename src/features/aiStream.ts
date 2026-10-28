@@ -28,8 +28,8 @@ export function endpointOrigin(baseUrl: string): string | null {
   }
 }
 
-export function selectionTooLarge(selection: string): boolean {
-  return selection.length > SELECTION_CHAR_LIMIT;
+export function selectionTooLarge(selection: string, limit = SELECTION_CHAR_LIMIT): boolean {
+  return selection.length > limit;
 }
 
 /** Selection and instruction only. The panel adds the document through `assembleRewrite`. */
