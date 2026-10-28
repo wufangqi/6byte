@@ -122,6 +122,42 @@ export function subscribeDocChanges(tabId: string, listener: DocListener): () =>
   };
 }
 
+const selectionListeners = new Map<string, Set<DocListener>>();
+
+/**
+ * Select a source range on behalf of another view of the tab (the Markdown
+ * preview). The editor may be hidden, so nothing is focused or scrolled.
+ */
+export function selectSourceRange(tabId: string, from: number, to: number): boolean {
+  const editor = getEditorView(tabId);
+  if (!editor) return false;
+  const length = editor.state.doc.length;
+  const anchor = Math.max(0, Math.min(from, length));
+  const head = Math.max(anchor, Math.min(to, length));
+  const current = editor.state.selection.main;
+  if (current.anchor !== anchor || current.head !== head) {
+    editor.dispatch({ selection: { anchor, head }, userEvent: "select.preview" });
+  }
+  for (const listener of selectionListeners.get(tabId) ?? []) listener();
+  return true;
+}
+
+/** Fires after `selectSourceRange` changed the selection from outside the editor. */
+export function subscribeSourceSelection(tabId: string, listener: DocListener): () => void {
+  let listeners = selectionListeners.get(tabId);
+  if (!listeners) {
+    listeners = new Set();
+    selectionListeners.set(tabId, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    const current = selectionListeners.get(tabId);
+    if (!current) return;
+    current.delete(listener);
+    if (current.size === 0) selectionListeners.delete(tabId);
+  };
+}
+
 /** Scroll container of the tab currently shown by the shared view. */
 export function getScrollElement(tabId: string): HTMLElement | null {
   if (!view || activeTabId !== tabId) return null;

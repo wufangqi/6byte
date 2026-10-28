@@ -1,5 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { parseAgentTurn, resolveWorkspacePath, runReadAgent, type AgentTools } from "./readAgent";
+import {
+  askHistory,
+  parseAgentTurn,
+  resolveWorkspacePath,
+  runReadAgent,
+  type AgentTools,
+} from "./readAgent";
+
+describe("ask history", () => {
+  const pairs = [
+    { question: "q1", answer: "a1-long-answer" },
+    { question: "q2", answer: "a2" },
+    { question: "q3", answer: "a3" },
+  ];
+
+  it("keeps the newest pairs in order", () => {
+    expect(askHistory(pairs, 2, 1000).map((message) => message.content)).toEqual([
+      "q2",
+      "a2",
+      "q3",
+      "a3",
+    ]);
+  });
+
+  it("stops at the character limit and at zero turns", () => {
+    expect(askHistory(pairs, 5, 10)).toHaveLength(4);
+    expect(askHistory(pairs, 0, 1000)).toEqual([]);
+  });
+});
 
 const tools = (): AgentTools & { calls: string[] } => ({
   calls: [],

@@ -15,7 +15,7 @@ describe("AI component render smoke tests", () => {
       />
     );
 
-    expect(html).toContain("模型回复");
+    expect(html).toContain("AI 面板");
     expect(html).toContain("询问");
     expect(html).toContain("请先在文档里选中一段文字。");
   });

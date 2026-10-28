@@ -1,4 +1,5 @@
 import { useI18n } from "../i18n";
+import { CopyAction, IconAction } from "./AiPanelParts";
 import { answerReferences } from "./answerLinks";
 
 interface Props {
@@ -42,13 +43,10 @@ export default function AgentAnswer({
         })}
         {references.length === 0 ? answer : null}
       </p>
-      <div className="agent-answer__actions">
-        <button type="button" className="btn" onClick={onInsert}>
-          {t("ai.answer.insert")}
-        </button>
-        <button type="button" className="btn" onClick={onConvertToRewrite}>
-          {t("ai.answer.toRewrite")}
-        </button>
+      <div className="ai-stream__reply-actions">
+        <CopyAction text={answer} />
+        <IconAction icon="insert" label={t("ai.answer.insert")} onClick={onInsert} />
+        <IconAction icon="rewrite" label={t("ai.answer.toRewrite")} onClick={onConvertToRewrite} />
       </div>
     </div>
   );

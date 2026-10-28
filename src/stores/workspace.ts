@@ -35,7 +35,7 @@ export interface Tab {
 /** `activeId` of the settings page. It is never an entry in `tabs`. */
 export const SETTINGS_TAB_ID = "settings";
 
-export type SettingsSection = "general" | "models" | "providers" | "access" | "usage";
+export type SettingsSection = "general" | "models" | "providers" | "limits" | "access" | "usage";
 
 interface WorkspaceState {
   tabs: Tab[];
