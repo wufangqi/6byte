@@ -177,11 +177,6 @@ export function clearRewritePreview(view: EditorView): void {
   view.dispatch({ effects: setRewritePreview.of(null) });
 }
 
-/** Drop the marks from a cached state that is not currently in the view. */
-export function stripRewritePreview(state: EditorState): EditorState {
-  return state.update({ effects: setRewritePreview.of(null) }).state;
-}
-
 /** Replace the marked range in one history entry. One undo restores the original. */
 export function commitRewrite(view: EditorView, from: number, to: number, text: string): boolean {
   if (from < 0 || to > view.state.doc.length || from >= to) return false;

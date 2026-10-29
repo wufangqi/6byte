@@ -18,11 +18,12 @@ import {
 interface Props {
   onOpenFile(path: string): void;
   onRevealLine(line: number): void;
+  onCommand?(id: string): void;
   onClose(): void;
 }
 
 /** Jump to a workspace file, a recent file, or a heading in the current document. */
-export default function CommandPalette({ onOpenFile, onRevealLine, onClose }: Props) {
+export default function CommandPalette({ onOpenFile, onRevealLine, onCommand, onClose }: Props) {
   const { t } = useI18n();
   const root = useFileTree((state) => state.rootPath);
   const tree = useFileTree((state) => state.root);
@@ -51,6 +52,17 @@ export default function CommandPalette({ onOpenFile, onRevealLine, onClose }: Pr
   }, [root]);
 
   const items = useMemo(() => {
+    const commands: PaletteItem[] =
+      tab?.mode === "text"
+        ? [
+            {
+              id: "export-html",
+              kind: "command",
+              label: t("menu.exportHtml"),
+              detail: t("command.exportHtml"),
+            },
+          ]
+        : [];
     const outline: PaletteItem[] =
       tab && isMarkdownFile(tab.name)
         ? extractHeadings(readBuffer(tab.id, tab.content)).map((heading) => ({
@@ -85,12 +97,13 @@ export default function CommandPalette({ onOpenFile, onRevealLine, onClose }: Pr
         path: file.path,
       });
     }
-    return filterPalette([...outline, ...fileItems], query);
+    return filterPalette([...commands, ...outline, ...fileItems], query);
   }, [files, query, recent, root, t, tab]);
 
   const choose = (item: PaletteItem | undefined) => {
     if (!item) return;
-    if (item.kind === "heading" && item.line) onRevealLine(item.line);
+    if (item.kind === "command") onCommand?.(item.id);
+    else if (item.kind === "heading" && item.line) onRevealLine(item.line);
     else if (item.path) onOpenFile(item.path);
   };
 

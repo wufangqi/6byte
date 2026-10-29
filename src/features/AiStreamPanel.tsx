@@ -66,10 +66,13 @@ import {
   UserBubble,
   CopyAction,
 } from "./AiPanelParts";
+import { setAiActivity } from "./aiActivity";
+import { documentQuestion } from "./documentAsk";
 import { isMarkdownFile } from "./markdown";
 import { AppLogo } from "./MenuBar";
 import { extractHeadings } from "./outline";
 import { assembleRewrite, type ContextPartId } from "./rewriteContext";
+import { acceptedRewriteCount, rewriteDecision, type RewriteReview } from "./rewriteReview";
 import {
   appendRewriteTurn,
   rewriteFollowupMessages,
@@ -177,7 +180,7 @@ interface ActiveRewrite {
   metric: RewriteMetric;
 }
 
-type Note = "accepted" | "restored" | "followupRestored" | "stale" | null;
+type Note = "accepted" | "restored" | "left" | "followupRestored" | "stale" | null;
 type Menu = "history" | "context" | null;
 
 const PART_LABEL: Record<ContextPartId, string> = {
@@ -245,6 +248,7 @@ export default function AiStreamPanel({
   const [instruction, setInstruction] = useState("");
   const [catalog, setCatalog] = useState<AiCatalog>(loadAiSettings);
   const [mode, setMode] = useState<ChatMode>("rewrite");
+  const [documentOnly, setDocumentOnly] = useState(false);
   const [asking, setAsking] = useState(false);
   const [agentTrace, setAgentTrace] = useState<AgentTrace[]>([]);
   const [agentSent, setAgentSent] = useState(0);
@@ -281,6 +285,9 @@ export default function AiStreamPanel({
   const epoch = useRef(0);
   const claimRef = useRef<AiStreamClaim | null>(null);
   const pending = useRef<PendingRewrite | null>(null);
+  /** Block review open in the pending card. Null means Tab accepts the whole proposal. */
+  const reviewRef = useRef<RewriteReview | null>(null);
+  const applyRef = useRef<() => void>(() => {});
   const sessionRef = useRef<RewriteSession | null>(null);
   const activeRewrite = useRef<ActiveRewrite | null>(null);
   const dismissedSelection = useRef<string | null>(null);
@@ -300,6 +307,10 @@ export default function AiStreamPanel({
   const limits = useActiveLimits();
   const host = modelHost(settings?.baseUrl ?? "");
   const running = view.phase === "waiting" || view.phase === "streaming";
+  useEffect(() => {
+    setAiActivity(asking || running ? "generating" : offer ? "review" : "idle");
+    return () => setAiActivity("idle");
+  }, [asking, offer, running]);
   const modelValue = `${catalog.activeProviderId}|${catalog.activeModelId}`;
   const modelChoices = catalog.providers.flatMap((provider) =>
     provider.models
@@ -430,15 +441,21 @@ export default function AiStreamPanel({
       const canDecide = Boolean(
         item.text && activeRewrite.current === null && streamId.current === null
       );
+      const review = reviewRef.current;
+      const decision = review ? rewriteDecision(item.text, review) : item.text;
       showRewritePreview(editor, {
         from: item.from,
         to: item.to,
         text: item.text,
         originalLabel: t("ai.stream.original"),
         rewriteLabel: t("ai.stream.proposal"),
-        onAccept: canDecide ? item.onAccept : undefined,
+        onAccept: canDecide && decision != null ? () => applyRef.current() : undefined,
         onDiscard: canDecide ? item.onDiscard : undefined,
-        acceptLabel: canDecide ? t("ai.review.acceptBlock") : undefined,
+        acceptLabel: canDecide
+          ? review
+            ? t("ai.review.applyAccepted", { count: acceptedRewriteCount(review) })
+            : t("ai.stream.acceptAll")
+          : undefined,
         discardLabel: canDecide ? t("ai.review.keepOriginal") : undefined,
       });
     },
@@ -702,35 +719,39 @@ export default function AiStreamPanel({
     };
   }, []);
 
-  const discard = useCallback(() => {
-    epoch.current += 1;
-    const id = streamId.current;
-    claimRef.current?.release();
-    const item = pending.current;
-    settleRewriteMetric("cancelled");
-    streamId.current = null;
-    pending.current = null;
-    activeRewrite.current = null;
-    clearRewriteSession();
-    setOffer(false);
-    if (item) {
-      disarmRewriteGate(item.tabId);
-      if (same(item)) {
-        clearProposal(item);
-        setNote("restored");
-        settleEntries("cancelled", "discarded");
-      } else {
-        setNote("stale");
-        settleEntries("stale", "stale");
+  const discard = useCallback(
+    (reason?: "document") => {
+      reviewRef.current = null;
+      epoch.current += 1;
+      const id = streamId.current;
+      claimRef.current?.release();
+      const item = pending.current;
+      settleRewriteMetric("cancelled");
+      streamId.current = null;
+      pending.current = null;
+      activeRewrite.current = null;
+      clearRewriteSession();
+      setOffer(false);
+      if (item) {
+        disarmRewriteGate(item.tabId);
+        if (same(item)) {
+          clearProposal(item);
+          setNote(reason === "document" ? "left" : "restored");
+          settleEntries("cancelled", "discarded");
+        } else {
+          setNote("stale");
+          settleEntries("stale", "stale");
+        }
+      } else settleEntries("cancelled", null);
+      if (item || id) {
+        const next = reduceStream(viewRef.current, { type: "cancel" });
+        viewRef.current = next;
+        setView(next);
       }
-    } else settleEntries("cancelled", null);
-    if (item || id) {
-      const next = reduceStream(viewRef.current, { type: "cancel" });
-      viewRef.current = next;
-      setView(next);
-    }
-    if (id) void aiCancel(id).catch(() => {});
-  }, [clearRewriteSession, settleEntries, settleRewriteMetric]);
+      if (id) void aiCancel(id).catch(() => {});
+    },
+    [clearRewriteSession, settleEntries, settleRewriteMetric]
+  );
   /** Cancelling a follow-up keeps the last stable draft available for review. */
   const cancelRewrite = useCallback(() => {
     const request = activeRewrite.current;
@@ -756,10 +777,14 @@ export default function AiStreamPanel({
     if (id) void aiCancel(id).catch(() => {});
   }, [discard, restorePreviousProposal, settleEntries, settleRewriteMetric]);
 
-  // Drop the highlight before the editor swaps documents. The shared view still
-  // shows this tab during layout; the swap itself happens in a later effect.
+  // An unaccepted candidate belongs to this document. Leaving the tab drops it
+  // before the shared editor swaps state, and does not write it.
+  const seenTab = useRef(tabId);
   useLayoutEffect(() => {
-    return () => discard();
+    if (seenTab.current === tabId) return;
+    seenTab.current = tabId;
+    reviewRef.current = null;
+    discard("document");
   }, [discard, tabId]);
 
   // Closing the panel stops a running question; it must not keep sending files.
@@ -801,6 +826,7 @@ export default function AiStreamPanel({
     (text?: string) => {
       const item = pending.current;
       if (!item?.text) return;
+      reviewRef.current = null;
       const editor = getEditorView(item.tabId);
       pending.current = null;
       disarmRewriteGate(item.tabId);
@@ -820,8 +846,27 @@ export default function AiStreamPanel({
     [clearRewriteSession, settleEntries]
   );
 
-  // Tab accepts the highlighted rewrite while the editor still has focus.
-  // Capture phase so CodeMirror never indents the line first (T37).
+  useEffect(() => {
+    applyRef.current = () => {
+      const item = pending.current;
+      if (!item?.text) return;
+      const text = rewriteDecision(item.text, reviewRef.current);
+      if (text == null) return;
+      accept(reviewRef.current ? text : undefined);
+    };
+  }, [accept]);
+
+  const onReviewChange = useCallback(
+    (review: RewriteReview | null) => {
+      reviewRef.current = review;
+      const item = pending.current;
+      if (item?.text) paint(item);
+    },
+    [paint]
+  );
+
+  // Tab uses the same decision as the editor button and the panel's primary
+  // button. Capture phase so CodeMirror never indents the line first (T37).
   useEffect(() => {
     const onTab = (event: KeyboardEvent) => {
       if (event.key !== "Tab" || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -831,7 +876,7 @@ export default function AiStreamPanel({
       if (!target || !editor?.contains(target)) return;
       event.preventDefault();
       event.stopPropagation();
-      accept();
+      applyRef.current();
     };
     window.addEventListener("keydown", onTab, true);
     return () => window.removeEventListener("keydown", onTab, true);
@@ -1075,7 +1120,7 @@ export default function AiStreamPanel({
 
   const askWorkspace = async () => {
     const request = instruction.trim();
-    if (!workspaceRoot || !request || asking) return;
+    if (!request || asking || (!documentOnly && !workspaceRoot)) return;
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
       onNeedSettings();
       return;
@@ -1102,6 +1147,32 @@ export default function AiStreamPanel({
     setAgentTrace([]);
     setAgentSent(0);
     try {
+      if (documentOnly) {
+        const content = readBuffer(tabId, tabSnapshot);
+        const [system, user] = documentQuestion(
+          tabName || "untitled",
+          content,
+          request,
+          limits.askBudget
+        );
+        const completion = await completeAgentTurn({
+          baseUrl: settings.baseUrl,
+          model: settings.model,
+          profileId: settings.id,
+          messages: [system, ...history, user],
+          maxTokens: limits.askMaxTokens,
+          signal: controller.signal,
+        });
+        patchEntry(replyId, {
+          answer: completion.text.trim() || t("ai.stream.empty"),
+          trace: [],
+          sent: content.length,
+          status: "done",
+          elapsedMs: metricNow() - startedAt,
+        });
+        return;
+      }
+      if (!workspaceRoot) return;
       const result = await runReadAgent({
         question: request,
         root: workspaceRoot,
@@ -1250,7 +1321,7 @@ export default function AiStreamPanel({
   const busy = mode === "ask" ? asking : running;
   const canSend =
     mode === "ask"
-      ? Boolean(workspaceRoot && instruction.trim()) && !running
+      ? Boolean((documentOnly || workspaceRoot) && instruction.trim()) && !running
       : offer
         ? Boolean(instruction.trim())
         : Boolean(span && !spanTooLarge && instruction.trim()) && !asking;
@@ -1271,11 +1342,13 @@ export default function AiStreamPanel({
       ? t("ai.stream.accepted")
       : note === "restored"
         ? t("ai.stream.restored")
-        : note === "followupRestored"
-          ? t("ai.stream.followupRestored")
-          : note === "stale"
-            ? t("ai.stream.stale")
-            : null;
+        : note === "left"
+          ? t("ai.stream.leftDocument")
+          : note === "followupRestored"
+            ? t("ai.stream.followupRestored")
+            : note === "stale"
+              ? t("ai.stream.stale")
+              : null;
 
   const local = isLocalHost(host);
   const footer =
@@ -1291,9 +1364,11 @@ export default function AiStreamPanel({
               : null
       : !workspaceRoot
         ? t("ai.mode.needWorkspace")
-        : asking || agentSent > 0
-          ? t("ai.mode.askSending", { count: agentSent, budget: limits.askBudget, host })
-          : t("ai.mode.askBudget", { budget: limits.askBudget, host });
+        : documentOnly
+          ? t("ai.mode.documentOnlyHint")
+          : asking || agentSent > 0
+            ? t("ai.mode.askSending", { count: agentSent, budget: limits.askBudget, host })
+            : t("ai.mode.askBudget", { budget: limits.askBudget, host });
 
   const toggleProcess = (id: string) =>
     setOpenProcess((list) =>
@@ -1358,7 +1433,8 @@ export default function AiStreamPanel({
             version={version}
             liveText={live ? view.text : undefined}
             onAccept={(text) => accept(text)}
-            onDiscard={discard}
+            onDiscard={() => discard()}
+            onReviewChange={entry.status === "pending" ? onReviewChange : undefined}
           />
           {!live && entry.text && (
             <div className="ai-stream__reply-actions">
@@ -1515,9 +1591,11 @@ export default function AiStreamPanel({
             <h3>{t(mode === "ask" ? "ai.panel.emptyAsk" : "ai.panel.emptyRewrite")}</h3>
             <p>
               {mode === "ask"
-                ? workspaceRoot
-                  ? t("ai.mode.askHint")
-                  : t("ai.mode.needWorkspace")
+                ? documentOnly
+                  ? t("ai.mode.documentOnlyHint")
+                  : workspaceRoot
+                    ? t("ai.mode.askHint")
+                    : t("ai.mode.needWorkspace")
                 : t(sourceShown ? "ai.panel.emptyRewriteHint" : "ai.panel.emptyRewriteHintPreview")}
             </p>
           </div>
@@ -1650,6 +1728,17 @@ export default function AiStreamPanel({
             </ul>
           )}
           <div className="ai-stream__bar">
+            {mode === "ask" && (
+              <button
+                type="button"
+                className={`ai-stream__pill${documentOnly ? " is-on" : ""}`}
+                aria-pressed={documentOnly}
+                title={t("ai.mode.documentOnlyHint")}
+                onClick={() => setDocumentOnly((on) => !on)}
+              >
+                {t("ai.mode.documentOnly")}
+              </button>
+            )}
             <button
               type="button"
               className="ai-stream__icon ai-stream__icon--up"

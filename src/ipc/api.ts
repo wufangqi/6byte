@@ -305,6 +305,15 @@ export async function openFeedback(): Promise<void> {
   return invoke<void>("open_feedback");
 }
 
+/** Open an http(s) link in the system browser. The app does not navigate itself. */
+export async function openExternal(url: string): Promise<void> {
+  if (!isTauri) {
+    window.open(url, "_blank", "noopener,noreferrer");
+    return;
+  }
+  return invoke<void>("open_external", { url });
+}
+
 /** Open a fresh editor window. It does not reopen the files in this window. */
 export async function openNewWindow(): Promise<void> {
   requireTauri("ipc.newWindow");

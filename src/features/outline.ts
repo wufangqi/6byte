@@ -1,46 +1,13 @@
-import { createSlugTracker, plainHeadingText, slugFor } from "./markdown";
+import { parseDocument, type OutlineItem } from "./documentModel";
 
-export interface OutlineItem {
-  level: number;
-  text: string;
-  slug: string;
-  /** 1-based source line. */
-  line: number;
-}
+export type { OutlineItem };
 
 /**
- * Extract ATX headings (`# Title`) from Markdown source.
+ * ATX headings from the shared document model.
  *
- * Fenced code blocks are skipped so `# comments` inside code do not show up.
- * Slugs use the same dedupe logic as the renderer, so the outline can jump to
- * the rendered heading ids.
+ * The command palette, `@` mentions and the read-only outline all use this
+ * list, so a heading skipped in one place is skipped in the others.
  */
 export function extractHeadings(source: string): OutlineItem[] {
-  const items: OutlineItem[] = [];
-  const tracker = createSlugTracker();
-  let fence: string | null = null;
-
-  source.split(/\r?\n/).forEach((line, index) => {
-    const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
-    if (fenceMatch) {
-      const marker = fenceMatch[1][0];
-      if (fence === null) fence = marker;
-      else if (fence === marker) fence = null;
-      return;
-    }
-    if (fence !== null) return;
-
-    const heading = line.match(/^(#{1,6})\s+(.*?)\s*#*\s*$/);
-    if (!heading) return;
-
-    const raw = heading[2].trim();
-    items.push({
-      level: heading[1].length,
-      text: plainHeadingText(raw),
-      slug: slugFor(raw, tracker),
-      line: index + 1,
-    });
-  });
-
-  return items;
+  return parseDocument(source).headings;
 }

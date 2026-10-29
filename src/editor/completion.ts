@@ -27,7 +27,7 @@ import {
 import { abandonAiStream, claimAiStream, type AiStreamClaim } from "../ipc/aiStreamBus";
 import type { AiMessage, AiUsage } from "../ipc/types";
 import { loadCompletionEndpoint, loadCompletionSettings } from "../features/completionSettings";
-import { inlineInsertField } from "./inlineInsert";
+import { rewritePreviewField } from "./rewritePreview";
 
 /** Marks a ghost-text update so it is not treated as the user typing. */
 const completionMark = Annotation.define<true>();
@@ -98,7 +98,7 @@ const ghostDecorations = EditorView.decorations.compute([ghostText], (state) => 
 });
 
 function rewritePending(view: EditorView): boolean {
-  const marks = view.state.field(inlineInsertField, false);
+  const marks = view.state.field(rewritePreviewField, false);
   return Boolean(marks && marks.size > 0);
 }
 

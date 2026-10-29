@@ -67,6 +67,7 @@ import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/ex
 import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
 import { isMarkdownFile } from "./features/markdown";
+import { rememberMarkdownSource } from "./features/markdownView";
 import {
   SETTINGS_TAB_ID,
   selectActiveTab,
@@ -132,8 +133,11 @@ export default function App() {
   const togglePreview = useCallback(() => {
     const tab = selectActiveTab(useWorkspace.getState());
     if (!tab || tab.mode !== "text") return;
-    if (isMarkdownFile(tab.name)) useWorkspace.getState().setSource(tab.id, !tab.source);
-    else useWorkspace.getState().setPreview(tab.id, !tab.preview);
+    if (isMarkdownFile(tab.name)) {
+      const shown = !tab.source;
+      useWorkspace.getState().setSource(tab.id, shown);
+      rememberMarkdownSource(shown);
+    } else useWorkspace.getState().setPreview(tab.id, !tab.preview);
   }, []);
 
   // Draggable editor/preview split (mouse drag or arrow keys on the separator).
@@ -990,6 +994,7 @@ export default function App() {
           if (tab) void saveTab(tab.id, true);
         }}
         onSaveAll={() => void saveAll()}
+        onExportHtml={() => void exportActiveAsHtml()}
         onRename={() => {
           const tab = selectActiveTab(useWorkspace.getState());
           if (tab) void requestRenameTab(tab.id);
@@ -1204,6 +1209,10 @@ export default function App() {
           onOpenFile={(path) => {
             setPaletteOpen(false);
             void openPaths([path]);
+          }}
+          onCommand={(id) => {
+            setPaletteOpen(false);
+            if (id === "export-html") void exportActiveAsHtml();
           }}
           onRevealLine={(line) => {
             setPaletteOpen(false);

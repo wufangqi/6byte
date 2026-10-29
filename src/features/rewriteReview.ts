@@ -154,6 +154,18 @@ export function updateRewriteHunk(
   };
 }
 
+/**
+ * Text written by Tab, the editor button, and the panel's primary button.
+ * Without a block review the whole proposal is accepted. Inside a review only
+ * blocks the user marked accepted are written; anything else stays original.
+ * `null` means nothing was accepted, so the document must not change.
+ */
+export function rewriteDecision(proposal: string, review: RewriteReview | null): string | null {
+  if (!review) return proposal;
+  if (acceptedRewriteCount(review) === 0) return null;
+  return acceptedRewriteText(review);
+}
+
 /** Replacement text that applies only explicitly accepted change blocks. */
 export function acceptedRewriteText(review: RewriteReview): string {
   return review.parts

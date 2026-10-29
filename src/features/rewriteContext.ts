@@ -1,6 +1,6 @@
 import type { AiMessage } from "../ipc/types";
+import { parseDocument, sectionByTitle, sectionCovering } from "./documentModel";
 import { isMarkdownFile } from "./markdown";
-import { extractHeadings } from "./outline";
 
 /** Lines kept on either side of the selection when there is no Markdown section. */
 export const NEIGHBOR_LINES = 40;
@@ -114,7 +114,8 @@ function contextPieces(source: RewriteSource): Piece[] {
   }
 
   const markdown = isMarkdownFile(filename);
-  const headings = markdown ? extractHeadings(source.document) : [];
+  const model = markdown ? parseDocument(source.document) : null;
+  const headings = model?.headings ?? [];
   if (headings.length > 0) {
     const outline = headings
       .map((heading) => `${"#".repeat(heading.level)} ${heading.text}`)
@@ -125,17 +126,13 @@ function contextPieces(source: RewriteSource): Piece[] {
   const starts = lineStarts(source.document);
   const fromLine = lineOf(starts, source.from);
   const toLine = lineOf(starts, Math.max(source.from, source.to - 1));
-  if (markdown && headings.length > 0) {
-    const heading = [...headings].reverse().find((item) => item.line <= fromLine);
-    if (heading) {
-      const next = headings.find((item) => item.line > heading.line && item.level <= heading.level);
-      const end = next ? next.line - 1 : starts.length;
-      pieces.push({
-        id: "section",
-        text: `所在章节：\n${sliceLines(source.document, starts, heading.line, end)}`,
-      });
-      return pieces;
-    }
+  const section = model ? sectionCovering(model, fromLine) : null;
+  if (section) {
+    pieces.push({
+      id: "section",
+      text: `所在章节：\n${sliceLines(source.document, starts, section.line, section.endLine)}`,
+    });
+    return pieces;
   }
 
   const neighborFrom = Math.max(1, fromLine - NEIGHBOR_LINES);
@@ -198,13 +195,8 @@ function sliceLines(
 
 /** The Markdown section for one heading, or null when that title is not in the document. */
 export function sectionForHeading(document: string, title: string, line?: number): string | null {
-  const headings = extractHeadings(document);
-  const heading =
-    headings.find((item) => item.text === title && (line == null || item.line === line)) ??
-    headings.find((item) => item.text === title);
+  const model = parseDocument(document);
+  const heading = sectionByTitle(model, title, line);
   if (!heading) return null;
-  const starts = lineStarts(document);
-  const next = headings.find((item) => item.line > heading.line && item.level <= heading.level);
-  const end = next ? next.line - 1 : starts.length;
-  return sliceLines(document, starts, heading.line, end);
+  return sliceLines(document, lineStarts(document), heading.line, heading.endLine);
 }

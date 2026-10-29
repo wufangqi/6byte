@@ -17,7 +17,7 @@ export interface WorkspaceFile {
 
 export interface PaletteItem {
   id: string;
-  kind: "file" | "heading" | "recent";
+  kind: "file" | "heading" | "recent" | "command";
   label: string;
   detail: string;
   path?: string;
