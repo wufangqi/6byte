@@ -8,7 +8,7 @@
 
 **中文** · [English](./README.md)
 
-**状态**：v0.2.0（2026-10-27）已发布：M0–M3、AI 审阅优先的改写、工作区文件树、Markdown 默认预览与导出一致性；安装包覆盖 Windows、Linux、macOS。
+**状态**：v0.3.0（2026-10-29）已发布：M0–M3、可审阅 AI 面板（本机会话历史、对话与限额、预览选区改写）、设置页、长 Markdown 窗口预览、共享文档模型与 Markdown 导出一致性；安装包覆盖 Windows、Linux、macOS。
 
 ![欢迎页](./docs/assets/welcome.png)
 ![编辑器与 Markdown 分屏预览](./docs/assets/editor-preview.png)
@@ -21,7 +21,7 @@
 - **编码与数据安全**：UTF-8 / BOM / UTF-16 / GBK 等检测，按原编码与换行回写；有损解码保存前确认；原子保存；外部修改检测与冲突三选一。
 - **文件树**：打开一个文件夹，目录按需逐层展开（每次点开一层，不扫描整棵树），单击文件打开。隐藏名、依赖目录和符号链接不列出。关闭文件夹不会关掉已经打开的标签。状态栏左侧面板按钮或 `Ctrl+Shift+E` 可快速显示/隐藏，折叠状态重启后保持。
 - **搜索**：`Ctrl+F` 查找替换（正则、捕获组），`Ctrl+Shift+F` 跨文件 grep（有工作区时从工作区根开始，否则从当前文件所在目录；跳过二进制与依赖目录）。
-- **AI（v0.2.0）**：模型服务（服务商 / 模型两级，密钥进系统钥匙串）；选中文字后可用 `Ctrl+K` 改写，`Tab` 接受、`Esc` 取消；候选先内联审阅再改正文；AI 面板为可调宽右侧停靠，状态栏可开关，标题栏「悬浮标」控制选区入口；支持一键润色 / 翻译 / 总结、多轮追问、本机会话历史、`Ctrl+P` 命令面板、`@` 引用、只读询问与默认关闭的自动补全。Markdown 预览里选中文字也可以改写。
+- **AI（v0.3.0）**：模型服务（服务商 / 模型两级，密钥进系统钥匙串）；选中文字后可用 `Ctrl+K` 改写，`Tab` 接受、`Esc` 取消；候选先内联审阅再改正文；AI 面板为可调宽右侧停靠，状态栏可开关，标题栏「悬浮标」控制选区入口；支持一键润色 / 翻译 / 总结、多轮追问、本机会话历史、`Ctrl+P` 命令面板、`@` 引用、只读询问与默认关闭的自动补全。Markdown 预览里选中文字也可以改写。
 - **界面**：中英双语、深色 / 浅色 / 跟随系统、自定义标题栏；`.txt` 与未命名笔记自动换行。设置（`Ctrl+,`）为标签页，含通用 / 模型 / 服务商 / 对话与限额 / 访问限制 / 用量统计；帮助菜单含「关于 6byte」（版本 / 平台 / Tauri）与键盘快捷键。
 - **轻量**：Tauri 2 + 系统 WebView，安装包约 5 MB，冷启动约 0.1 s。
 
@@ -29,19 +29,19 @@
 
 从 [Releases](https://github.com/wufangqi/6byte/releases/latest) 下载：
 
-- `6byte_0.2.0_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
-- `6byte_0.2.0_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
+- `6byte_0.3.0_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
+- `6byte_0.3.0_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
 
 **Linux**
 
-- `6byte_0.2.0_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.2.0_amd64.deb`
-- `6byte_0.2.0_amd64.AppImage` — 免安装：`chmod +x 6byte_0.2.0_amd64.AppImage && ./6byte_0.2.0_amd64.AppImage`
+- `6byte_0.3.0_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.3.0_amd64.deb`
+- `6byte_0.3.0_amd64.AppImage` — 免安装：`chmod +x 6byte_0.3.0_amd64.AppImage && ./6byte_0.3.0_amd64.AppImage`
 
 依赖 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 为 `libwebkit2gtk-4.1-0`）。
 
 **macOS**
 
-- `6byte_0.2.0_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
+- `6byte_0.3.0_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
 
 卸载走「设置 → 应用」或安装目录下的 `uninstall.exe`。
 
@@ -76,7 +76,7 @@ pnpm tauri build    # 安装包 → src-tauri/target/release/bundle/
 
 ## 路线图
 
-下一步：长 Markdown 预览基准（T71）、共享 DocumentModel（T72），以及 AI 审阅 / 生命周期的剩余收口（T73–T76）。v0.2.0 已发布 AI 信任闭环、工作区上下文、Markdown 预览 / 导出一致性、文件重命名、图表缩放与多平台安装包。详见 [docs/待办清单.md](./docs/待办清单.md)。
+下一步：Windows / Linux / macOS 人工验收（M-07）与分发扩张（M4：便携版、至少一个包管理器渠道、自动更新、资源管理器右键）。v0.3.0 已发布可审阅 AI 面板、设置页、长 Markdown 窗口预览与共享文档模型。详见 [docs/待办清单.md](./docs/待办清单.md)。
 
 ## 文档
 
