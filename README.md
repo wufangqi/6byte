@@ -8,7 +8,7 @@
 
 [中文](./README.zh.md) · **English**
 
-**Status**: v0.2.0 (2026-10-27) is out: M0–M3, AI review-first rewriting, workspace file tree, Markdown-first preview and export parity. Installers cover Windows, Linux and macOS.
+**Status**: v0.3.0 (2026-10-29) is out: M0–M3, the reviewed AI panel (local history, conversation & limits, preview rewriting), a settings page, long-Markdown windowed preview, the shared document model, and Markdown-first export parity. Installers cover Windows, Linux and macOS.
 
 > The app UI is bilingual (switch under **View → Language**). The detailed docs under `docs/` are written in Chinese.
 
@@ -23,7 +23,7 @@
 - **Encoding & data safety**: UTF-8 / BOM / UTF-16 / GBK detection, write-back with the original encoding and line endings, confirmation before overwriting lossily decoded files, atomic save, external-change detection with a three-way conflict dialog.
 - **File tree**: open one folder; folders expand lazily one level per click, so the tree never scans the whole workspace. Click a file to open it. Hidden names, dependency folders and symlinks stay out of the tree. Closing the folder leaves open tabs alone. Toggle the panel from the status bar or with `Ctrl+Shift+E`; the collapsed state survives restarts.
 - **Search**: `Ctrl+F` find & replace (regex, capture groups), `Ctrl+Shift+F` cross-file grep (workspace root when a folder is open, otherwise the active file's directory; skips binaries and dependency folders).
-- **AI (v0.2.0)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. Candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize, follow-up prompts, on-device conversation history, the workspace command palette (`Ctrl+P`), `@` references, read-only ask mode and autocomplete (off by default) are also available. A selection in the Markdown preview can be rewritten too.
+- **AI (v0.3.0)**: model services (providers → models, API keys in the OS keychain); select text and use `Ctrl+K` to rewrite it, then **Tab** accepts or **Esc** cancels. Candidates are reviewed inline before touching the document, the AI panel is a resizable right dock with a status-bar toggle, and a title-bar toggle controls the selection entry. One-click Polish / Translate / Summarize, follow-up prompts, on-device conversation history, the workspace command palette (`Ctrl+P`), `@` references, read-only ask mode and autocomplete (off by default) are also available. A selection in the Markdown preview can be rewritten too.
 - **Interface**: Chinese / English, light / dark / follow system, custom title bar; `.txt` and untitled notes wrap visually. Settings (`Ctrl+,`) is a tab with General / Models / Providers / Conversation & limits / Access / Usage sections; the Help menu has About (version / platform / Tauri) and the keyboard shortcut reference.
 - **Light**: Tauri 2 with the system WebView, ~5 MB installers, ~0.1 s cold start.
 
@@ -31,19 +31,19 @@
 
 Download from [Releases](https://github.com/wufangqi/6byte/releases/latest):
 
-- `6byte_0.2.0_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
-- `6byte_0.2.0_x64_en-US.msi` — MSI, for enterprise / silent install
+- `6byte_0.3.0_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
+- `6byte_0.3.0_x64_en-US.msi` — MSI, for enterprise / silent install
 
 **Linux**
 
-- `6byte_0.2.0_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.2.0_amd64.deb`
-- `6byte_0.2.0_amd64.AppImage` — portable: `chmod +x 6byte_0.2.0_amd64.AppImage && ./6byte_0.2.0_amd64.AppImage`
+- `6byte_0.3.0_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.3.0_amd64.deb`
+- `6byte_0.3.0_amd64.AppImage` — portable: `chmod +x 6byte_0.3.0_amd64.AppImage && ./6byte_0.3.0_amd64.AppImage`
 
 Needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Ubuntu 22.04+ / Debian 12+).
 
 **macOS**
 
-- `6byte_0.2.0_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
+- `6byte_0.3.0_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 
@@ -78,7 +78,7 @@ Frontend unit tests **303**, Rust **112** (+4 ignored). The latest installed-bui
 
 ## Roadmap
 
-Next: long-Markdown preview benchmarks (T71), a shared DocumentModel (T72), and the remaining AI review/lifecycle polish (T73–T76). v0.2.0 ships the AI trust loop, workspace context, Markdown-first preview/export parity, file rename, diagram zoom and multi-platform installers. Details in [docs/待办清单.md](./docs/待办清单.md).
+Next: manual acceptance on Windows / Linux / macOS (M-07) and distribution expansion (M4: portable build, a package-manager channel, auto-update, Explorer context menu). v0.3.0 ships the reviewed AI panel, settings page, long-Markdown windowed preview and the shared document model. Details in [docs/待办清单.md](./docs/待办清单.md).
 
 ## Docs
 
