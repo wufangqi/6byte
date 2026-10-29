@@ -74,6 +74,7 @@ export const zh: MessageCatalog = {
   "menu.save": "保存",
   "menu.saveAs": "另存为…",
   "menu.saveAll": "全部保存",
+  "menu.exportHtml": "导出 HTML",
   "menu.theme": "主题",
   "menu.light": "浅色",
   "menu.dark": "深色",
@@ -299,6 +300,8 @@ export const zh: MessageCatalog = {
   "ai.mode.askPlaceholder": "例如：安装说明写了什么？",
   "ai.mode.askBudget": "问题和查到的片段发到 {host}，每次最多约 {budget} 字",
   "ai.mode.askSending": "已发送约 {count} / {budget} 字 → {host}",
+  "ai.mode.documentOnly": "只问本文",
+  "ai.mode.documentOnlyHint": "只把当前文档发给模型，不读取工作区里的其他文件。",
   "ai.answer.insert": "插入到光标",
   "ai.answer.toRewrite": "转为改写",
   "ai.answer.rewriteSeed": "根据下面的回答改写当前选中的文字：\n{answer}",
@@ -320,7 +323,8 @@ export const zh: MessageCatalog = {
   "ai.panel.assistant": "6byte AI",
   "ai.panel.emptyRewrite": "改写选中的文字",
   "ai.panel.emptyRewriteHint":
-    "结果先显示在选区旁边，接受后才替换原文，不会自动保存。Tab 接受，Esc 取消。",
+    "结果先显示在选区旁边，接受后才替换原文，不会自动保存。Tab 与「全部接受」相同。逐块审阅时，Tab 只写入已采用的块。切换文档会放下未接受的候选。",
+  "ai.stream.leftDocument": "切换文档后，未接受的候选已放下。正文没有改动。",
   "ai.panel.emptyRewriteHintPreview":
     "在预览里选中文字就能改写。改动先在这里对比，接受后才替换原文，不会自动保存。Esc 取消。",
   "ai.panel.emptyAsk": "在工作区里查找并回答",
@@ -380,6 +384,7 @@ export const zh: MessageCatalog = {
   "ai.mention.empty": "当前工作区里没有匹配的文件或标题",
   "command.title": "转到文件或标题",
   "command.placeholder": "输入文件名或标题",
+  "command.exportHtml": "把当前文档存成一个 HTML 文件",
   "command.empty": "没有匹配",
   "command.noWorkspace": "最近打开的文件和当前标题。打开文件夹后可以搜索工作区。",
   "command.outline": "当前文档",
@@ -479,6 +484,9 @@ export const zh: MessageCatalog = {
     "Ctrl+K 或点这里：用选区向模型提问。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
   "status.aiPanel": "AI",
   "status.aiPanel.title": "打开或关闭 AI 面板（Ctrl+Shift+A）",
+  "status.ai.generating": "生成中",
+  "status.ai.review": "待审阅",
+  "status.ai.title": "AI 正在生成，或有候选等待审阅",
   "status.aiMarker": "AI 悬浮标",
   "status.aiMarker.on": "AI 悬浮标：已开启（点击关闭）",
   "status.aiMarker.off": "AI 悬浮标：已关闭（点击开启）",
@@ -530,6 +538,8 @@ export const zh: MessageCatalog = {
   "preview.source.titleOn": "只看预览（Ctrl+Shift+M）",
   "preview.export": "导出 HTML",
   "preview.empty": "没有可预览的内容。",
+  "preview.window":
+    "长文档只渲染附近的内容：第 {from}–{to} 行，共 {total} 行。滚到顶或底会继续加载。",
   "preview.externalLink": "预览暂不支持在应用内打开外部链接（M2 后续接入系统浏览器）。",
   "preview.diagram.viewport": "图表查看器",
   "preview.diagram.zoomOut": "缩小图表",
@@ -653,6 +663,7 @@ export const en: MessageCatalog = {
   "menu.save": "Save",
   "menu.saveAs": "Save as…",
   "menu.saveAll": "Save all",
+  "menu.exportHtml": "Export HTML",
   "menu.theme": "Theme",
   "menu.light": "Light",
   "menu.dark": "Dark",
@@ -890,6 +901,9 @@ export const en: MessageCatalog = {
   "ai.mode.askBudget":
     "Your question and the snippets it finds go to {host}, up to about {budget} characters each time",
   "ai.mode.askSending": "Sent about {count} / {budget} characters → {host}",
+  "ai.mode.documentOnly": "This file only",
+  "ai.mode.documentOnlyHint":
+    "Send only the current document. The model does not read other files.",
   "ai.answer.insert": "Insert at cursor",
   "ai.answer.toRewrite": "Turn into rewrite",
   "ai.answer.rewriteSeed": "Rewrite the current selection using this answer:\n{answer}",
@@ -912,7 +926,9 @@ export const en: MessageCatalog = {
   "ai.panel.assistant": "6byte AI",
   "ai.panel.emptyRewrite": "Rewrite the selected text",
   "ai.panel.emptyRewriteHint":
-    "The result appears beside the selection first. The original is replaced only when you accept, and the file is not saved. Tab accepts, Esc cancels.",
+    "The result appears beside the selection first. The original is replaced only when you accept, and the file is not saved. Tab does the same as Accept all. While reviewing blocks, Tab writes only the blocks you accepted. Leaving the document drops an unaccepted rewrite.",
+  "ai.stream.leftDocument":
+    "The unaccepted rewrite was dropped when you left this document. The text was not changed.",
   "ai.panel.emptyRewriteHintPreview":
     "Select text in the preview to rewrite it. Compare the change here first; the original is replaced only when you accept, and the file is not saved. Esc cancels.",
   "ai.panel.emptyAsk": "Look things up in the workspace",
@@ -973,6 +989,7 @@ export const en: MessageCatalog = {
   "ai.mention.empty": "No matching file or heading in this workspace",
   "command.title": "Go to file or heading",
   "command.placeholder": "Type a file name or heading",
+  "command.exportHtml": "Save the current document as one HTML file",
   "command.empty": "No matches",
   "command.noWorkspace":
     "Recent files and headings in this document. Open a folder to search the workspace.",
@@ -1074,6 +1091,9 @@ export const en: MessageCatalog = {
     "Ctrl+K or click here to rewrite the selection. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
   "status.aiPanel": "AI",
   "status.aiPanel.title": "Open or close the AI panel (Ctrl+Shift+A)",
+  "status.ai.generating": "Generating",
+  "status.ai.review": "Waiting for review",
+  "status.ai.title": "The AI is generating, or a rewrite is waiting for review",
   "status.aiMarker": "AI marker",
   "status.aiMarker.on": "AI marker: on (click to turn off)",
   "status.aiMarker.off": "AI marker: off (click to turn on)",
@@ -1131,6 +1151,8 @@ export const en: MessageCatalog = {
   "preview.source.titleOn": "Preview only (Ctrl+Shift+M)",
   "preview.export": "Export HTML",
   "preview.empty": "Nothing to preview.",
+  "preview.window":
+    "Long document, showing lines {from}–{to} of {total}. Scroll to either end to load more.",
   "preview.externalLink": "Opening external links inside the app is not supported yet.",
   "preview.diagram.viewport": "Diagram viewer",
   "preview.diagram.zoomOut": "Zoom out",

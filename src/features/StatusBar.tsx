@@ -1,3 +1,4 @@
+import { useAiActivity } from "./aiActivity";
 import { useI18n } from "../i18n";
 import { formatSize } from "../lib/format";
 import { useFileTree } from "../stores/fileTree";
@@ -46,6 +47,25 @@ export default function StatusBar({
   const workspaceName = useFileTree((state) => (state.rootPath ? state.rootName : ""));
   const workspacePath = useFileTree((state) => state.rootPath);
   const { t, tp } = useI18n();
+  const activity = useAiActivity();
+  const activityLabel =
+    activity === "generating"
+      ? t("status.ai.generating")
+      : activity === "review"
+        ? t("status.ai.review")
+        : "";
+  const activityItem = activityLabel ? (
+    <button
+      type="button"
+      className={`statusbar__ai statusbar__ai--${activity}`}
+      title={t("status.ai.title")}
+      onClick={() => {
+        if (!aiPanelOpen) onToggleAiPanel?.();
+      }}
+    >
+      {activityLabel}
+    </button>
+  ) : null;
   const panelToggle = hasWorkspace && onToggleTree && (
     <button
       type="button"
@@ -69,6 +89,7 @@ export default function StatusBar({
       <footer className="statusbar">
         {panelToggle}
         {workspace}
+        {activityItem}
         <span className="statusbar__item">{t("status.ready")}</span>
       </footer>
     );
@@ -118,6 +139,7 @@ export default function StatusBar({
         </button>
       )}
 
+      {activityItem}
       {onToggleAiPanel && (
         <button
           type="button"

@@ -25,7 +25,6 @@ import { getLocale, type Locale } from "../i18n/locale";
 import { translate } from "../i18n/messages";
 import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
 import { completionExtension } from "./completion";
-import { aiPreview, inlineInsertField } from "./inlineInsert";
 import { rewritePreviewField } from "./rewritePreview";
 
 /** Swapped when the appearance changes, without recreating the editor. */
@@ -179,7 +178,7 @@ export interface ExtensionOptions {
 
 export function buildExtensions(
   filename: string,
-  onStats: (stats: { lines: number; chars: number; preview?: boolean }) => void,
+  onStats: (stats: { lines: number; chars: number }) => void,
   options: ExtensionOptions = {}
 ): Extension[] {
   const simplified = options.simplified ?? false;
@@ -235,19 +234,14 @@ export function buildExtensions(
       },
     }),
     rewritePreviewField,
-    inlineInsertField,
     EditorView.updateListener.of((update) => {
       // Keep the per-tab state cache fresh for saves, exports and inactive previews.
       options.onStateChanged?.(update.state);
       if (update.docChanged) {
-        const preview = update.transactions.every(
-          (tr) => !tr.docChanged || tr.annotation(aiPreview)
-        );
         // O(1) statistics only: the full text never enters React state per keystroke.
         onStats({
           lines: update.state.doc.lines,
           chars: update.state.doc.length,
-          preview,
         });
         options.onDocChanged?.();
       }

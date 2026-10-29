@@ -14,6 +14,29 @@ pub fn open_feedback() -> Result<(), String> {
     Ok(())
 }
 
+/// Open one http(s) address in the system browser. Other schemes are refused.
+#[tauri::command]
+pub fn open_external(url: String) -> Result<(), String> {
+    if !external_url_allowed(&url) {
+        return Err("only http and https links can be opened".into());
+    }
+    spawn_browser(url.trim()).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub fn external_url_allowed(url: &str) -> bool {
+    let trimmed = url.trim();
+    if trimmed.is_empty()
+        || trimmed
+            .chars()
+            .any(|ch| ch.is_control() || ch.is_whitespace())
+    {
+        return false;
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    lower.starts_with("https://") || lower.starts_with("http://")
+}
+
 fn spawn_browser(url: &str) -> std::io::Result<std::process::Child> {
     #[cfg(windows)]
     {
@@ -38,5 +61,15 @@ mod tests {
         let platform = app_platform();
         assert!(platform.contains(std::env::consts::OS));
         assert!(platform.contains(std::env::consts::ARCH));
+    }
+
+    #[test]
+    fn external_links_are_http_only() {
+        assert!(external_url_allowed("https://example.com/a"));
+        assert!(external_url_allowed("  http://127.0.0.1/x  "));
+        assert!(!external_url_allowed("javascript:alert(1)"));
+        assert!(!external_url_allowed("file:///C:/secret.txt"));
+        assert!(!external_url_allowed("https://example.com/\ncalc"));
+        assert!(!external_url_allowed(""));
     }
 }

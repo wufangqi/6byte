@@ -54,6 +54,8 @@ interface RenderEnv extends Record<string, unknown> {
   tracker: SlugTracker;
   baseDir?: string;
   sourceLines?: boolean;
+  /** Added to `data-src` line numbers when rendering a slice of a longer document. */
+  lineOffset?: number;
 }
 
 export interface RenderOptions {
@@ -64,13 +66,20 @@ export interface RenderOptions {
    * so the preview can map a selection back to the source. Off for export.
    */
   sourceLines?: boolean;
+  /**
+   * Added to every `data-src` line number. Used when `source` is a slice of a
+   * longer document, so the numbers still refer to the whole file.
+   */
+  lineOffset?: number;
 }
 
 md.core.ruler.push("source_lines", (state) => {
-  if (!(state.env as Partial<RenderEnv> | undefined)?.sourceLines) return;
+  const environment = state.env as Partial<RenderEnv> | undefined;
+  if (!environment?.sourceLines) return;
+  const offset = environment.lineOffset ?? 0;
   for (const token of state.tokens) {
     if (token.nesting === 1 && token.map) {
-      token.attrSet("data-src", `${token.map[0]}:${token.map[1]}`);
+      token.attrSet("data-src", `${token.map[0] + offset}:${token.map[1] + offset}`);
     }
   }
 });
@@ -330,6 +339,7 @@ export function renderMarkdown(source: string, options: RenderOptions = {}): str
     tracker: createSlugTracker(),
     baseDir: options.baseDir,
     sourceLines: options.sourceLines,
+    lineOffset: options.lineOffset,
   };
   return md.render(source, env as unknown as Record<string, unknown>);
 }

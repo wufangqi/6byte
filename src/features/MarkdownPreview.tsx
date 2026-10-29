@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import {
   getDocText,
@@ -12,11 +12,20 @@ import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { enhanceMermaidDiagram } from "./diagramViewport";
 import { renderKatexHtml, renderMermaidSvg } from "./diagrams";
-import { useI18n } from "../i18n";
+import { localizeError, useI18n } from "../i18n";
+import { openExternal } from "../ipc/api";
+import { isSafeHttpUrl } from "./externalUrl";
 import { useResolvedTheme } from "./theme";
 import { renderMarkdown } from "./markdown";
 import { highlightCode } from "./highlight";
 import { extractHeadings, type OutlineItem } from "./outline";
+import {
+  FULL_PREVIEW_CHARS,
+  WINDOW_CHARS,
+  previewSlice,
+  wholeDocument,
+  type PreviewSlice,
+} from "./previewWindow";
 import { scrollFraction, topForFraction } from "./scrollSync";
 
 interface Props {
@@ -32,15 +41,22 @@ interface Props {
   syncScroll?: boolean;
 }
 
-const renderAll = (tabId: string, baseDir: string | null) => {
-  const text = getDocText(tabId) ?? "";
-  return {
-    html: renderMarkdown(text, { sourceLines: true, ...(baseDir ? { baseDir } : {}) }),
-    headings: extractHeadings(text),
-  };
-};
+interface RenderedPreview {
+  html: string;
+  headings: OutlineItem[];
+  slice: PreviewSlice;
+}
 
 const TARGET_HIGHLIGHT = "ai-target";
+
+/** The block element whose `data-src` range contains `line` (0-based). */
+function elementForLine(root: ParentNode, line: number): HTMLElement | null {
+  for (const node of root.querySelectorAll<HTMLElement>("[data-src]")) {
+    const [start, end] = (node.getAttribute("data-src") ?? "").split(":").map(Number);
+    if (line >= start && line < end) return node;
+  }
+  return null;
+}
 
 /**
  * Keep the text picked for AI visible after focus moves to the AI panel, which
@@ -56,7 +72,8 @@ function markTarget(range: Range | null): void {
  * Split preview for Markdown tabs (T19).
  *
  * The buffer lives in CodeMirror; this pane re-renders from `getDocText` with a
- * 120 ms debounce and keeps its scroll position in sync with the editor.
+ * 120 ms debounce. A short document keeps its scroll position in sync with the
+ * editor. A longer one renders only a window around the reading position.
  */
 export default function MarkdownPreview({
   tabId,
@@ -69,20 +86,61 @@ export default function MarkdownPreview({
 }: Props) {
   const resolvedTheme = useResolvedTheme();
   const { t } = useI18n();
-  const [rendered, setRendered] = useState(() => renderAll(tabId, baseDir));
+  const headingsRef = useRef<OutlineItem[]>([]);
+  const sourceRef = useRef<string | null>(null);
+  const anchorRef = useRef(0);
+  const pendingLine = useRef<number | null>(null);
+  const adjusting = useRef(false);
+  const renderAt = useCallback(
+    (anchor: number): RenderedPreview => {
+      const text = getDocText(tabId) ?? "";
+      if (text !== sourceRef.current) {
+        sourceRef.current = text;
+        headingsRef.current = extractHeadings(text);
+      }
+      const slice =
+        text.length <= FULL_PREVIEW_CHARS
+          ? wholeDocument(text)
+          : previewSlice(text, anchor, WINDOW_CHARS);
+      return {
+        html: renderMarkdown(slice.text, {
+          sourceLines: true,
+          lineOffset: slice.startLine,
+          ...(baseDir ? { baseDir } : {}),
+        }),
+        headings: headingsRef.current,
+        slice,
+      };
+    },
+    [tabId, baseDir]
+  );
+  const [rendered, setRendered] = useState<RenderedPreview>(() => ({
+    html: "",
+    headings: [],
+    slice: wholeDocument(""),
+  }));
   const [outlineOpen, setOutlineOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const syncing = useRef<"editor" | "preview" | null>(null);
-  const { html, headings } = rendered;
+  const { html, headings, slice } = rendered;
+
+  const placeWindow = useCallback(
+    (line: number) => {
+      const next = Math.max(0, line);
+      anchorRef.current = next;
+      pendingLine.current = next;
+      setRendered(renderAt(next));
+    },
+    [renderAt]
+  );
 
   // Re-render after edits, debounced so typing does not reparse on each keystroke.
+  // A long document only re-renders the window around the reading position.
   useEffect(() => {
     let debounce: number | undefined;
-    const render = () => {
-      setRendered(renderAll(tabId, baseDir));
-    };
+    const render = () => setRendered(renderAt(anchorRef.current));
 
-    // The initial state runs during render, before CodeEditor registers its view,
+    // The initial state runs during render, before the editor registers its view,
     // so pull the real buffer once after mount (deferred to satisfy the effect rule).
     const initial = window.setTimeout(render, 0);
     const schedule = () => {
@@ -96,9 +154,31 @@ export default function MarkdownPreview({
       window.clearTimeout(debounce);
       unsubscribe();
     };
-    // The resolved theme is a dependency so switching themes re-renders the
-    // markdown and lets the Shiki/Mermaid effects repaint with the new palette.
-  }, [tabId, baseDir, resolvedTheme]);
+  }, [tabId, resolvedTheme, renderAt]);
+
+  // After the window shifts, keep the line the reader was on in view.
+  useLayoutEffect(() => {
+    const line = pendingLine.current;
+    const scroller = scrollerRef.current;
+    if (line == null || !scroller) return;
+    pendingLine.current = null;
+    const body = scroller.querySelector(".markdown-preview__body");
+    const target = body ? elementForLine(body, line) : null;
+    adjusting.current = true;
+    if (target) {
+      const offset =
+        target.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, offset - 8);
+    } else {
+      scroller.scrollTop = 0;
+    }
+    const frame = window.requestAnimationFrame(() => {
+      adjusting.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [html]);
 
   // A selection in the preview becomes the editor selection, so Ctrl+K, the
   // floating AI action and the AI panel work the same with the source hidden.
@@ -224,9 +304,11 @@ export default function MarkdownPreview({
     };
   }, [html, resolvedTheme, t]);
 
-  // Bidirectional, fraction-based scroll sync; the editor remains the source of truth.
+  // Bidirectional, fraction-based scroll sync for a fully rendered document.
+  // A windowed document follows the editor's top line instead of a fraction of
+  // a DOM that no longer matches the file.
   useEffect(() => {
-    if (!syncScroll) return;
+    if (!syncScroll || !slice.full) return;
     const editor = getScrollElement(tabId);
     const preview = scrollerRef.current;
     if (!editor || !preview) return;
@@ -271,7 +353,62 @@ export default function MarkdownPreview({
       editor.removeEventListener("scroll", onEditorScroll);
       preview.removeEventListener("scroll", onPreviewScroll);
     };
-  }, [tabId, syncScroll]);
+  }, [tabId, syncScroll, slice.full]);
+
+  // Move the window when the editor scrolls outside it, or the preview hits an edge.
+  useEffect(() => {
+    if (slice.full) return;
+    const preview = scrollerRef.current;
+    const editor = syncScroll ? getScrollElement(tabId) : null;
+    let timer = 0;
+    let lastPreviewTop = preview?.scrollTop ?? 0;
+
+    const setWindow = (line: number) => {
+      const next = Math.max(0, Math.min(line, Math.max(0, slice.totalLines - 1)));
+      if (next === slice.startLine) return;
+      placeWindow(next);
+    };
+
+    const onEditorScroll = () => {
+      if (!editor) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const view = getEditorView(tabId);
+        if (!view) return;
+        const line =
+          view.state.doc.lineAt(view.lineBlockAtHeight(editor.scrollTop).from).number - 1;
+        const margin = Math.max(2, Math.floor((slice.endLine - slice.startLine) * 0.15));
+        if (line >= slice.startLine + margin && line < slice.endLine - margin) return;
+        setWindow(line);
+      }, 80);
+    };
+
+    const onPreviewScroll = () => {
+      if (!preview) return;
+      const top = preview.scrollTop;
+      const movedDown = top > lastPreviewTop;
+      const movedUp = top < lastPreviewTop;
+      lastPreviewTop = top;
+      if (adjusting.current) return;
+      if (preview.scrollHeight <= preview.clientHeight + 80) return;
+      const nearEnd = top + preview.clientHeight >= preview.scrollHeight - 48;
+      const nearStart = top < 24;
+      if (movedDown && nearEnd && slice.endLine < slice.totalLines) {
+        setWindow(slice.startLine + Math.floor((slice.endLine - slice.startLine) * 0.45));
+      } else if (movedUp && nearStart && slice.startLine > 0) {
+        const span = slice.endLine - slice.startLine;
+        setWindow(Math.max(0, slice.startLine - Math.floor(span * 0.45)));
+      }
+    };
+
+    editor?.addEventListener("scroll", onEditorScroll, { passive: true });
+    preview?.addEventListener("scroll", onPreviewScroll, { passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      editor?.removeEventListener("scroll", onEditorScroll);
+      preview?.removeEventListener("scroll", onPreviewScroll);
+    };
+  }, [tabId, syncScroll, slice, placeWindow]);
 
   const onPreviewClick = (event: MouseEvent<HTMLDivElement>) => {
     const anchor = (event.target as HTMLElement).closest("a");
@@ -279,14 +416,29 @@ export default function MarkdownPreview({
     const href = anchor.getAttribute("href") ?? "";
     if (href.startsWith("#")) {
       event.preventDefault();
-      scrollerRef.current?.querySelector(href)?.scrollIntoView({ block: "start" });
+      const slug = decodeURIComponent(href.slice(1));
+      const heading = headings.find((item) => item.slug === slug);
+      if (heading) jumpTo(slug, heading.line);
+      else scrollerRef.current?.querySelector(href)?.scrollIntoView({ block: "start" });
       return;
     }
     event.preventDefault();
+    if (isSafeHttpUrl(href)) {
+      void openExternal(href).catch((error) =>
+        useWorkspace.getState().setError(localizeError(error))
+      );
+      return;
+    }
     useWorkspace.getState().setError(t("preview.externalLink"));
   };
 
-  const jumpTo = (slug: string) => {
+  const jumpTo = (slug: string, line: number) => {
+    if (!slice.full) {
+      const anchor = Math.max(0, line - 1);
+      placeWindow(anchor);
+      setOutlineOpen(false);
+      return;
+    }
     const scroller = scrollerRef.current;
     const target = scroller?.querySelector<HTMLElement>(`[id="${slug}"]`);
     if (scroller && target) {
@@ -333,6 +485,15 @@ export default function MarkdownPreview({
           {t("preview.export")}
         </button>
       </div>
+      {!slice.full && (
+        <p className="markdown-preview__window">
+          {t("preview.window", {
+            from: slice.startLine + 1,
+            to: slice.endLine,
+            total: slice.totalLines,
+          })}
+        </p>
+      )}
       <div className="markdown-preview__scroll" ref={scrollerRef} onClick={onPreviewClick}>
         {html ? (
           <div
@@ -357,7 +518,7 @@ export default function MarkdownPreview({
               className="markdown-preview__outline-item"
               style={{ paddingLeft: `${10 + (heading.level - 1) * 12}px` }}
               title={t("preview.line", { line: heading.line })}
-              onClick={() => jumpTo(heading.slug)}
+              onClick={() => jumpTo(heading.slug, heading.line)}
             >
               {heading.text}
             </button>

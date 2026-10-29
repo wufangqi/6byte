@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { isMarkdownFile } from "../features/markdown";
+import { markdownSourcePreferred } from "../features/markdownView";
 import { t } from "../i18n/locale";
 import { samePath } from "../lib/paths";
 import {
@@ -60,8 +61,6 @@ interface WorkspaceState {
   closeSettings(): void;
   setContent(id: string, content: string, version?: number): void;
   markEdited(id: string, stats: { lines: number; chars: number }): void;
-  /** Line and character counts for a preview insert. Does not mark the file dirty. */
-  noteDocStats(id: string, stats: { lines: number; chars: number }): void;
   markSaved(
     id: string,
     patch: { path: string; content: string; meta: FileMeta; size: number; mtimeMs: number }
@@ -119,7 +118,7 @@ export const tabFromFile = (file: OpenedFile): Tab => {
     chars: file.content.length,
     version: 0,
     preview: markdown,
-    source: !markdown,
+    source: markdown ? markdownSourcePreferred() : true,
   };
 };
 
@@ -236,13 +235,6 @@ export const useWorkspace = create<WorkspaceState>((set) => ({
     set((state) => ({
       tabs: state.tabs.map((t) =>
         t.id === id ? { ...t, dirty: true, lines: stats.lines, chars: stats.chars } : t
-      ),
-    })),
-
-  noteDocStats: (id, stats) =>
-    set((state) => ({
-      tabs: state.tabs.map((t) =>
-        t.id === id ? { ...t, lines: stats.lines, chars: stats.chars } : t
       ),
     })),
 

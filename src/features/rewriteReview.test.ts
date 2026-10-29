@@ -3,6 +3,7 @@ import {
   acceptedRewriteCount,
   acceptedRewriteText,
   createRewriteReview,
+  rewriteDecision,
   rewriteHunks,
   updateRewriteHunk,
 } from "./rewriteReview";
@@ -32,6 +33,16 @@ describe("rewrite review", () => {
 
     expect(hunk).toMatchObject({ original: "old", replacement: "new", state: "pending" });
     expect(acceptedRewriteText(updateRewriteHunk(review, hunk.id, "accepted"))).toBe("new");
+  });
+
+  it("uses one decision for Tab, the editor button, and the panel button", () => {
+    const review = createRewriteReview("one\ntwo\n", "ONE\ntwo\n");
+    const [hunk] = rewriteHunks(review);
+    expect(rewriteDecision("ONE\ntwo\n", null)).toBe("ONE\ntwo\n");
+    expect(rewriteDecision("ONE\ntwo\n", review)).toBeNull();
+    expect(rewriteDecision("ONE\ntwo\n", updateRewriteHunk(review, hunk.id, "accepted"))).toBe(
+      "ONE\ntwo\n"
+    );
   });
 
   it("keeps unchanged output out of the review list", () => {

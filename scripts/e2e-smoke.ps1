@@ -192,7 +192,7 @@ Write-Host '[0/24] reset persisted session, recent files, theme, locale and work
 $resetPage = Get-PageTarget
 $resetSocket = Connect-Cdp $resetPage.webSocketDebuggerUrl
 Wait-AppReady $resetSocket
-Invoke-CdpEval $resetSocket "localStorage.setItem('ainative.session', '[]'); localStorage.setItem('ainative.recent', '[]'); localStorage.setItem('ainative.theme', 'dark'); localStorage.setItem('ainative.locale', 'zh'); localStorage.removeItem('ainative.workspace'); localStorage.removeItem('ainative.treeHidden'); 'ok'" | Out-Null
+Invoke-CdpEval $resetSocket "localStorage.setItem('ainative.session', '[]'); localStorage.setItem('ainative.recent', '[]'); localStorage.setItem('ainative.theme', 'dark'); localStorage.setItem('ainative.locale', 'zh'); localStorage.removeItem('ainative.workspace'); localStorage.removeItem('ainative.treeHidden'); localStorage.removeItem('ainative.markdownSource'); 'ok'" | Out-Null
 Invoke-CdpEval $resetSocket 'location.reload(); "ok"' | Out-Null
 $resetSocket.Dispose()
 Start-Sleep -Seconds 4
@@ -681,8 +681,11 @@ $socket = Set-SessionAndReload -Paths @($splitFile)
 
 $drag = @'
 (async () => {
-  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
-  await new Promise((resolve) => setTimeout(resolve, 700));
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (document.querySelector('.split__divider')) break;
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+  }
   const split = document.querySelector('.split');
   const divider = document.querySelector('.split__divider');
   const pane = document.querySelector('.split__pane');

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n } from "../i18n";
 import type { AskStep, Conversation, RewriteEntry, UserEntry } from "./aiHistory";
 import { AppLogo } from "./MenuBar";
@@ -292,6 +292,7 @@ export function RewriteCard({
   liveText,
   onAccept,
   onDiscard,
+  onReviewChange,
 }: {
   entry: RewriteEntry;
   version: number;
@@ -299,6 +300,8 @@ export function RewriteCard({
   liveText?: string;
   onAccept(text?: string): void;
   onDiscard(): void;
+  /** Null when this card is not choosing blocks. Tab follows the same choice. */
+  onReviewChange?(review: RewriteReview | null): void;
 }) {
   const { t } = useI18n();
   const [review, setReview] = useState<RewriteReview | null>(null);
@@ -307,6 +310,12 @@ export function RewriteCard({
   const text = live ? (liveText ?? "") : entry.text;
   const hunks = pending ? rewriteHunks(createRewriteReview(entry.original, entry.text)) : [];
   const accepted = acceptedRewriteCount(review);
+
+  useEffect(() => {
+    if (!onReviewChange || entry.status !== "pending") return;
+    onReviewChange(review);
+    return () => onReviewChange(null);
+  }, [entry.status, onReviewChange, review]);
 
   return (
     <div className={`ai-stream__card is-${entry.status}`}>

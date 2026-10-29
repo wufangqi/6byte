@@ -27,6 +27,7 @@ interface Props {
   onSave(): void;
   onSaveAs(): void;
   onSaveAll(): void;
+  onExportHtml(): void;
   onRename(): void;
   onOpenModelSettings(): void;
   onOpenSettings(): void;
@@ -55,6 +56,7 @@ export default function MenuBar({
   onSave,
   onSaveAs,
   onSaveAll,
+  onExportHtml,
   onRename,
   onOpenModelSettings,
   onOpenSettings,
@@ -252,6 +254,12 @@ export default function MenuBar({
                 label={t("menu.saveAll")}
                 disabled={!canSaveAll}
                 onClick={onSaveAll}
+                close={() => setMenu(null)}
+              />
+              <FileItem
+                label={t("menu.exportHtml")}
+                disabled={!canSave}
+                onClick={onExportHtml}
                 close={() => setMenu(null)}
               />
               <FileItem

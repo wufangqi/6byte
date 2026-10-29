@@ -25,7 +25,7 @@ export interface DocStateInit {
   version: number;
   /** L1 files (5–20 MB) drop folding/bracket/selection decorations. */
   simplified?: boolean;
-  onStats: (stats: { lines: number; chars: number; preview?: boolean }) => void;
+  onStats: (stats: { lines: number; chars: number }) => void;
   onDocChanged?: () => void;
   onStateChanged?: (state: EditorState) => void;
   onPasteImage?: (file: File) => Promise<string | null>;

@@ -52,9 +52,7 @@ export default function EditorHost({ tab, simplified, onPasteImage, visible = tr
     version: target.version,
     simplified: simplifiedRef.current,
     onStats: (stats) => {
-      const store = useWorkspace.getState();
-      if (stats.preview) store.noteDocStats(target.id, stats);
-      else store.markEdited(target.id, stats);
+      useWorkspace.getState().markEdited(target.id, stats);
     },
     onDocChanged: () => notifyDocChanged(target.id),
     onStateChanged: (state) => saveDocState(target.id, state),

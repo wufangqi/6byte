@@ -50,6 +50,7 @@ pub fn run() {
             ai::ai_probe,
             about::app_platform,
             about::open_feedback,
+            about::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
