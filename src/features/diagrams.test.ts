@@ -76,6 +76,15 @@ describe("renderMermaidSvg", () => {
     expect(svg).not.toContain("<script");
   }, 120000);
 
+  it("uses a different palette for light and dark themes", async () => {
+    const source = "graph TD\n  A-->B";
+    const dark = await renderMermaidSvg(source, "dark");
+    const light = await renderMermaidSvg(source, "light");
+    expect(dark).toContain("<svg");
+    expect(light).toContain("<svg");
+    expect(light).not.toBe(dark);
+  }, 120000);
+
   it("returns null for a diagram that cannot be parsed", async () => {
     expect(await renderMermaidSvg("this is not a diagram")).toBeNull();
   }, 20000);

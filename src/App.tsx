@@ -527,61 +527,83 @@ export default function App() {
   }, [saveTab]);
 
   /**
-   * Rename a tab: files on disk are renamed in place, unsaved buffers only get a
-   * new default name (the real rename happens on the next save).
+   * Rename a file on disk and point any open tab at the new path.
+   * An unsaved tab only changes its display name; the real rename happens on save.
    */
-  const requestRenameTab = useCallback(async (tabId: string) => {
-    const store = useWorkspace.getState();
-    const tab = store.tabs.find((item) => item.id === tabId);
-    if (!tab) return;
-
-    const extension = extensionOf(tab.name) || ".md";
-    if (!tab.path) {
+  const renameExistingFile = useCallback(
+    async (path: string, currentName: string, tabId?: string) => {
+      const extension = extensionOf(currentName);
+      const store = useWorkspace.getState();
       const name = await askName({
         title: tr("tab.rename"),
         label: tr("tab.renameLabel"),
-        initial: tab.name,
+        initial: currentName,
         confirmLabel: tr("tab.rename.confirm"),
         cancelLabel: tr("dialog.cancel"),
+        validate: (value) => {
+          const next = withExtension(value, extension);
+          const folder = parentDir(path);
+          const target = folder ? joinPath(folder, next) : next;
+          if (samePath(target, path)) return null;
+          const clash = duplicateTab(useWorkspace.getState().tabs, tabId ?? "", target);
+          return clash ? tr("app.duplicate", { name: clash.name }) : null;
+        },
       });
       if (!name) return;
-      store.setName(tab.id, withExtension(name, extension));
-      return;
-    }
 
-    const name = await askName({
-      title: tr("tab.rename"),
-      label: tr("tab.renameLabel"),
-      initial: tab.name,
-      confirmLabel: tr("tab.rename.confirm"),
-      cancelLabel: tr("dialog.cancel"),
-      validate: (value) => {
-        const next = withExtension(value, extension);
-        const folder = parentDir(tab.path as string);
-        const target = folder ? joinPath(folder, next) : next;
-        if (samePath(target, tab.path as string)) return null;
-        const clash = duplicateTab(store.tabs, tab.id, target);
-        return clash ? tr("app.duplicate", { name: clash.name }) : null;
-      },
-    });
-    if (!name) return;
+      try {
+        const result = await renameFile(path, withExtension(name, extension));
+        const open = useWorkspace
+          .getState()
+          .tabs.find((item) => item.path && samePath(item.path, path));
+        if (open) {
+          const disk = await statFile(result.path).catch(() => null);
+          store.renameTab(open.id, {
+            path: result.path,
+            name: result.name,
+            mtimeMs: disk?.mtimeMs ?? open.mtimeMs,
+          });
+        }
+        store.setNotice(tr("tab.rename.done", { name: result.name }));
+        const folder = parentDir(result.path);
+        if (folder) void useFileTree.getState().retryDir(folder);
+      } catch (e) {
+        store.setError(localizeError(e));
+      }
+    },
+    []
+  );
 
-    try {
-      const result = await renameFile(tab.path, withExtension(name, extension));
-      const disk = await statFile(result.path).catch(() => null);
-      store.renameTab(tab.id, {
-        path: result.path,
-        name: result.name,
-        mtimeMs: disk?.mtimeMs ?? tab.mtimeMs,
-      });
-      store.setNotice(tr("tab.rename.done", { name: result.name }));
-      // Refresh the containing folder if it is currently expanded in the tree.
-      const folder = parentDir(result.path);
-      if (folder) void useFileTree.getState().retryDir(folder);
-    } catch (e) {
-      store.setError(localizeError(e));
-    }
-  }, []);
+  const requestRenameTab = useCallback(
+    async (tabId: string) => {
+      const store = useWorkspace.getState();
+      const tab = store.tabs.find((item) => item.id === tabId);
+      if (!tab) return;
+      if (!tab.path) {
+        const extension = extensionOf(tab.name) || ".md";
+        const name = await askName({
+          title: tr("tab.rename"),
+          label: tr("tab.renameLabel"),
+          initial: tab.name,
+          confirmLabel: tr("tab.rename.confirm"),
+          cancelLabel: tr("dialog.cancel"),
+        });
+        if (!name) return;
+        store.setName(tab.id, withExtension(name, extension));
+        return;
+      }
+      await renameExistingFile(tab.path, tab.name, tab.id);
+    },
+    [renameExistingFile]
+  );
+
+  const requestRenamePath = useCallback(
+    async (path: string) => {
+      const currentName = path.split(/[\\/]/).pop() || path;
+      await renameExistingFile(path, currentName);
+    },
+    [renameExistingFile]
+  );
 
   const requestCloseTab = useCallback(
     async (tabId: string) => {
@@ -1015,7 +1037,11 @@ export default function App() {
       <div className="workspace" ref={workspaceRef}>
         {showTree && (
           <>
-            <FileTree width={treeWidth} onOpenFile={(path) => void openPaths([path])} />
+            <FileTree
+              width={treeWidth}
+              onOpenFile={(path) => void openPaths([path])}
+              onRenameFile={(path) => void requestRenamePath(path)}
+            />
             <div
               className="split__divider file-tree__divider"
               role="separator"

@@ -5,6 +5,7 @@ import { revealInOs } from "../ipc/api";
 import {
   pageRows,
   TREE_PAGE_SIZE,
+  treeContextActions,
   treeHighlights,
   visibleTreeRows,
   type TreeNode,
@@ -15,6 +16,7 @@ import { useFileTree } from "../stores/fileTree";
 interface Props {
   width: number;
   onOpenFile(path: string): void;
+  onRenameFile?(path: string): void;
 }
 
 interface MenuState {
@@ -25,7 +27,7 @@ interface MenuState {
 }
 
 /** Read-only workspace tree. One root, children loaded the first time a directory opens. */
-export default function FileTree({ width, onOpenFile }: Props) {
+export default function FileTree({ width, onOpenFile, onRenameFile }: Props) {
   const { t } = useI18n();
   const root = useFileTree((state) => state.root);
   const rootPath = useFileTree((state) => state.rootPath);
@@ -95,6 +97,7 @@ export default function FileTree({ width, onOpenFile }: Props) {
         "Home",
         "End",
         "Escape",
+        "F2",
       ].includes(key)
     ) {
       return;
@@ -110,7 +113,9 @@ export default function FileTree({ width, onOpenFile }: Props) {
     else if (key === "ArrowUp") move(Math.max(0, selectedIndex - 1));
     else if (key === "Home") move(0);
     else if (key === "End") move(rows.length - 1);
-    else if (key === "Enter" && current) {
+    else if (key === "F2" && current?.kind === "file") {
+      onRenameFile?.(current.path);
+    } else if (key === "Enter" && current) {
       if (current.kind === "file") onOpenFile(current.path);
       else void useFileTree.getState().toggleDir(current.path);
     } else if (key === "ArrowRight" && current?.kind === "dir") {
@@ -279,6 +284,19 @@ export default function FileTree({ width, onOpenFile }: Props) {
           >
             {t("tree.open")}
           </button>
+          {treeContextActions(menu.kind).includes("rename") && onRenameFile && (
+            <button
+              type="button"
+              className="menu__item"
+              onClick={() => {
+                onRenameFile(menu.path);
+                setMenu(null);
+              }}
+            >
+              {t("tab.rename")}
+              <span className="menu__shortcut">F2</span>
+            </button>
+          )}
           <button
             type="button"
             className="menu__item"

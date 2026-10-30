@@ -524,6 +524,27 @@ mod tests {
     }
 
     #[test]
+    fn rename_file_refuses_a_missing_path_and_a_directory() {
+        let missing = temp_path("rename-missing");
+        let missing_error =
+            rename_file(missing.to_string_lossy().to_string(), "next.md".into()).unwrap_err();
+        assert!(missing_error.contains("不存在"), "{missing_error}");
+
+        let directory = std::env::temp_dir().join(format!(
+            "ainative-test-rename-dir-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&directory).unwrap();
+        let directory_error =
+            rename_file(directory.to_string_lossy().to_string(), "next".into()).unwrap_err();
+        assert!(directory_error.contains("不是文件"), "{directory_error}");
+        let _ = fs::remove_dir(directory);
+    }
+
+    #[test]
     fn rename_file_refuses_to_overwrite_an_existing_file() {
         let first = temp_path("rename-a");
         let second = temp_path("rename-b");

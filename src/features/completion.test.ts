@@ -25,13 +25,17 @@ describe("completion settings", () => {
       enabled: false,
       providerId: "",
       modelId: "",
+      delayMs: 500,
     });
     expect(parseCompletionSettings('{"enabled":"yes"}').enabled).toBe(false);
     expect(parseCompletionSettings('{"enabled":true,"providerId":"p1","modelId":"fast"}')).toEqual({
       enabled: true,
       providerId: "p1",
       modelId: "fast",
+      delayMs: 500,
     });
+    expect(parseCompletionSettings('{"enabled":true,"delayMs":50}').delayMs).toBe(100);
+    expect(parseCompletionSettings('{"enabled":true,"delayMs":9000}').delayMs).toBe(5000);
   });
 
   it("uses the completion model, not the rewrite model", () => {
@@ -39,6 +43,7 @@ describe("completion settings", () => {
       enabled: true,
       providerId: "p1",
       modelId: "fast",
+      delayMs: 500,
     });
     expect(endpoint).toEqual({
       id: "p1",
@@ -46,7 +51,12 @@ describe("completion settings", () => {
       model: "fast-text",
     });
     expect(
-      completionEndpoint(catalog, { enabled: true, providerId: "p1", modelId: "missing" })
+      completionEndpoint(catalog, {
+        enabled: true,
+        providerId: "p1",
+        modelId: "missing",
+        delayMs: 500,
+      })
     ).toBeNull();
   });
 });

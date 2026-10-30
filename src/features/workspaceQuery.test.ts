@@ -5,6 +5,7 @@ import {
   boundedFileExcerpt,
   buildReferences,
   collectWorkspaceFiles,
+  dropTypedMention,
   filterPalette,
   grepDefaultRoot,
   insertMention,
@@ -68,6 +69,7 @@ describe("workspace query", () => {
     expect(parseMentions(inserted.text)).toEqual([{ kind: "heading", label: "启动", line: 4 }]);
     expect(activeMentionQuery("请改 @rea", 7)).toBe("rea");
     expect(activeMentionQuery("请改 @{heading:4:启动} ", 20)).toBeNull();
+    expect(dropTypedMention("请改 @启", 5, "启")).toEqual({ text: "请改 ", caret: 3 });
   });
 
   it("names a markdown file by its headings and keeps a plain file to forty lines", () => {
