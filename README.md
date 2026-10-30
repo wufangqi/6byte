@@ -104,7 +104,7 @@ Performance data, including long-Markdown scroll and memory measurements, is in 
 
 ## Deliberately not doing
 
-6byte stays an editor with a reviewable AI path, not a platform. It will not add WYSIWYG/rich-text editing, a knowledge graph, a plugin system, real-time collaboration, a general-purpose chat sidebar, or autonomous cross-file writes. Those would trade review-before-write for scope we cannot verify.
+6byte stays an editor with a reviewable AI path, not a platform. It will not add WYSIWYG/rich-text editing, a knowledge graph, a plugin system, real-time collaboration, a general-purpose chat sidebar, or autonomous cross-file writes. It also will not fork VS Code/VSCodium or ship the AI as a VS Code extension — that decision was closed on 2026-10-30 ([memo](./docs/VS%20Code%20二开评估.md)). Those would trade review-before-write for scope we cannot verify.
 
 ## Roadmap
 
