@@ -12,7 +12,7 @@
 
 **当前版本：v0.3.1**（2026-10-30），Windows、Linux、macOS 安装包齐全。
 
-![在段落、渲染结果和源码旁边审阅 AI 改写](./docs/assets/hero-zh.png)
+![在段落、渲染结果和源码旁边审阅 AI 改写](./assets/hero-zh.png)
 
 *在段落上按 `Ctrl+K`：候选同时停在编辑器内联和右侧 AI 面板。`Tab` 接受，`Esc` 取消，一次撤销恢复原文。*
 
@@ -29,18 +29,18 @@
 
 ## 编辑器
 
-![工作区文件树、Markdown 源码、渲染预览与大纲](./docs/assets/editor-zh.png)
+![工作区文件树、Markdown 源码、渲染预览与大纲](./assets/editor-zh.png)
 
 - **工作区文件树**：打开一个文件夹，目录按需逐层展开，不扫描整棵树。隐藏名、依赖目录和符号链接不列出。`Ctrl+Shift+E` 开关，折叠状态重启后保持。
 - **标签与历史**：会话恢复、最近文件、按标签保留撤销历史、拖拽打开、中键关闭；标签或文件树右键 / `F2` 均可重命名，已打开标签跟随新路径。
 - **搜索**：`Ctrl+F` 查找替换（正则、捕获组）；`Ctrl+Shift+F` 跨文件 grep（跳过二进制与依赖目录）。
 - **Markdown**：默认渲染，`<>` / `Ctrl+Shift+M` 在旁边显示源码；大纲跳转、可拖分栏、Mermaid 缩放 / 平移 / 重置（25%–300%，深浅色两套出图）、KaTeX、Shiki、图片粘贴，文件菜单和命令面板都能导出 HTML。
-- **长 Markdown**：超过 8 万字符只渲染阅读位置附近约 2.4 万字符，代码围栏不从中间切开；滚动与内存实测见 [docs/perf.md](./docs/perf.md)。
+- **长 Markdown**：超过 8 万字符只渲染阅读位置附近约 2.4 万字符，代码围栏不从中间切开。
 - **界面**：中英双语、深色 / 浅色 / 跟随系统、自定义标题栏；`.txt` 与未命名笔记自动换行。
 
 ## 可控的 AI
 
-![设置页的对话与限额](./docs/assets/settings-zh.png)
+![设置页的对话与限额](./assets/settings-zh.png)
 
 - **内联审阅**：选中文字按 `Ctrl+K` 写要求，候选同时停在段落旁和右侧 AI 面板；`Tab` / **接受**替换，`Esc` / **放弃**保留原文；逐块审阅只应用你同意的块。
 - **对话与限额**：简单 / 中等 / 极致三档预设，另可建最多五套自定义；控制记住轮数、历史字数、选区与上下文上限、改写 / 询问 token 预算和询问步数。面板在本机保留最近 30 段会话，可新建、切换、删除。
@@ -90,8 +90,6 @@ pnpm tauri build    # 安装包 → src-tauri/target/release/bundle/
 - 真实 Ollama（0.40.11，`qwen2.5:1.5b`）端到端跑过改写与询问。
 - CI 在 Windows、macOS、Ubuntu 上跑同一套检查。
 
-性能与长 Markdown 的滚动 / 内存实测见 [docs/perf.md](./docs/perf.md)。
-
 ## 已知限制
 
 - 20–100 MB 只读；超过 100 MB 走 memmap 只读（≤512 MB），都不能编辑保存。
@@ -104,18 +102,15 @@ pnpm tauri build    # 安装包 → src-tauri/target/release/bundle/
 
 ## 明确不做
 
-6byte 保持「可审阅的编辑器 + AI」，不做平台：不做 WYSIWYG / 富文本、知识图谱、插件系统、实时协作、通用聊天侧栏，也不做跨文件自治写入；不做 VS Code / VSCodium 二开，也不把 AI 做成 VS Code 扩展（2026-10-30 关闭，见 [决策备忘](./docs/VS%20Code%20二开评估.md)）。这些会拿「先审阅再写入」换取无法验证的范围。
+6byte 保持「可审阅的编辑器 + AI」，不做平台：不做 WYSIWYG / 富文本、知识图谱、插件系统、实时协作、通用聊天侧栏，也不做跨文件自治写入；不做 VS Code / VSCodium 二开，也不把 AI 做成 VS Code 扩展（2026-10-30 关闭）。这些会拿「先审阅再写入」换取无法验证的范围。
 
 ## 路线图
 
-下一步是 Windows / Linux / macOS 人工验收（M-07）与分发扩张（M4：便携版、至少一个包管理器渠道、自动更新、资源管理器右键）。细节与进度见 [docs/待办清单.md](./docs/待办清单.md)。
+下一步是 Windows / Linux / macOS 人工验收（M-07）与分发扩张（M4：便携版、至少一个包管理器渠道、自动更新、资源管理器右键）。
 
 ## 文档
 
-- [技术选型与路线图](./docs/技术选型与路线图.md)
-- [待办与进度](./docs/待办清单.md) · [更新日志](./CHANGELOG.md)
-- [性能](./docs/perf.md) · [发布清单](./docs/release-checklist.md)
-- [UI 规范](./docs/ui-guidelines.md) · [项目梳理](./docs/项目梳理.md) · [工作区文件树 PRD](./docs/PRD-工作区文件树.md)
+- [更新日志](./CHANGELOG.md)
 - [贡献指南](./CONTRIBUTING.md)
 
 ## 许可证
