@@ -115,7 +115,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/e2e-smoke.ps1
 
 ## 不做的事
 
-见 `技术选型与路线图.md` §1.4：不做 IDE、不做笔记库、v1 不做插件/同步/协作、不做 WYSIWYG。
+见 `docs/技术选型与路线图.md` §1.4：不做 IDE、不做笔记库、v1 不做插件/同步/协作、不做 WYSIWYG。
 
 README 截图（可选，发版前刷新）：
 

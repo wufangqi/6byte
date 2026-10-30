@@ -112,7 +112,7 @@ Manual acceptance on Windows / Linux / macOS (M-07) and distribution expansion (
 
 ## Docs
 
-- [Roadmap & design notes](./技术选型与路线图.md) (Chinese)
+- [Roadmap & design notes](./docs/技术选型与路线图.md) (Chinese)
 - [Backlog & progress](./docs/待办清单.md) · [Changelog](./CHANGELOG.md)
 - [Performance](./docs/perf.md) · [Release checklist](./docs/release-checklist.md)
 - [UI guidelines](./docs/ui-guidelines.md) · [Project review](./docs/项目梳理.md) · [Workspace tree PRD](./docs/PRD-工作区文件树.md)

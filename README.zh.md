@@ -112,7 +112,7 @@ pnpm tauri build    # 安装包 → src-tauri/target/release/bundle/
 
 ## 文档
 
-- [技术选型与路线图](./技术选型与路线图.md)
+- [技术选型与路线图](./docs/技术选型与路线图.md)
 - [待办与进度](./docs/待办清单.md) · [更新日志](./CHANGELOG.md)
 - [性能](./docs/perf.md) · [发布清单](./docs/release-checklist.md)
 - [UI 规范](./docs/ui-guidelines.md) · [项目梳理](./docs/项目梳理.md) · [工作区文件树 PRD](./docs/PRD-工作区文件树.md)
