@@ -12,7 +12,7 @@ Open `md` / `txt` / `log` and start writing. Your files and AI keys stay on your
 
 **Current release: v0.3.1** (2026-10-30) — Windows, Linux and macOS installers.
 
-![Reviewing an AI rewrite beside the paragraph, the rendered Markdown and the source](./docs/assets/hero-en.png)
+![Reviewing an AI rewrite beside the paragraph, the rendered Markdown and the source](./assets/hero-en.png)
 
 *`Ctrl+K` on a paragraph: the rewrite waits inline and in the AI panel. `Tab` accepts, `Esc` cancels, one undo restores the original.*
 
@@ -29,18 +29,18 @@ Most editors either treat AI as a chat sidebar that cannot touch the document, o
 
 ## The editor
 
-![Editor with workspace tree, Markdown source, rendered preview and outline](./docs/assets/editor-en.png)
+![Editor with workspace tree, Markdown source, rendered preview and outline](./assets/editor-en.png)
 
 - **Workspace tree**: open one folder; folders expand lazily one level per click, never scanning the whole tree. Hidden names, dependency folders and symlinks stay out. `Ctrl+Shift+E` toggles it; the collapsed state survives restarts.
 - **Tabs & history**: session restore, recent files, per-tab undo history, drag & drop, middle-click close, rename from the tab context menu or `F2`.
 - **Search**: `Ctrl+F` find & replace with regex and capture groups; `Ctrl+Shift+F` cross-file grep across the workspace (skips binaries and dependency folders).
 - **Markdown**: rendered by default; `<>` / `Ctrl+Shift+M` reveals the source beside it. Outline, draggable split, Mermaid zoom / pan / reset (25–300%), KaTeX, Shiki, image paste, and HTML export in the File menu or command palette.
-- **Long Markdown**: documents over 80k characters render a ~24k-character window around the reading position instead of the whole file; code fences are never cut in half. Measured scroll and memory numbers are in [docs/perf.md](./docs/perf.md).
+- **Long Markdown**: documents over 80k characters render a ~24k-character window around the reading position instead of the whole file; code fences are never cut in half.
 - **UI**: Chinese / English, light / dark / follow system, custom title bar. `.txt` and untitled notes wrap automatically.
 
 ## AI you can control
 
-![Settings tab with conversation history and send limits](./docs/assets/settings-en.png)
+![Settings tab with conversation history and send limits](./assets/settings-en.png)
 
 - **Inline review**: select text, `Ctrl+K`, describe the change. The candidate sits beside the paragraph and in the right-hand AI panel; `Tab` or **Accept** replaces it, `Esc` or **Discard** keeps the original. Block-level review applies only the hunks you accept.
 - **Conversation & limits**: built-in Simple / Medium / Extreme presets plus up to five custom sets. Control remembered turns, history size, selection and context limits, rewrite/ask token budgets, and ask steps. The panel keeps the last 30 local conversations and can start, switch or delete them.
@@ -90,8 +90,6 @@ Full commands, directory rules, commit conventions and the release process live 
 - Real Ollama (0.40.11, `qwen2.5:1.5b`) exercised the rewrite and ask paths end to end.
 - CI runs the same checks on Windows, macOS and Ubuntu.
 
-Performance data, including long-Markdown scroll and memory measurements, is in [docs/perf.md](./docs/perf.md).
-
 ## Known limitations
 
 - 20–100 MB files are read-only; over 100 MB opens as a read-only memmap preview (≤512 MB). Neither can be edited or saved.
@@ -104,18 +102,15 @@ Performance data, including long-Markdown scroll and memory measurements, is in 
 
 ## Deliberately not doing
 
-6byte stays an editor with a reviewable AI path, not a platform. It will not add WYSIWYG/rich-text editing, a knowledge graph, a plugin system, real-time collaboration, a general-purpose chat sidebar, or autonomous cross-file writes. It also will not fork VS Code/VSCodium or ship the AI as a VS Code extension — that decision was closed on 2026-10-30 ([memo](./docs/VS%20Code%20二开评估.md)). Those would trade review-before-write for scope we cannot verify.
+6byte stays an editor with a reviewable AI path, not a platform. It will not add WYSIWYG/rich-text editing, a knowledge graph, a plugin system, real-time collaboration, a general-purpose chat sidebar, or autonomous cross-file writes. It also will not fork VS Code/VSCodium or ship the AI as a VS Code extension. That decision was closed on 2026-10-30. Those would trade review-before-write for scope we cannot verify.
 
 ## Roadmap
 
-Manual acceptance on Windows / Linux / macOS (M-07) and distribution expansion (M4: portable build, a package-manager channel, auto-update, Explorer context menu) are next. Details and progress live in [docs/待办清单.md](./docs/待办清单.md).
+Manual acceptance on Windows / Linux / macOS (M-07) and distribution expansion (M4: portable build, a package-manager channel, auto-update, Explorer context menu) are next.
 
 ## Docs
 
-- [Roadmap & design notes](./docs/技术选型与路线图.md) (Chinese)
-- [Backlog & progress](./docs/待办清单.md) · [Changelog](./CHANGELOG.md)
-- [Performance](./docs/perf.md) · [Release checklist](./docs/release-checklist.md)
-- [UI guidelines](./docs/ui-guidelines.md) · [Project review](./docs/项目梳理.md) · [Workspace tree PRD](./docs/PRD-工作区文件树.md)
+- [Changelog](./CHANGELOG.md)
 - [Contributing](./CONTRIBUTING.md)
 
 ## License
