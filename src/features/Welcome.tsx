@@ -19,7 +19,23 @@ export default function Welcome({ onOpen, onNew, onOpenFolder, onOpenPath }: Pro
   return (
     <div className="welcome">
       <div className="welcome__inner">
-        <h1 className="welcome__title">6byte</h1>
+        <h1 className="welcome__title" aria-label="6byte">
+          <span className="welcome__title-six">
+            6
+            <svg className="welcome__title-mark" viewBox="0 0 10 10" aria-hidden="true">
+              <rect
+                x="1.2"
+                y="1.2"
+                width="7.6"
+                height="7.6"
+                rx="1.5"
+                fill="#3BE3EE"
+                transform="rotate(45 5 5)"
+              />
+            </svg>
+          </span>
+          byte
+        </h1>
         <p className="welcome__sub">{t("welcome.sub")}</p>
 
         <div className="welcome__actions">
