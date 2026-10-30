@@ -10,10 +10,18 @@ import {
   pathInsideRoot,
   sortTreeEntries,
   TREE_PAGE_SIZE,
+  treeContextActions,
   treeHighlights,
   visibleTreeRows,
   type TreeNode,
 } from "./fileTree";
+
+describe("tree context menu", () => {
+  it("offers rename only for files", () => {
+    expect(treeContextActions("file")).toContain("rename");
+    expect(treeContextActions("dir")).not.toContain("rename");
+  });
+});
 
 describe("tree width and collapse", () => {
   it("clamps the width and falls back when the stored value is unusable", () => {

@@ -4,18 +4,32 @@ import { watchStorageKey } from "../lib/storageSync";
 /** Separate from the rewrite catalog so the completion model can differ. */
 export const COMPLETION_KEY = "ainative.complete";
 
+/** Pause before a completion request. The settings page edits this in seconds. */
+export const COMPLETION_DELAY_DEFAULT = 500;
+export const COMPLETION_DELAY_MIN = 100;
+export const COMPLETION_DELAY_MAX = 5_000;
+
 export interface CompletionSettings {
   /** Master switch. Off means the editor never asks the model to complete. */
   enabled: boolean;
   providerId: string;
   modelId: string;
+  /** Milliseconds to wait after the last keystroke. */
+  delayMs: number;
 }
 
 export const COMPLETION_OFF: CompletionSettings = {
   enabled: false,
   providerId: "",
   modelId: "",
+  delayMs: COMPLETION_DELAY_DEFAULT,
 };
+
+export function cleanCompletionDelay(value: unknown): number {
+  const number = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(number)) return COMPLETION_DELAY_DEFAULT;
+  return Math.max(COMPLETION_DELAY_MIN, Math.min(COMPLETION_DELAY_MAX, Math.round(number)));
+}
 
 const listeners = new Set<() => void>();
 let unwatchStorage: (() => void) | null = null;
@@ -39,11 +53,13 @@ export function parseCompletionSettings(raw: string | null | undefined): Complet
       enabled?: unknown;
       providerId?: unknown;
       modelId?: unknown;
+      delayMs?: unknown;
     };
     return {
       enabled: value.enabled === true,
       providerId: typeof value.providerId === "string" ? value.providerId : "",
       modelId: typeof value.modelId === "string" ? value.modelId : "",
+      delayMs: cleanCompletionDelay(value.delayMs),
     };
   } catch {
     return COMPLETION_OFF;
@@ -65,6 +81,7 @@ export function saveCompletionSettings(settings: CompletionSettings): void {
       enabled: settings.enabled,
       providerId: settings.providerId,
       modelId: settings.modelId,
+      delayMs: cleanCompletionDelay(settings.delayMs),
     })
   );
   listeners.forEach((listener) => listener());

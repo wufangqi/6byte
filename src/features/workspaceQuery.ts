@@ -153,6 +153,19 @@ export function activeMentionQuery(text: string, caret: number): string | null {
   return fragment;
 }
 
+/** Remove the `@query` the user is still typing, leaving the rest of the instruction. */
+export function dropTypedMention(
+  text: string,
+  caret: number,
+  query: string
+): { text: string; caret: number } {
+  const start = caret - query.length - 1;
+  if (start >= 0 && text.slice(start, caret) === `@${query}`) {
+    return { text: `${text.slice(0, start)}${text.slice(caret)}`, caret: start };
+  }
+  return { text, caret };
+}
+
 export function insertMention(
   text: string,
   caret: number,

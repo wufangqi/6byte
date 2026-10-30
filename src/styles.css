@@ -1561,6 +1561,7 @@ code {
   text-align: left;
 }
 
+.ai-stream__mention.is-on,
 .ai-stream__mention:hover {
   background: var(--bg-active-line);
 }
@@ -2488,6 +2489,13 @@ code {
 .ai-stream__chip button:hover:not(:disabled) {
   background: var(--bg-elevated);
   color: var(--fg);
+}
+
+.ai-stream__chip--mention {
+  max-width: 280px;
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .ai-stream__bot {

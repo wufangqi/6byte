@@ -201,7 +201,7 @@ class CompletionPlugin implements PluginValue {
     this.timer = window.setTimeout(() => {
       this.timer = 0;
       void this.request();
-    }, 450);
+    }, loadCompletionSettings().delayMs);
   }
 
   private async request(): Promise<void> {

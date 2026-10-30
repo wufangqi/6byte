@@ -50,6 +50,7 @@ import {
   saveConversation,
   seconds,
   type AskEntry,
+  type ChatChip,
   type ChatEntry,
   type ChatMode,
   type Conversation,
@@ -91,12 +92,12 @@ import { completeAgentTurn, workspaceAgentTools } from "./readAgentHost";
 import {
   activeMentionQuery,
   buildReferences,
+  dropTypedMention,
   collectWorkspaceFiles,
-  insertMention,
   instructionWithoutMentions,
   mentionToken,
-  parseMentions,
   relativePath,
+  type Mention,
   type WorkspaceFile,
 } from "./workspaceQuery";
 import AgentAnswer from "./AgentAnswer";
@@ -211,6 +212,14 @@ function selectionExcerpt(text: string): string {
   return compact.length > 88 ? `${compact.slice(0, 88)}…` : compact;
 }
 
+function mentionLabel(mention: Mention): string {
+  return mention.kind === "file" ? `@${mention.label}` : `# ${mention.label}`;
+}
+
+function mentionChips(mentions: readonly Mention[]): ChatChip[] {
+  return mentions.map((mention) => ({ kind: "file", label: mentionLabel(mention) }));
+}
+
 /** 1-based first and last line of a selection, or null when the editor is gone. */
 function selectionLines(
   tabId: string,
@@ -263,6 +272,8 @@ export default function AiStreamPanel({
   const [referenceText, setReferenceText] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionCaret, setMentionCaret] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [pinnedMentions, setPinnedMentions] = useState<Mention[]>([]);
   const [conversationId, setConversationId] = useState(newChatId);
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [openProcess, setOpenProcess] = useState<string[]>([]);
@@ -277,6 +288,7 @@ export default function AiStreamPanel({
   );
   const rootRef = useRef<HTMLElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const mentionListRef = useRef<HTMLUListElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const stickToBottom = useRef(true);
   const menuRef = useRef<Menu>(null);
@@ -291,6 +303,8 @@ export default function AiStreamPanel({
   const sessionRef = useRef<RewriteSession | null>(null);
   const activeRewrite = useRef<ActiveRewrite | null>(null);
   const dismissedSelection = useRef<string | null>(null);
+  /** Caret and query dismissed with Escape or a completed pick, so keyup cannot reopen it. */
+  const dismissedMention = useRef<string | null>(null);
   const viewRef = useRef(view);
   const thinkingRef = useRef<HTMLPreElement | null>(null);
   const followThinking = useRef(true);
@@ -343,7 +357,7 @@ export default function AiStreamPanel({
         },
         {
           exclude: excluded,
-          references: parseMentions(instruction).length === 0 ? "" : referenceText,
+          references: pinnedMentions.length === 0 ? "" : referenceText,
           extraBudget: limits.contextChars,
         }
       )
@@ -354,7 +368,7 @@ export default function AiStreamPanel({
           rewriteSession,
           proposal,
           instructionWithoutMentions(instruction) || instruction.trim(),
-          parseMentions(instruction).length === 0 ? "" : referenceText,
+          pinnedMentions.length === 0 ? "" : referenceText,
           limits,
           settings?.contextTokens
         )
@@ -536,7 +550,7 @@ export default function AiStreamPanel({
   }, [workspaceRoot]);
 
   useEffect(() => {
-    const found = parseMentions(instruction);
+    const found = pinnedMentions;
     if (found.length === 0) return;
     let cancel = false;
     void buildReferences(
@@ -551,7 +565,12 @@ export default function AiStreamPanel({
     return () => {
       cancel = true;
     };
-  }, [instruction, tabId, tabSnapshot, workspaceFiles, workspaceRoot]);
+  }, [pinnedMentions, tabId, tabSnapshot, workspaceFiles, workspaceRoot]);
+
+  useEffect(() => {
+    const active = mentionListRef.current?.querySelector<HTMLElement>(".ai-stream__mention.is-on");
+    active?.scrollIntoView?.({ block: "nearest" });
+  }, [mentionIndex, mentionQuery]);
 
   useEffect(() => {
     const node = thinkingRef.current;
@@ -888,6 +907,7 @@ export default function AiStreamPanel({
     setEntries((list) => [...list, user, reply]);
     setNote(null);
     setInstruction("");
+    setPinnedMentions([]);
     setMentionQuery(null);
     setMenu(null);
   };
@@ -896,6 +916,7 @@ export default function AiStreamPanel({
     const selected = span;
     const current = selected?.text ?? "";
     const request = (prompt ?? instruction).trim();
+    const mentions = pinnedMentions;
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
       onNeedSettings();
       return;
@@ -929,6 +950,7 @@ export default function AiStreamPanel({
                 : t("ai.panel.selectionLines", { from: lines[0], to: lines[1] })
               : t("ai.context.selection"),
           },
+          ...mentionChips(mentions),
         ],
       },
       {
@@ -954,7 +976,7 @@ export default function AiStreamPanel({
       const tab = useWorkspace.getState().tabs.find((item) => item.id === tabId);
       const document = tab ? readBuffer(tab.id, tab.content) : readBuffer(tabId, "");
       const references = await buildReferences(
-        parseMentions(request),
+        mentions,
         document,
         listedFiles,
         workspaceRoot,
@@ -1030,6 +1052,7 @@ export default function AiStreamPanel({
 
   const continueRewrite = async () => {
     const request = instruction.trim();
+    const mentions = pinnedMentions;
     const item = pending.current;
     const session = sessionRef.current;
     if (!item?.text || !session || !offer || !request) return;
@@ -1052,7 +1075,13 @@ export default function AiStreamPanel({
     };
     const replyId = newChatId();
     startEntries(
-      { id: newChatId(), role: "user", mode: "rewrite", text: request, chips: [] },
+      {
+        id: newChatId(),
+        role: "user",
+        mode: "rewrite",
+        text: request,
+        chips: mentionChips(mentions),
+      },
       {
         id: replyId,
         role: "rewrite",
@@ -1072,7 +1101,7 @@ export default function AiStreamPanel({
       const tab = useWorkspace.getState().tabs.find((candidate) => candidate.id === tabId);
       const document = tab ? readBuffer(tab.id, tab.content) : readBuffer(tabId, "");
       const references = await buildReferences(
-        parseMentions(request),
+        mentions,
         document,
         listedFiles,
         workspaceRoot,
@@ -1120,6 +1149,9 @@ export default function AiStreamPanel({
 
   const askWorkspace = async () => {
     const request = instruction.trim();
+    const mentions = pinnedMentions;
+    const cited = mentions.map(mentionLabel).join(" ");
+    const question = cited ? `${request}\n\n引用：${cited}` : request;
     if (!request || asking || (!documentOnly && !workspaceRoot)) return;
     if (!settings?.baseUrl.trim() || !settings.model.trim()) {
       onNeedSettings();
@@ -1132,7 +1164,7 @@ export default function AiStreamPanel({
     const replyId = newChatId();
     const startedAt = metricNow();
     startEntries(
-      { id: newChatId(), role: "user", mode: "ask", text: request, chips: [] },
+      { id: newChatId(), role: "user", mode: "ask", text: request, chips: mentionChips(mentions) },
       {
         id: replyId,
         role: "ask",
@@ -1152,7 +1184,7 @@ export default function AiStreamPanel({
         const [system, user] = documentQuestion(
           tabName || "untitled",
           content,
-          request,
+          question,
           limits.askBudget
         );
         const completion = await completeAgentTurn({
@@ -1174,7 +1206,7 @@ export default function AiStreamPanel({
       }
       if (!workspaceRoot) return;
       const result = await runReadAgent({
-        question: request,
+        question,
         root: workspaceRoot,
         tools: workspaceAgentTools(workspaceRoot, denylist),
         denylist,
@@ -1243,6 +1275,7 @@ export default function AiStreamPanel({
     setOpenProcess([]);
     setNote(null);
     setInstruction("");
+    setPinnedMentions([]);
     setMentionQuery(null);
     setMenu(null);
     show(IDLE_STREAM);
@@ -1260,7 +1293,9 @@ export default function AiStreamPanel({
                 .slice(0, 6)
                 .map((heading) => ({
                   key: `heading:${heading.line}:${heading.text}`,
+                  kind: "heading" as const,
                   label: heading.text,
+                  line: heading.line,
                   detail: "#".repeat(heading.level),
                   token: mentionToken({
                     kind: "heading" as const,
@@ -1283,24 +1318,68 @@ export default function AiStreamPanel({
               const relative = workspaceRoot ? relativePath(workspaceRoot, file.path) : file.name;
               return {
                 key: file.path,
-                label: file.name,
-                detail: relative,
-                token: mentionToken({ kind: "file" as const, label: relative }),
+                kind: "file" as const,
+                label: relative || file.name,
+                line: undefined,
+                detail: file.name,
+                token: mentionToken({ kind: "file" as const, label: relative || file.name }),
               };
             }),
         ].slice(0, 8);
 
-  const pickMention = (token: string) => {
+  const activeMention = Math.min(mentionIndex, Math.max(0, mentionChoices.length - 1));
+
+  const syncMention = (value: string, caret: number) => {
+    const next = activeMentionQuery(value, caret);
+    setMentionCaret(caret);
+    if (next !== null && dismissedMention.current === `${caret}:${next}`) {
+      setMentionQuery(null);
+      return;
+    }
+    dismissedMention.current = null;
+    if (next !== mentionQuery) setMentionIndex(0);
+    setMentionQuery(next);
+  };
+
+  const pickMention = (choice: (typeof mentionChoices)[number]) => {
     if (mentionQuery === null) return;
-    const next = insertMention(instruction, mentionCaret, mentionQuery, token);
+    dismissedMention.current = `${mentionCaret}:${mentionQuery}`;
+    const next = dropTypedMention(instruction, mentionCaret, mentionQuery);
+    const mention: Mention = { kind: choice.kind, label: choice.label, line: choice.line };
     setInstruction(next.text);
+    setMentionCaret(next.caret);
     setMentionQuery(null);
-    inputRef.current?.focus();
+    setPinnedMentions((list) =>
+      list.some(
+        (item) =>
+          item.kind === mention.kind && item.label === mention.label && item.line === mention.line
+      )
+        ? list
+        : [...list, mention]
+    );
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
+
+  const removeMention = (mention: Mention) => {
+    setPinnedMentions((list) =>
+      list.filter(
+        (item) =>
+          !(
+            item.kind === mention.kind &&
+            item.label === mention.label &&
+            item.line === mention.line
+          )
+      )
+    );
   };
 
   const onMentionClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
-    const token = event.currentTarget.dataset.token;
-    if (token) pickMention(token);
+    const index = Number(event.currentTarget.dataset.index);
+    const choice = mentionChoices[index];
+    if (choice) pickMention(choice);
   };
 
   const insertAt = () => {
@@ -1638,29 +1717,62 @@ export default function AiStreamPanel({
           </div>
         )}
         <div className="ai-stream__composer">
-          {mode === "rewrite" && span && !offer && (
+          {(pinnedMentions.length > 0 || (mode === "rewrite" && span && !offer)) && (
             <div className="ai-stream__composer-ctx">
-              <span className="ai-stream__chip" title={selectionExcerpt(span.text)}>
-                <PanelIcon kind="text" size={12} />
-                <span>
-                  {lines
-                    ? lines[0] === lines[1]
-                      ? t("ai.panel.selectionLine", { line: lines[0] })
-                      : t("ai.panel.selectionLines", { from: lines[0], to: lines[1] })
-                    : t("ai.context.selection")}
+              {mode === "rewrite" && span && !offer && (
+                <span className="ai-stream__chip" title={selectionExcerpt(span.text)}>
+                  <PanelIcon kind="text" size={12} />
+                  <span>
+                    {lines
+                      ? lines[0] === lines[1]
+                        ? t("ai.panel.selectionLine", { line: lines[0] })
+                        : t("ai.panel.selectionLines", { from: lines[0], to: lines[1] })
+                      : t("ai.context.selection")}
+                  </span>
+                  <button
+                    type="button"
+                    aria-label={t("ai.stream.removeSelection")}
+                    disabled={running}
+                    onClick={() => {
+                      dismissedSelection.current = selectionKey(span);
+                      setSpan(null);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Backspace" && event.key !== "Delete") return;
+                      event.preventDefault();
+                      dismissedSelection.current = selectionKey(span);
+                      setSpan(null);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <PanelIcon kind="close" size={10} />
+                  </button>
                 </span>
-                <button
-                  type="button"
-                  aria-label={t("ai.stream.removeSelection")}
-                  disabled={running}
-                  onClick={() => {
-                    dismissedSelection.current = selectionKey(span);
-                    setSpan(null);
-                  }}
+              )}
+              {pinnedMentions.map((mention) => (
+                <span
+                  key={`${mention.kind}:${mention.line ?? ""}:${mention.label}`}
+                  className="ai-stream__chip ai-stream__chip--mention"
+                  title={mentionLabel(mention)}
                 >
-                  <PanelIcon kind="close" size={10} />
-                </button>
-              </span>
+                  <PanelIcon kind={mention.kind === "file" ? "file" : "text"} size={12} />
+                  <span>{mentionLabel(mention)}</span>
+                  <button
+                    type="button"
+                    aria-label={t("ai.mention.remove")}
+                    disabled={running || asking}
+                    onClick={() => removeMention(mention)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Backspace" && event.key !== "Delete") return;
+                      event.preventDefault();
+                      removeMention(mention);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <PanelIcon kind="close" size={10} />
+                  </button>
+                </span>
+              ))}
             </div>
           )}
           <textarea
@@ -1669,6 +1781,13 @@ export default function AiStreamPanel({
             rows={2}
             value={instruction}
             aria-label={t("ai.stream.instruction")}
+            aria-activedescendant={
+              mentionQuery !== null && mentionChoices[activeMention]
+                ? `ai-mention-${activeMention}`
+                : undefined
+            }
+            aria-controls={mentionQuery !== null ? "ai-mention-list" : undefined}
+            aria-expanded={mentionQuery !== null}
             placeholder={
               mode === "ask"
                 ? t("ai.mode.askPlaceholder")
@@ -1680,46 +1799,98 @@ export default function AiStreamPanel({
               const value = event.target.value;
               const caret = event.target.selectionStart ?? value.length;
               setInstruction(value);
-              setMentionCaret(caret);
-              setMentionQuery(activeMentionQuery(value, caret));
+              syncMention(value, caret);
             }}
             onKeyDown={(event) => {
-              if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
+              if (event.nativeEvent.isComposing) return;
+              const menuOpen = mentionQuery !== null && mentionChoices.length > 0;
+              if (menuOpen && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+                event.preventDefault();
+                const step = event.key === "ArrowDown" ? 1 : -1;
+                setMentionIndex((index) => {
+                  const current = Math.min(index, mentionChoices.length - 1);
+                  return (current + step + mentionChoices.length) % mentionChoices.length;
+                });
+                return;
+              }
+              if (menuOpen && event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                dismissedMention.current = `${mentionCaret}:${mentionQuery ?? ""}`;
+                setMentionQuery(null);
+                return;
+              }
+              if (
+                (event.key === "Backspace" || event.key === "Delete") &&
+                !event.shiftKey &&
+                !event.metaKey &&
+                !event.ctrlKey &&
+                !event.altKey
+              ) {
+                const node = event.currentTarget;
+                const start = node.selectionStart ?? 0;
+                const end = node.selectionEnd ?? 0;
+                const atChip =
+                  start === 0 &&
+                  end === 0 &&
+                  (event.key === "Backspace" || node.value.length === 0);
+                if (atChip) {
+                  if (pinnedMentions.length > 0) {
+                    event.preventDefault();
+                    setPinnedMentions((list) => list.slice(0, -1));
+                    return;
+                  }
+                  if (mode === "rewrite" && span && !offer) {
+                    event.preventDefault();
+                    dismissedSelection.current = selectionKey(span);
+                    setSpan(null);
+                    return;
+                  }
+                }
+              }
+              if (event.key !== "Enter" || event.shiftKey) return;
               event.preventDefault();
-              if (mentionQuery !== null && mentionChoices.length > 0) {
-                pickMention(mentionChoices[0].token);
+              if (menuOpen) {
+                const choice = mentionChoices[activeMention];
+                if (choice) pickMention(choice);
                 return;
               }
               if (!busy) submit();
             }}
             onKeyUp={(event) => {
               const caret = event.currentTarget.selectionStart ?? instruction.length;
-              setMentionCaret(caret);
-              setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+              syncMention(event.currentTarget.value, caret);
             }}
             onClick={(event) => {
               const caret = event.currentTarget.selectionStart ?? instruction.length;
-              setMentionCaret(caret);
-              setMentionQuery(activeMentionQuery(event.currentTarget.value, caret));
+              syncMention(event.currentTarget.value, caret);
             }}
           />
           {mentionQuery !== null && (
-            <ul className="ai-stream__mentions" role="listbox" aria-label={t("ai.mention.list")}>
+            <ul
+              ref={mentionListRef}
+              id="ai-mention-list"
+              className="ai-stream__mentions"
+              role="listbox"
+              aria-label={t("ai.mention.list")}
+            >
               {mentionChoices.length === 0 ? (
                 <li className="ai-stream__mention-empty">{t("ai.mention.empty")}</li>
               ) : (
-                mentionChoices.map((choice) => (
+                mentionChoices.map((choice, index) => (
                   <li key={choice.key}>
                     <button
                       type="button"
+                      id={`ai-mention-${index}`}
                       role="option"
-                      aria-selected={false}
-                      className="ai-stream__mention"
+                      aria-selected={index === activeMention}
+                      className={`ai-stream__mention${index === activeMention ? " is-on" : ""}`}
                       onMouseDown={(event) => event.preventDefault()}
-                      data-token={choice.token}
+                      onMouseEnter={() => setMentionIndex(index)}
+                      data-index={index}
                       onClick={onMentionClick}
                     >
-                      <span>{choice.label}</span>
+                      <span>{choice.kind === "file" ? `@${choice.label}` : choice.label}</span>
                       <span className="ai-stream__mention-detail">{choice.detail}</span>
                     </button>
                   </li>

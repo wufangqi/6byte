@@ -37,6 +37,14 @@ export function parseTreeWidth(raw: string | null): number {
   return clampTreeWidth(Number(raw));
 }
 
+export type TreeMenuAction = "open" | "rename" | "reveal" | "copy";
+
+/** Directories stay out of rename: the filesystem command only renames files. */
+export function treeContextActions(kind: "file" | "dir"): readonly TreeMenuAction[] {
+  if (kind === "file") return ["open", "rename", "reveal", "copy"];
+  return ["open", "reveal", "copy"];
+}
+
 export function parseTreeHidden(raw: string | null): boolean {
   return raw === "1";
 }

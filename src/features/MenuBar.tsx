@@ -437,7 +437,7 @@ export default function MenuBar({
   );
 }
 
-/** Same mark as the app icon: text lines and a caret on a rounded gradient. */
+/** Same mark as the app icon: six blocks on the night gradient. The top block is the caret, turned 45° about its lower-right corner. */
 export function AppLogo({ className }: { className?: string }) {
   const gradient = useId();
   return (
@@ -449,10 +449,22 @@ export function AppLogo({ className }: { className?: string }) {
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="7" fill={`url(#${gradient})`} />
-      <rect x="5.8" y="10.9" width="14.1" height="1.8" rx="0.9" fill="#ffffff" opacity="0.91" />
-      <rect x="5.8" y="15" width="12.8" height="1.8" rx="0.9" fill="#ffffff" opacity="0.91" />
-      <rect x="5.8" y="19.2" width="10.2" height="1.8" rx="0.9" fill="#ffffff" opacity="0.91" />
-      <rect x="21.8" y="9.6" width="1.8" height="12.8" rx="0.9" fill="#7aa2f7" />
+      <g fill="#3BE3EE">
+        <rect x="7.057" y="10.187" width="5.962" height="5.867" rx="0.95" />
+        <rect x="19.035" y="10.187" width="5.908" height="5.867" rx="0.95" />
+        <rect x="13.073" y="16.107" width="5.908" height="5.867" rx="0.95" />
+        <rect x="7.057" y="22.08" width="5.962" height="5.813" rx="0.95" />
+        <rect x="19.035" y="22.08" width="5.908" height="5.813" rx="0.95" />
+      </g>
+      <rect
+        x="7.057"
+        y="4.107"
+        width="5.962"
+        height="5.813"
+        rx="0.95"
+        fill="#7aa2f7"
+        transform="rotate(45 13.019 9.920)"
+      />
     </svg>
   );
 }

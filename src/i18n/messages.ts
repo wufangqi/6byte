@@ -146,6 +146,9 @@ export const zh: MessageCatalog = {
   "ai.complete.title": "自动补全",
   "ai.complete.enable": "编辑时自动补全",
   "ai.complete.model": "补全模型",
+  "ai.complete.delay": "停笔后触发",
+  "ai.complete.delayHint": "停止输入这么久才请求补全。范围 0.1–5 秒，默认 0.5 秒。",
+  "ai.complete.delayUnit": "秒",
   "ai.complete.modelEmpty": "请选择一个不思考的模型",
   "ai.complete.hint":
     "默认关闭。开启后，停笔一会儿会在光标后显示建议，样式和正文不同。Tab 接受，Esc 取消。接受只改编辑区，不会自动保存。请单独选一个不输出思考过程的模型。",
@@ -382,6 +385,7 @@ export const zh: MessageCatalog = {
   "ai.context.list": "这次一并发送",
   "ai.mention.list": "引用文件或标题",
   "ai.mention.empty": "当前工作区里没有匹配的文件或标题",
+  "ai.mention.remove": "移除引用",
   "command.title": "转到文件或标题",
   "command.placeholder": "输入文件名或标题",
   "command.exportHtml": "把当前文档存成一个 HTML 文件",
@@ -735,6 +739,10 @@ export const en: MessageCatalog = {
   "ai.complete.title": "Autocomplete",
   "ai.complete.enable": "Complete while editing",
   "ai.complete.model": "Completion model",
+  "ai.complete.delay": "Trigger after a pause",
+  "ai.complete.delayHint":
+    "How long to wait after you stop typing. Range 0.1–5 seconds. Default 0.5 seconds.",
+  "ai.complete.delayUnit": "s",
   "ai.complete.modelEmpty": "Choose a model that does not think",
   "ai.complete.hint":
     "Off by default. When on, a pause shows a suggestion after the caret in a distinct style. Tab accepts it and Escape cancels. Accepting edits the buffer and does not save the file. Pick a model that does not emit a thinking trace.",
@@ -987,6 +995,7 @@ export const en: MessageCatalog = {
   "ai.context.list": "Sent with this request",
   "ai.mention.list": "Mention a file or heading",
   "ai.mention.empty": "No matching file or heading in this workspace",
+  "ai.mention.remove": "Remove mention",
   "command.title": "Go to file or heading",
   "command.placeholder": "Type a file name or heading",
   "command.exportHtml": "Save the current document as one HTML file",

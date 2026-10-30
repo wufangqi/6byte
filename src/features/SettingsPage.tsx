@@ -61,6 +61,9 @@ import {
 } from "./aiSettings";
 import { endpointOrigin } from "./aiStream";
 import {
+  COMPLETION_DELAY_MAX,
+  COMPLETION_DELAY_MIN,
+  cleanCompletionDelay,
   completionChoices,
   loadCompletionSettings,
   saveCompletionSettings,
@@ -372,6 +375,35 @@ function ModelsSection({
             label={t("ai.complete.enable")}
             onChange={(enabled) => editCompletion({ enabled })}
           />
+        </Row>
+        <Row title={t("ai.complete.delay")} hint={t("ai.complete.delayHint")}>
+          <label className="settings__number">
+            <input
+              key={completion.delayMs}
+              className="settings__input settings__input--number"
+              type="number"
+              inputMode="decimal"
+              min={COMPLETION_DELAY_MIN / 1000}
+              max={COMPLETION_DELAY_MAX / 1000}
+              step={0.1}
+              defaultValue={(completion.delayMs / 1000).toFixed(1)}
+              aria-label={t("ai.complete.delay")}
+              onBlur={(event) => {
+                const seconds = Number(event.currentTarget.value);
+                const delayMs = cleanCompletionDelay(
+                  Number.isFinite(seconds) ? seconds * 1000 : undefined
+                );
+                event.currentTarget.value = (delayMs / 1000).toFixed(1);
+                if (delayMs !== completion.delayMs) editCompletion({ delayMs });
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  event.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="settings__unit">{t("ai.complete.delayUnit")}</span>
+          </label>
         </Row>
         <Row title={t("ai.complete.model")} hint={t("settings.models.completeModelHint")}>
           <select
