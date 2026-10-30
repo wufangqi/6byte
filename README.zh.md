@@ -10,7 +10,7 @@
 
 **中文** · [English](./README.md)
 
-**当前版本：v0.3.0**（2026-10-29），Windows、Linux、macOS 安装包齐全。
+**当前版本：v0.3.1**（2026-10-30），Windows、Linux、macOS 安装包齐全。
 
 ![在段落、渲染结果和源码旁边审阅 AI 改写](./docs/assets/hero-zh.png)
 
@@ -32,9 +32,9 @@
 ![工作区文件树、Markdown 源码、渲染预览与大纲](./docs/assets/editor-zh.png)
 
 - **工作区文件树**：打开一个文件夹，目录按需逐层展开，不扫描整棵树。隐藏名、依赖目录和符号链接不列出。`Ctrl+Shift+E` 开关，折叠状态重启后保持。
-- **标签与历史**：会话恢复、最近文件、按标签保留撤销历史、拖拽打开、中键关闭，标签右键或 `F2` 重命名。
+- **标签与历史**：会话恢复、最近文件、按标签保留撤销历史、拖拽打开、中键关闭；标签或文件树右键 / `F2` 均可重命名，已打开标签跟随新路径。
 - **搜索**：`Ctrl+F` 查找替换（正则、捕获组）；`Ctrl+Shift+F` 跨文件 grep（跳过二进制与依赖目录）。
-- **Markdown**：默认渲染，`<>` / `Ctrl+Shift+M` 在旁边显示源码；大纲跳转、可拖分栏、Mermaid 缩放 / 平移 / 重置（25%–300%）、KaTeX、Shiki、图片粘贴，文件菜单和命令面板都能导出 HTML。
+- **Markdown**：默认渲染，`<>` / `Ctrl+Shift+M` 在旁边显示源码；大纲跳转、可拖分栏、Mermaid 缩放 / 平移 / 重置（25%–300%，深浅色两套出图）、KaTeX、Shiki、图片粘贴，文件菜单和命令面板都能导出 HTML。
 - **长 Markdown**：超过 8 万字符只渲染阅读位置附近约 2.4 万字符，代码围栏不从中间切开；滚动与内存实测见 [docs/perf.md](./docs/perf.md)。
 - **界面**：中英双语、深色 / 浅色 / 跟随系统、自定义标题栏；`.txt` 与未命名笔记自动换行。
 
@@ -44,11 +44,11 @@
 
 - **内联审阅**：选中文字按 `Ctrl+K` 写要求，候选同时停在段落旁和右侧 AI 面板；`Tab` / **接受**替换，`Esc` / **放弃**保留原文；逐块审阅只应用你同意的块。
 - **对话与限额**：简单 / 中等 / 极致三档预设，另可建最多五套自定义；控制记住轮数、历史字数、选区与上下文上限、改写 / 询问 token 预算和询问步数。面板在本机保留最近 30 段会话，可新建、切换、删除。
-- **工作区上下文**：`Ctrl+P` 命令面板；改写框输入 `@` 引用文件；只读询问可以列目录、搜索、按行读取、读大纲，但不能写文件，也不能读你排除的隐藏 / 密钥文件。
+- **工作区上下文**：`Ctrl+P` 命令面板；改写框输入 `@` 可用上下键选文件或标题，选中后变成可删除的高亮标签；只读询问可以列目录、搜索、按行读取、读大纲，但不能写文件，也不能读你排除的隐藏 / 密钥文件。
 - **一键动作**：选中文字润色 / 翻译 / 总结；追问「再短一点」「更正式」会沿用上一版候选。
 - **预览选区**：在渲染后的 Markdown 里选中文字，也能映射回源码范围发起改写。
 - **密钥留在本机**：服务商与模型在设置（`Ctrl+,`）里配置；API Key 进系统钥匙串并绑定保存时的源站，非本机地址只接受 HTTPS。
-- **自动补全默认关闭**；开启后使用单独的补全模型，`Tab` 接受、`Esc` 取消。
+- **自动补全默认关闭**；开启后使用单独的补全模型，触发等待可在 0.1–5 秒间调（默认 0.5 秒），`Tab` 接受、`Esc` 取消。
 
 ## 安装
 
@@ -56,19 +56,19 @@
 
 **Windows**
 
-- `6byte_0.3.0_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
-- `6byte_0.3.0_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
+- `6byte_0.3.1_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
+- `6byte_0.3.1_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
 
 **Linux**
 
-- `6byte_0.3.0_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.3.0_amd64.deb`
-- `6byte_0.3.0_amd64.AppImage` — 免安装：`chmod +x 6byte_0.3.0_amd64.AppImage && ./6byte_0.3.0_amd64.AppImage`
+- `6byte_0.3.1_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.3.1_amd64.deb`
+- `6byte_0.3.1_amd64.AppImage` — 免安装：`chmod +x 6byte_0.3.1_amd64.AppImage && ./6byte_0.3.1_amd64.AppImage`
 
 依赖 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 的 `libwebkit2gtk-4.1-0`）。
 
 **macOS**
 
-- `6byte_0.3.0_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
+- `6byte_0.3.1_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
 
 卸载走「设置 → 应用」，或安装目录里的 `uninstall.exe`。
 
@@ -85,7 +85,7 @@ pnpm tauri build    # 安装包 → src-tauri/target/release/bundle/
 
 ## 验证
 
-- 前端 **303** 个单测（52 文件），Rust **112**（+4 ignored），预览基准 **3/3**。
+- 前端 **307** 个单测（53 文件），Rust **113**（+4 ignored），预览基准 **3/3**。
 - 0.3.0 发布构建上，安装版 E2E **107/107（24 步）**、AI E2E **6/6**（Windows，2026-10-29）。
 - 真实 Ollama（0.40.11，`qwen2.5:1.5b`）端到端跑过改写与询问。
 - CI 在 Windows、macOS、Ubuntu 上跑同一套检查。
