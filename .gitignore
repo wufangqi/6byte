@@ -13,3 +13,7 @@ src-tauri/gen/schemas/
 
 # OS
 Thumbs.db
+
+# Local notes; kept on disk, not published
+docs/
+
