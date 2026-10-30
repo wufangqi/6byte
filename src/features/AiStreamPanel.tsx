@@ -1075,7 +1075,13 @@ export default function AiStreamPanel({
     };
     const replyId = newChatId();
     startEntries(
-      { id: newChatId(), role: "user", mode: "rewrite", text: request, chips: mentionChips(mentions) },
+      {
+        id: newChatId(),
+        role: "user",
+        mode: "rewrite",
+        text: request,
+        chips: mentionChips(mentions),
+      },
       {
         id: replyId,
         role: "rewrite",
@@ -1321,10 +1327,7 @@ export default function AiStreamPanel({
             }),
         ].slice(0, 8);
 
-  const activeMention = Math.min(
-    mentionIndex,
-    Math.max(0, mentionChoices.length - 1)
-  );
+  const activeMention = Math.min(mentionIndex, Math.max(0, mentionChoices.length - 1));
 
   const syncMention = (value: string, caret: number) => {
     const next = activeMentionQuery(value, caret);
@@ -1348,7 +1351,8 @@ export default function AiStreamPanel({
     setMentionQuery(null);
     setPinnedMentions((list) =>
       list.some(
-        (item) => item.kind === mention.kind && item.label === mention.label && item.line === mention.line
+        (item) =>
+          item.kind === mention.kind && item.label === mention.label && item.line === mention.line
       )
         ? list
         : [...list, mention]
@@ -1363,7 +1367,11 @@ export default function AiStreamPanel({
     setPinnedMentions((list) =>
       list.filter(
         (item) =>
-          !(item.kind === mention.kind && item.label === mention.label && item.line === mention.line)
+          !(
+            item.kind === mention.kind &&
+            item.label === mention.label &&
+            item.line === mention.line
+          )
       )
     );
   };

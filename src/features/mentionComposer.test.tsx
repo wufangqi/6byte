@@ -131,7 +131,9 @@ describe("rewrite mention composer", () => {
     await act(async () => {
       setCaret(textarea, "@演进");
     });
-    const file = options().find((option) => option.textContent?.includes("@docs/AI-native-演进建议.md"));
+    const file = options().find((option) =>
+      option.textContent?.includes("@docs/AI-native-演进建议.md")
+    );
     expect(file?.getAttribute("aria-selected")).toBe("true");
 
     await act(async () => {
