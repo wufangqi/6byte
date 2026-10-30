@@ -10,7 +10,7 @@ Open `md` / `txt` / `log` and start writing. Your files and AI keys stay on your
 
 [中文](./README.zh.md) · **English**
 
-**Current release: v0.3.0** (2026-10-29) — Windows, Linux and macOS installers.
+**Current release: v0.3.1** (2026-10-30) — Windows, Linux and macOS installers.
 
 ![Reviewing an AI rewrite beside the paragraph, the rendered Markdown and the source](./docs/assets/hero-en.png)
 
@@ -56,19 +56,19 @@ Download from [Releases](https://github.com/wufangqi/6byte/releases/latest):
 
 **Windows**
 
-- `6byte_0.3.0_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
-- `6byte_0.3.0_x64_en-US.msi` — MSI for enterprise / silent install
+- `6byte_0.3.1_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
+- `6byte_0.3.1_x64_en-US.msi` — MSI for enterprise / silent install
 
 **Linux**
 
-- `6byte_0.3.0_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.3.0_amd64.deb`
-- `6byte_0.3.0_amd64.AppImage` — portable: `chmod +x 6byte_0.3.0_amd64.AppImage && ./6byte_0.3.0_amd64.AppImage`
+- `6byte_0.3.1_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.3.1_amd64.deb`
+- `6byte_0.3.1_amd64.AppImage` — portable: `chmod +x 6byte_0.3.1_amd64.AppImage && ./6byte_0.3.1_amd64.AppImage`
 
 Needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Ubuntu 22.04+ / Debian 12+).
 
 **macOS**
 
-- `6byte_0.3.0_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
+- `6byte_0.3.1_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 
@@ -85,7 +85,7 @@ Full commands, directory rules, commit conventions and the release process live 
 
 ## Verified
 
-- Frontend **303** unit tests across 52 files; Rust **112** tests (+4 ignored); preview benchmark **3/3**.
+- Frontend **307** unit tests across 53 files; Rust **113** tests (+4 ignored); preview benchmark **3/3**.
 - Installed-build E2E **107/107 across 24 steps** and AI E2E **6/6** on the 0.3.0 release build (Windows, 2026-10-29).
 - Real Ollama (0.40.11, `qwen2.5:1.5b`) exercised the rewrite and ask paths end to end.
 - CI runs the same checks on Windows, macOS and Ubuntu.
