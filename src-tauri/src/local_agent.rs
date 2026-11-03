@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -326,8 +326,7 @@ fn spawn_server(core: Arc<Mutex<Core>>, stop: watch::Receiver<bool>) -> std::io:
         }
     });
     rx.recv().unwrap_or_else(|_| {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        Err(std::io::Error::other(
             "local agent server stopped before binding",
         ))
     })
@@ -1114,9 +1113,9 @@ pub fn local_agent_resolve_candidate(
     agent.resolve_candidate(id, &status, from, to, revision);
 }
 
-#[tauri::command]
-pub fn local_agent_set_editor(
-    agent: tauri::State<'_, LocalAgent>,
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorUpdate {
     path: String,
     name: String,
     revision: u64,
@@ -1124,15 +1123,18 @@ pub fn local_agent_set_editor(
     selection_from: u32,
     selection_to: u32,
     selection_text: String,
-) {
+}
+
+#[tauri::command]
+pub fn local_agent_set_editor(agent: tauri::State<'_, LocalAgent>, update: EditorUpdate) {
     agent.set_editor(prepare_snapshot(
-        path,
-        name,
-        revision,
-        text,
-        selection_from,
-        selection_to,
-        selection_text,
+        update.path,
+        update.name,
+        update.revision,
+        update.text,
+        update.selection_from,
+        update.selection_to,
+        update.selection_text,
     ));
 }
 

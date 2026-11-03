@@ -59,9 +59,7 @@ pub fn serve() -> io::Result<()> {
 }
 
 fn handle_rpc(message: &Value, api: &dyn AgentApi) -> Option<Value> {
-    let Some(id) = message.get("id") else {
-        return None;
-    };
+    let id = message.get("id")?;
     if id.is_null() {
         return None;
     }
@@ -285,7 +283,7 @@ fn required_u64(arguments: &Value, key: &str) -> Result<u64, String> {
 }
 
 fn load_discovery() -> Result<Discovery, String> {
-    let path = discovery_path().ok_or_else(|| unavailable())?;
+    let path = discovery_path().ok_or_else(unavailable)?;
     let text = fs::read_to_string(&path).map_err(|_| unavailable())?;
     let value: Value = serde_json::from_str(&text).map_err(|_| unreadable())?;
     let origin = value.get("origin").and_then(Value::as_str).unwrap_or("");

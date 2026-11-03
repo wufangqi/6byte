@@ -406,7 +406,7 @@ export function setLocalAgentEditor(snapshot: {
   selectionTo: number;
   selectionText: string;
 }): Promise<void> {
-  return invoke<void>("local_agent_set_editor", snapshot);
+  return invoke<void>("local_agent_set_editor", { update: snapshot });
 }
 
 export function onLocalAgentCandidate(
