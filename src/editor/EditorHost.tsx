@@ -9,7 +9,14 @@ import {
   saveDocState,
   type DocStateInit,
 } from "./docStates";
-import { attachView, detachView, notifyDocChanged, setActiveTab, settleEditor } from "./registry";
+import {
+  attachView,
+  detachView,
+  notifyDocChanged,
+  notifySelectionChanged,
+  setActiveTab,
+  settleEditor,
+} from "./registry";
 import { editorChrome, localeCompartment, searchPhrases, themeCompartment } from "./extensions";
 import { getLocale, subscribeLocale } from "../i18n/locale";
 import { getResolvedTheme, subscribeTheme } from "../features/theme";
@@ -54,7 +61,8 @@ export default function EditorHost({ tab, simplified, onPasteImage, visible = tr
     onStats: (stats) => {
       useWorkspace.getState().markEdited(target.id, stats);
     },
-    onDocChanged: () => notifyDocChanged(target.id),
+    onDocChanged: (edits) => notifyDocChanged(target.id, edits),
+    onSelectionChanged: () => notifySelectionChanged(target.id),
     onStateChanged: (state) => saveDocState(target.id, state),
     onPasteImage: pasteRef.current ? (file) => pasteRef.current!(file) : undefined,
   });

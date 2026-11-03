@@ -473,7 +473,8 @@ $toggle = @'
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
   await new Promise((resolve) => setTimeout(resolve, 700));
   return {
-    split: document.querySelector('.split') !== null,
+    previewTab: document.querySelector('.tab--preview') !== null,
+    divider: document.querySelector('.split__divider') !== null,
     heading: document.querySelector('.markdown-preview h1')?.textContent?.trim() ?? null,
     strong: document.querySelector('.markdown-preview strong')?.textContent?.trim() ?? null,
     code: document.querySelector('.markdown-preview pre code')?.textContent ?? null,
@@ -483,7 +484,8 @@ $toggle = @'
 })()
 '@
 $toggled = Invoke-CdpEval $socket ($toggle -replace "`r`n", ' ')
-Assert-True ($toggled.split) 'Ctrl+Shift+M opens the split preview'
+Assert-True ($toggled.previewTab) 'Ctrl+Shift+M opens a preview tab'
+Assert-True ($toggled.divider -eq $false) 'preview does not open a split divider'
 Assert-True ($toggled.heading -eq 'Title') 'heading is rendered' "$($toggled.heading)"
 Assert-True ($toggled.strong -eq 'world') 'inline emphasis is rendered' "$($toggled.strong)"
 Assert-True ($toggled.code -like '*const a = 1;*') 'fenced code is rendered' "$($toggled.code)"
@@ -491,9 +493,14 @@ Assert-True ($toggled.highlighted -or $toggled.language -like '*language-js*') '
 
 $live = @'
 (async () => {
+  const source = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('preview-target.md') && !el.classList.contains('tab--preview'));
+  source?.click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
   const editor = document.querySelector('.cm-content');
   editor.focus();
   document.execCommand('insertText', false, '\n## Second\n');
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  document.querySelector('.tab--preview')?.click();
   await new Promise((resolve) => setTimeout(resolve, 700));
   return {
     heading: document.querySelector('.markdown-preview h2')?.textContent?.trim() ?? null,
@@ -670,8 +677,8 @@ Assert-True ($highlighted.tokens -gt 0) 'syntax tokens are rendered' "tokens=$($
 $socket.Dispose()
 Remove-Item $highlightDir -Recurse -Force -ErrorAction SilentlyContinue
 
-# --------------------------------------- resizable split divider (T19)
-Write-Host '[13/24] split divider is draggable' -ForegroundColor Cyan
+# --------------------------------------- preview tab instead of a split (T19)
+Write-Host '[13/24] preview opens in its own tab' -ForegroundColor Cyan
 $splitDir = Join-Path $env:TEMP 'ainative-e2e-split'
 New-Item -ItemType Directory -Force -Path $splitDir | Out-Null
 $splitFile = Join-Path $splitDir 'split-target.md'
@@ -681,40 +688,21 @@ $socket = Set-SessionAndReload -Paths @($splitFile)
 
 $drag = @'
 (async () => {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    if (document.querySelector('.split__divider')) break;
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 700));
-  }
-  const split = document.querySelector('.split');
-  const divider = document.querySelector('.split__divider');
-  const pane = document.querySelector('.split__pane');
-  if (!split || !divider || !pane) return { divider: false };
-  const rect = split.getBoundingClientRect();
-  const before = pane.getBoundingClientRect().width;
-  const startX = rect.left + rect.width * 0.5;
-  const targetX = rect.left + rect.width * 0.3;
-  divider.dispatchEvent(new PointerEvent('pointerdown', { button: 0, clientX: startX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
-  window.dispatchEvent(new PointerEvent('pointermove', { clientX: targetX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
-  window.dispatchEvent(new PointerEvent('pointerup', { clientX: targetX, clientY: rect.top + 120, bubbles: true, pointerId: 1 }));
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const after = pane.getBoundingClientRect().width;
-  divider.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  const reset = pane.getBoundingClientRect().width;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  const tabs = [...document.querySelectorAll('.tab')].map((el) => el.textContent || '');
   return {
-    divider: true,
-    before,
-    after,
-    reset,
-    half: rect.width / 2,
+    preview: document.querySelector('.markdown-preview') !== null,
+    previewTab: document.querySelectorAll('.tab--preview').length,
+    divider: document.querySelector('.split__divider') !== null,
+    tabs: tabs.length,
   };
 })()
 '@
 $dragged = Invoke-CdpEval $socket ($drag -replace "`r`n", ' ')
-Assert-True ($dragged.divider) 'split divider is present'
-Assert-True ($dragged.after -lt $dragged.before - 20) 'dragging left narrows the editor pane' "before=$([math]::Round($dragged.before,0)) after=$([math]::Round($dragged.after,0))"
-Assert-True ([math]::Abs($dragged.reset - $dragged.half) -le 4) 'double-click restores the 50/50 split' "reset=$([math]::Round($dragged.reset,0)) half=$([math]::Round($dragged.half,0))"
+Assert-True ($dragged.preview) 'preview renders in the new tab'
+Assert-True ($dragged.previewTab -eq 1) 'one preview tab is open' "tabs=$($dragged.tabs)"
+Assert-True ($dragged.divider -eq $false) 'the editor and preview are not split'
 $socket.Dispose()
 Remove-Item $splitDir -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -888,16 +876,20 @@ $perFile = @'
   txt?.click();
   await new Promise((resolve) => setTimeout(resolve, 400));
   const onTxt = !!document.querySelector('.markdown-preview');
-  md?.click();
+  document.querySelector('.tab--preview')?.click();
   await new Promise((resolve) => setTimeout(resolve, 500));
-  const backOnMd = !!document.querySelector('.markdown-preview');
-  return { onMd, onTxt, backOnMd };
+  const backOnPreview = !!document.querySelector('.markdown-preview');
+  md?.click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const sourceHidesPreview = !document.querySelector('.markdown-preview');
+  return { onMd, onTxt, backOnPreview, sourceHidesPreview };
 })()
 '@
 $state = Invoke-CdpEval $socket ($perFile -replace "`r`n", ' ')
 Assert-True ($state.onMd) 'preview opens for the markdown tab' "$($state | ConvertTo-Json -Compress)"
 Assert-True ($state.onTxt -eq $false) 'switching to a text tab hides the preview' "$($state | ConvertTo-Json -Compress)"
-Assert-True ($state.backOnMd) 'returning to the markdown tab restores its preview' "$($state | ConvertTo-Json -Compress)"
+Assert-True ($state.backOnPreview) 'the preview tab shows the rendered document again' "$($state | ConvertTo-Json -Compress)"
+Assert-True ($state.sourceHidesPreview) 'the source tab shows the editor' "$($state | ConvertTo-Json -Compress)"
 
 # --------------------------------------- mermaid + katex (T51)
 Write-Host '[19/24] preview renders KaTeX formulas and Mermaid diagrams' -ForegroundColor Cyan
@@ -1049,8 +1041,10 @@ $lang = @'
     language.dispatchEvent(new Event('change', { bubbles: true }));
   }
   await sleep(600);
-  const langTab = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('greeting.md'));
+  const langTab = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('greeting.md') && !el.classList.contains('tab--preview'));
   langTab?.click();
+  await sleep(400);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
   await sleep(500);
   return readState();
 })()
@@ -1154,10 +1148,7 @@ $openPreview = @'
 (async () => {
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const before = document.querySelector('.cm-content');
-  const source = document.querySelector('.markdown-preview__source');
-  if (source && source.getAttribute('aria-pressed') === 'true') source.click();
-  await sleep(300);
-  if (source && source.getAttribute('aria-pressed') !== 'true') source.click();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
   await sleep(600);
   return { sameEditor: before === document.querySelector('.cm-content'), preview: document.querySelector('.markdown-preview') !== null };
 })()
@@ -1165,6 +1156,8 @@ $openPreview = @'
 $toggled = Invoke-CdpEval $socket ($openPreview -replace "`r`n", ' ')
 Assert-True ($toggled.preview -eq $true) 'preview opens' "$($toggled | ConvertTo-Json -Compress)"
 Assert-True ($toggled.sameEditor -eq $true) 'opening the preview keeps the editor mounted (no remount)' "$($toggled | ConvertTo-Json -Compress)"
+Invoke-CdpEval $socket "(function(){ const tab=[...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('undo-a.md') && !el.classList.contains('tab--preview')); tab?.click(); return true; })()" | Out-Null
+Start-Sleep -Milliseconds 300
 Invoke-CdpEval $socket "document.querySelector('.cm-content')?.focus(); true" | Out-Null
 $null = Invoke-CdpMethod $socket 'Input.insertText' @{ text = 'UNDO-PREVIEW ' }
 Start-Sleep -Milliseconds 300

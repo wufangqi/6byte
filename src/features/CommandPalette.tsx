@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import { listDirChildren } from "../ipc/api";
 import { fileName } from "../lib/paths";
 import { useFileTree } from "../stores/fileTree";
-import { useWorkspace } from "../stores/workspace";
+import { resolveDocument, selectActiveTab, useWorkspace } from "../stores/workspace";
 import { isMarkdownFile } from "./markdown";
 import { extractHeadings } from "./outline";
 import {
@@ -28,9 +28,7 @@ export default function CommandPalette({ onOpenFile, onRevealLine, onCommand, on
   const root = useFileTree((state) => state.rootPath);
   const tree = useFileTree((state) => state.root);
   const recent = useWorkspace((state) => state.recent);
-  const tab = useWorkspace(
-    (state) => state.tabs.find((item) => item.id === state.activeId) ?? null
-  );
+  const tab = useWorkspace((state) => resolveDocument(state, selectActiveTab(state)));
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState(() => flattenTreeFiles(tree));
   const [active, setActive] = useState(0);

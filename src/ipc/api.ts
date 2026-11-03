@@ -341,6 +341,81 @@ export async function openNewWindow(): Promise<void> {
   });
 }
 
+export interface LocalAgentInfo {
+  port: number;
+  token: string;
+  origin: string;
+  discoveryPath?: string | null;
+}
+
+export interface LocalAgentStatus {
+  enabled: boolean;
+  port: number;
+  token: string;
+  origin: string;
+  discoveryPath?: string | null;
+}
+
+export interface LocalAgentCandidate {
+  id: number;
+  path: string;
+  revision: number;
+  from: number;
+  to: number;
+  text: string;
+}
+
+export function resolveLocalAgentCandidate(decision: {
+  id: number;
+  status: "offered" | "stale" | "unavailable";
+  from: number;
+  to: number;
+  revision: number;
+}): Promise<void> {
+  return invoke<void>("local_agent_resolve_candidate", decision);
+}
+
+/** Start the loopback agent API. A second call keeps the same token and refreshes the gate. */
+export function startLocalAgent(root: string, denylist: string): Promise<LocalAgentInfo> {
+  return invoke<LocalAgentInfo>("local_agent_start", { root, denylist });
+}
+
+export function stopLocalAgent(): Promise<void> {
+  return invoke<void>("local_agent_stop");
+}
+
+/** Path of the MCP program installed beside 6byte. */
+export function mcpCommandPath(): Promise<string> {
+  return invoke<string>("app_mcp_command");
+}
+
+export function localAgentStatus(): Promise<LocalAgentStatus> {
+  return invoke<LocalAgentStatus>("local_agent_status");
+}
+
+export function setLocalAgentGate(root: string, denylist: string): Promise<void> {
+  return invoke<void>("local_agent_set_gate", { root, denylist });
+}
+
+export function setLocalAgentEditor(snapshot: {
+  path: string;
+  name: string;
+  revision: number;
+  text: string;
+  selectionFrom: number;
+  selectionTo: number;
+  selectionText: string;
+}): Promise<void> {
+  return invoke<void>("local_agent_set_editor", snapshot);
+}
+
+export function onLocalAgentCandidate(
+  handler: (candidate: LocalAgentCandidate) => void
+): Promise<() => void> {
+  if (!isTauri) return Promise.resolve(() => {});
+  return listen<LocalAgentCandidate>("local-agent-candidate", (event) => handler(event.payload));
+}
+
 /** Pick a folder (used as the cross-file search root). */
 export async function pickDirectory(): Promise<string | null> {
   const selected = await openDialog({ directory: true, multiple: false });

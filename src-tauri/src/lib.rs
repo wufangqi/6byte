@@ -4,10 +4,14 @@ mod bigfile;
 mod codec;
 mod commands;
 mod grep;
+mod local_agent;
+mod mcp;
 mod secrets;
 mod skip;
 mod tree;
 mod watcher;
+
+pub use mcp::serve as mcp_serve;
 
 use std::sync::Arc;
 
@@ -20,6 +24,7 @@ pub fn run() {
         .manage(bigfile::LargeFileCache::default())
         .manage(ai::AiHub::default())
         .manage(secrets::AiSecrets::system())
+        .manage(local_agent::LocalAgent::default())
         .setup(|app| {
             let handle = app.handle().clone();
             app.manage(watcher::FileWatcher::new(Arc::new(move |event| {
@@ -48,7 +53,14 @@ pub fn run() {
             ai::ai_clear_key,
             ai::ai_has_key,
             ai::ai_probe,
+            local_agent::local_agent_start,
+            local_agent::local_agent_stop,
+            local_agent::local_agent_status,
+            local_agent::local_agent_set_gate,
+            local_agent::local_agent_set_editor,
+            local_agent::local_agent_resolve_candidate,
             about::app_platform,
+            about::app_mcp_command,
             about::open_feedback,
             about::open_external,
         ])

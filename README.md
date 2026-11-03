@@ -10,7 +10,7 @@ Open `md` / `txt` / `log` and start writing. Your files and AI keys stay on your
 
 [中文](./README.zh.md) · **English**
 
-**Current release: v0.3.1** (2026-10-30) — Windows, Linux and macOS installers.
+**Current release: v0.3.2** (2026-11-03) — Windows, Linux and macOS installers.
 
 ![Reviewing an AI rewrite beside the paragraph, the rendered Markdown and the source](./assets/hero-en.png)
 
@@ -34,7 +34,8 @@ Most editors either treat AI as a chat sidebar that cannot touch the document, o
 - **Workspace tree**: open one folder; folders expand lazily one level per click, never scanning the whole tree. Hidden names, dependency folders and symlinks stay out. `Ctrl+Shift+E` toggles it; the collapsed state survives restarts.
 - **Tabs & history**: session restore, recent files, per-tab undo history, drag & drop, middle-click close, rename from the tab context menu or `F2`.
 - **Search**: `Ctrl+F` find & replace with regex and capture groups; `Ctrl+Shift+F` cross-file grep across the workspace (skips binaries and dependency folders).
-- **Markdown**: rendered by default; `<>` / `Ctrl+Shift+M` reveals the source beside it. Outline, draggable split, Mermaid zoom / pan / reset (25–300%), KaTeX, Shiki, image paste, and HTML export in the File menu or command palette.
+- **Markdown**: rendered by default. `Ctrl+Shift+M` opens the preview in its own tab instead of a side-by-side split; press it again to return to the source. Outline, Mermaid zoom / pan / reset (25–300%), KaTeX, Shiki, image paste, and HTML export in the File menu or command palette.
+- **New files** default to `.txt`. Settings → General can switch that to Markdown.
 - **Long Markdown**: documents over 80k characters render a ~24k-character window around the reading position instead of the whole file; code fences are never cut in half.
 - **UI**: Chinese / English, light / dark / follow system, custom title bar. `.txt` and untitled notes wrap automatically.
 
@@ -56,19 +57,19 @@ Download from [Releases](https://github.com/wufangqi/6byte/releases/latest):
 
 **Windows**
 
-- `6byte_0.3.1_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
-- `6byte_0.3.1_x64_en-US.msi` — MSI for enterprise / silent install
+- `6byte_0.3.2_x64-setup.exe` — NSIS, per-user install, no admin rights (recommended)
+- `6byte_0.3.2_x64_en-US.msi` — MSI for enterprise / silent install
 
 **Linux**
 
-- `6byte_0.3.1_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.3.1_amd64.deb`
-- `6byte_0.3.1_amd64.AppImage` — portable: `chmod +x 6byte_0.3.1_amd64.AppImage && ./6byte_0.3.1_amd64.AppImage`
+- `6byte_0.3.2_amd64.deb` — Debian / Ubuntu: `sudo apt install ./6byte_0.3.2_amd64.deb`
+- `6byte_0.3.2_amd64.AppImage` — portable: `chmod +x 6byte_0.3.2_amd64.AppImage && ./6byte_0.3.2_amd64.AppImage`
 
 Needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` on Ubuntu 22.04+ / Debian 12+).
 
 **macOS**
 
-- `6byte_0.3.1_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
+- `6byte_0.3.2_universal.dmg` — universal (Apple Silicon + Intel). The build is unsigned and not notarized: right-click → **Open** the first time, or run `xattr -dr com.apple.quarantine /Applications/6byte.app`.
 
 Uninstall via "Settings → Apps" or `uninstall.exe` in the install directory.
 

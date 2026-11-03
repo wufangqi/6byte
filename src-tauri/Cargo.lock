@@ -43,7 +43,7 @@ dependencies = [
 
 [[package]]
 name = "aneditor"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -51,6 +51,7 @@ dependencies = [
  "encoding_rs",
  "eventsource-stream",
  "futures-util",
+ "getrandom 0.2.17",
  "keyring",
  "memmap2",
  "notify",

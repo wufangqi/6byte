@@ -20,11 +20,13 @@ import {
   keymap,
   lineNumbers,
   rectangularSelection,
+  type ViewUpdate,
 } from "@codemirror/view";
 import { getLocale, type Locale } from "../i18n/locale";
 import { translate } from "../i18n/messages";
 import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
 import { completionExtension } from "./completion";
+import type { DocEdit } from "./docEdits";
 import { rewritePreviewField } from "./rewritePreview";
 
 /** Swapped when the appearance changes, without recreating the editor. */
@@ -153,6 +155,14 @@ export function languageExtensions(filename: string): Extension {
   return [languageFor(filename), wrapsPlainText(filename) ? EditorView.lineWrapping : []];
 }
 
+function docEdits(update: ViewUpdate): DocEdit[] {
+  const edits: DocEdit[] = [];
+  update.changes.iterChanges((from, to, _fromB, _toB, inserted) => {
+    edits.push({ from, to, insert: inserted.length });
+  });
+  return edits;
+}
+
 /** Soft-wrap prose. `.txt` and extensionless notes (saved as `.txt`) wrap; code-like names do not. */
 export function wrapsPlainText(filename: string): boolean {
   if (/\.txt$/i.test(filename)) return true;
@@ -162,8 +172,10 @@ export function wrapsPlainText(filename: string): boolean {
 export interface ExtensionOptions {
   /** L1 large files (5–20 MB) drop folding/bracket/selection decorations to stay responsive. */
   simplified?: boolean;
-  /** Called on every document change (O(1)); used by the markdown preview. */
-  onDocChanged?: () => void;
+  /** Called on every document change with that transaction's edits. O(changes). */
+  onDocChanged?: (edits: DocEdit[]) => void;
+  /** Called when the caret or selection moves. O(1); listeners read the view themselves. */
+  onSelectionChanged?: () => void;
   /**
    * Called with the new state on every update so the per-tab state cache stays
    * current (save/export/preview in inactive tabs read it).
@@ -243,8 +255,9 @@ export function buildExtensions(
           lines: update.state.doc.lines,
           chars: update.state.doc.length,
         });
-        options.onDocChanged?.();
+        options.onDocChanged?.(docEdits(update));
       }
+      if (update.selectionSet) options.onSelectionChanged?.();
     }),
   ];
 }

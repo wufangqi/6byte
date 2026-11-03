@@ -2,15 +2,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import EditorHost from "./editor/EditorHost";
 import GrepPanel from "./features/GrepPanel";
-import {
-  DEFAULT_SPLIT_PERCENT,
-  MAX_SPLIT_PERCENT,
-  MIN_SPLIT_PERCENT,
-  SPLIT_KEYBOARD_STEP,
-  adjustSplitPercent,
-  clampSplitPercent,
-  normalizeSplitPercent,
-} from "./features/splitPane";
 import LargeFileViewer from "./features/LargeFileViewer";
 import MarkdownPreview from "./features/MarkdownPreview";
 import SettingsPage from "./features/SettingsPage";
@@ -28,12 +19,22 @@ import StatusBar from "./features/StatusBar";
 import TabBar from "./features/TabBar";
 import FileTree from "./features/WorkspaceTree";
 import Welcome from "./features/Welcome";
+import LocalAgentHost from "./features/LocalAgentHost";
 import { clampTreeWidth } from "./features/fileTree";
 import { ask } from "./features/dialogStore";
 import { askName } from "./features/renamePrompt";
 import RenameDialog from "./features/RenameDialog";
 import { extensionOf, withExtension } from "./features/fileName";
-import { duplicateTab, isWatcherEcho, statConflicts } from "./features/fileSafety";
+import {
+  duplicateTab,
+  isWatcherEcho,
+  statConflicts,
+  beginOwnWrite,
+  finishOwnWrite,
+  cancelOwnWrite,
+  isOwnWriteEvent,
+  saveTouchesDisk,
+} from "./features/fileSafety";
 import CommandPalette from "./features/CommandPalette";
 import { isAppShortcutBlocked } from "./features/shortcuts";
 import { useFileWatch } from "./features/useFileWatch";
@@ -66,10 +67,10 @@ import { useFileTree } from "./stores/fileTree";
 import { buildHtmlDocument, htmlPathFor, inlineLocalImages } from "./features/exportHtml";
 import { getResolvedTheme } from "./features/theme";
 import { loadImageDataUrl } from "./features/images";
-import { isMarkdownFile } from "./features/markdown";
-import { rememberMarkdownSource } from "./features/markdownView";
+import { requestPreviewJump } from "./features/previewJump";
 import {
   SETTINGS_TAB_ID,
+  resolveDocument,
   selectActiveTab,
   tabFromFile,
   tabFromLarge,
@@ -78,7 +79,6 @@ import {
 
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
-const SPLIT_KEY = "ainative.splitPercent";
 const AI_PANEL_WIDTH_KEY = "ainative.aiPanelWidth";
 const AI_FLOATING_MARKER_KEY = "ainative.aiFloatingMarker";
 const SESSION_DEBOUNCE_MS = 500;
@@ -124,41 +124,20 @@ export default function App() {
       return AI_PANEL_DEFAULT_WIDTH;
     }
   });
-  const markdown = Boolean(active?.mode === "text" && isMarkdownFile(active.name));
-  const previewOn = Boolean(active?.mode === "text" && active.preview);
-  const showSource = markdown ? Boolean(active?.source) : true;
-  const showPreview = markdown || previewOn;
+  const documentTab = useWorkspace((state) => resolveDocument(state, selectActiveTab(state)));
+  const showingPreview = Boolean(active?.previewOf && documentTab);
   const { t } = useI18n();
 
   const togglePreview = useCallback(() => {
-    const tab = selectActiveTab(useWorkspace.getState());
+    const state = useWorkspace.getState();
+    const tab = selectActiveTab(state);
     if (!tab || tab.mode !== "text") return;
-    if (isMarkdownFile(tab.name)) {
-      const shown = !tab.source;
-      useWorkspace.getState().setSource(tab.id, shown);
-      rememberMarkdownSource(shown);
-    } else useWorkspace.getState().setPreview(tab.id, !tab.preview);
+    if (tab.previewOf) {
+      state.setActive(tab.previewOf);
+      return;
+    }
+    state.openPreview(tab.id);
   }, []);
-
-  // Draggable editor/preview split (mouse drag or arrow keys on the separator).
-  const [splitPercent, setSplitPercent] = useState(() => {
-    try {
-      const stored = localStorage.getItem(SPLIT_KEY);
-      return stored === null ? DEFAULT_SPLIT_PERCENT : normalizeSplitPercent(Number(stored));
-    } catch {
-      return DEFAULT_SPLIT_PERCENT;
-    }
-  });
-  const splitRef = useRef<HTMLDivElement | null>(null);
-  const splitDragging = useRef(false);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(SPLIT_KEY, String(splitPercent));
-    } catch {
-      /* ignore storage errors */
-    }
-  }, [splitPercent]);
 
   useEffect(() => {
     try {
@@ -175,36 +154,6 @@ export default function App() {
       /* ignore storage errors */
     }
   }, [aiFloatingMarkerEnabled]);
-
-  const startSplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const container = splitRef.current;
-    if (!container || event.button !== 0) return;
-    event.preventDefault();
-
-    const rect = container.getBoundingClientRect();
-    splitDragging.current = true;
-    const previousCursor = document.body.style.cursor;
-    const previousSelect = document.body.style.userSelect;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-
-    const onMove = (moveEvent: PointerEvent) => {
-      if (!splitDragging.current) return;
-      setSplitPercent(clampSplitPercent(moveEvent.clientX, rect.left, rect.width));
-    };
-    const onUp = () => {
-      splitDragging.current = false;
-      document.body.style.cursor = previousCursor;
-      document.body.style.userSelect = previousSelect;
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
-    };
-
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
-  }, []);
 
   // Success banners are transient; errors stay until dismissed.
   useEffect(() => {
@@ -363,7 +312,7 @@ export default function App() {
   /** Export the active buffer as a self-contained HTML file (T19). */ const exportActiveAsHtml =
     useCallback(async () => {
       const store = useWorkspace.getState();
-      const tab = store.tabs.find((t) => t.id === store.activeId);
+      const tab = resolveDocument(store, selectActiveTab(store));
       if (!tab || tab.mode !== "text") return;
 
       const content = readBuffer(tab.id, tab.content);
@@ -406,7 +355,8 @@ export default function App() {
   const saveTab = useCallback(
     async (tabId: string, saveAs = false): Promise<boolean> => {
       const store = useWorkspace.getState();
-      const tab = store.tabs.find((t) => t.id === tabId);
+      const found = store.tabs.find((t) => t.id === tabId);
+      const tab = found ? resolveDocument(store, found) : null;
       if (!tab) return true;
 
       if (tab.mode === "large") {
@@ -416,8 +366,12 @@ export default function App() {
 
       // A proposal is not part of the buffer. Drop it before reading so a
       // save during the stream cannot be followed by accepting that reply.
-      dismissRewriteForSave(tabId);
-      const content = readBuffer(tabId, tab.content);
+      dismissRewriteForSave(tab.id);
+      // A clean file is already the bytes on disk. Writing it changes the
+      // mtime; the watcher then reloads the buffer and the caret jumps to
+      // the first line.
+      if (!saveTouchesDisk(tab, saveAs)) return true;
+      const content = readBuffer(tab.id, tab.content);
 
       let path = tab.path;
       if (!path || saveAs) {
@@ -500,8 +454,10 @@ export default function App() {
       }
 
       const meta = tab.meta.lossy ? { ...tab.meta, lossy: false } : tab.meta;
+      beginOwnWrite(path);
       try {
         const result = await writeFile(path, content, meta, tab.meta.lossy);
+        finishOwnWrite(path, { size: result.size, mtimeMs: result.mtimeMs });
         store.markSaved(tab.id, {
           path,
           content,
@@ -511,6 +467,7 @@ export default function App() {
         });
         return true;
       } catch (e) {
+        cancelOwnWrite(path);
         store.setError(localizeError(e));
         return false;
       }
@@ -577,7 +534,8 @@ export default function App() {
   const requestRenameTab = useCallback(
     async (tabId: string) => {
       const store = useWorkspace.getState();
-      const tab = store.tabs.find((item) => item.id === tabId);
+      const found = store.tabs.find((item) => item.id === tabId);
+      const tab = found ? resolveDocument(store, found) : null;
       if (!tab) return;
       if (!tab.path) {
         const extension = extensionOf(tab.name) || ".md";
@@ -653,9 +611,12 @@ export default function App() {
   const handleExternalChange = useCallback(
     async (event: FileChangeEvent) => {
       const store = useWorkspace.getState();
-      const tab = store.tabs.find((t) => t.path === event.path);
+      const tab = store.tabs.find((item) => item.path && samePath(item.path, event.path));
       if (!tab) return;
 
+      // A save we started can be reported before markSaved stores the new
+      // mtime. The buffer is unchanged; reloading it would move the caret.
+      if (isOwnWriteEvent(event.path, event)) return;
       // Our own saves echo back through the watcher; the store already has the stat.
       if (isWatcherEcho(tab, event)) return;
       if (event.size === 0 && event.mtimeMs === 0) {
@@ -988,14 +949,16 @@ export default function App() {
   }, [availableAiPanelWidth]);
 
   // Grep prefers the workspace root. Image paths still use the file's own folder.
-  const lastSeparator = active?.path
-    ? Math.max(active.path.lastIndexOf("/"), active.path.lastIndexOf("\\"))
+  const lastSeparator = documentTab?.path
+    ? Math.max(documentTab.path.lastIndexOf("/"), documentTab.path.lastIndexOf("\\"))
     : -1;
-  const fileDir = active?.path && lastSeparator > 0 ? active.path.slice(0, lastSeparator) : null;
+  const fileDir =
+    documentTab?.path && lastSeparator > 0 ? documentTab.path.slice(0, lastSeparator) : null;
   const grepRoot = grepDefaultRoot(treeRoot, fileDir);
 
   return (
     <div className="app">
+      <LocalAgentHost />
       <MenuBar
         onNew={() => useWorkspace.getState().newTab()}
         onNewWindow={() => void createWindow()}
@@ -1082,65 +1045,34 @@ export default function App() {
           <div className="workspace__body">
             {settingsActive ? (
               <SettingsPage />
-            ) : active ? (
-              active.mode === "large" ? (
-                <LargeFileViewer key={`${active.id}:${active.version}`} tab={active} />
+            ) : documentTab ? (
+              documentTab.mode === "large" ? (
+                <LargeFileViewer
+                  key={`${documentTab.id}:${documentTab.version}`}
+                  tab={documentTab}
+                />
               ) : (
-                <div className="split" ref={splitRef}>
+                <div className="editor-frame">
                   <div
-                    className={`split__pane${showSource ? "" : " split__pane--off"}`}
-                    style={{ width: showSource && showPreview ? `${splitPercent}%` : "100%" }}
+                    className={`editor-frame__source${showingPreview ? " editor-frame__source--off" : ""}`}
                   >
                     <EditorHost
-                      tab={active}
-                      simplified={active.size > 5 * 1024 * 1024}
+                      tab={documentTab}
+                      simplified={documentTab.size > 5 * 1024 * 1024}
                       onPasteImage={handlePasteImage}
-                      visible={showSource}
+                      visible={!showingPreview}
                     />
                   </div>
-                  {showPreview && (
-                    <>
-                      {showSource && (
-                        <div
-                          className="split__divider"
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label={t("app.split.label")}
-                          aria-valuemin={MIN_SPLIT_PERCENT}
-                          aria-valuemax={MAX_SPLIT_PERCENT}
-                          aria-valuenow={Math.round(splitPercent)}
-                          tabIndex={0}
-                          title={t("app.split.title")}
-                          onPointerDown={startSplitDrag}
-                          onDoubleClick={() => setSplitPercent(50)}
-                          onKeyDown={(event) => {
-                            if (event.key === "ArrowLeft") {
-                              event.preventDefault();
-                              setSplitPercent((value) =>
-                                adjustSplitPercent(value, -SPLIT_KEYBOARD_STEP)
-                              );
-                            } else if (event.key === "ArrowRight") {
-                              event.preventDefault();
-                              setSplitPercent((value) =>
-                                adjustSplitPercent(value, SPLIT_KEYBOARD_STEP)
-                              );
-                            }
-                          }}
-                        />
-                      )}
-                      <div className="split__pane split__pane--preview">
-                        <MarkdownPreview
-                          key={active.id}
-                          tabId={active.id}
-                          name={active.name}
-                          baseDir={fileDir}
-                          onExport={() => void exportActiveAsHtml()}
-                          sourceOn={showSource}
-                          onToggleSource={markdown ? togglePreview : undefined}
-                          syncScroll={showSource}
-                        />
-                      </div>
-                    </>
+                  {showingPreview && (
+                    <MarkdownPreview
+                      key={documentTab.id}
+                      tabId={documentTab.id}
+                      name={documentTab.name}
+                      baseDir={fileDir}
+                      onExport={() => void exportActiveAsHtml()}
+                      onToggleSource={() => useWorkspace.getState().setActive(documentTab.id)}
+                      syncScroll={false}
+                    />
                   )}
                 </div>
               )
@@ -1155,7 +1087,7 @@ export default function App() {
           </div>
         </div>
 
-        {streamOpen && active?.mode === "text" && (
+        {streamOpen && documentTab?.mode === "text" && (
           <>
             <div
               className="split__divider ai-stream__divider"
@@ -1186,9 +1118,9 @@ export default function App() {
               }}
             />
             <AiStreamPanel
-              tabId={active.id}
+              tabId={documentTab.id}
               panelWidth={aiPanelWidth}
-              sourceShown={showSource}
+              sourceShown={!showingPreview}
               onClose={() => setStreamOpen(false)}
               onOpenMatch={(path, line) => void openMatch(path, line)}
               onNeedSettings={() => {
@@ -1200,20 +1132,19 @@ export default function App() {
         )}
       </div>
 
-      {active?.mode === "text" && (
+      {documentTab?.mode === "text" && (
         <AiSelectionAction
-          key={active.id}
-          tabId={active.id}
+          key={documentTab.id}
+          tabId={documentTab.id}
           visible={aiFloatingMarkerEnabled && !streamOpen}
           onRewrite={openRewrite}
         />
       )}
 
       <StatusBar
-        previewOn={markdown ? showSource : previewOn}
-        sourceToggle={markdown}
+        previewOn={showingPreview}
         onTogglePreview={togglePreview}
-        canPreview={Boolean(active && active.mode === "text")}
+        canPreview={documentTab?.mode === "text"}
         hasWorkspace={Boolean(treeRoot)}
         treeHidden={treeHidden}
         onToggleTree={toggleTree}
@@ -1242,7 +1173,12 @@ export default function App() {
           }}
           onRevealLine={(line) => {
             setPaletteOpen(false);
-            if (active) revealLineWhenReady(active.id, line, () => {});
+            if (!documentTab) return;
+            if (showingPreview) {
+              requestPreviewJump(line);
+              return;
+            }
+            revealLineWhenReady(documentTab.id, line, () => {});
           }}
         />
       )}

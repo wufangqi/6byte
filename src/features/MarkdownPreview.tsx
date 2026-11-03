@@ -8,6 +8,7 @@ import {
   subscribeDocChanges,
 } from "../editor/registry";
 import { sourceRangeForPreviewSelection } from "./previewSelection";
+import { subscribePreviewJump } from "./previewJump";
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { enhanceMermaidDiagram } from "./diagramViewport";
@@ -431,6 +432,25 @@ export default function MarkdownPreview({
     }
     useWorkspace.getState().setError(t("preview.externalLink"));
   };
+
+  useEffect(() => {
+    return subscribePreviewJump((line) => {
+      const zero = Math.max(0, line - 1);
+      if (!slice.full) {
+        placeWindow(zero);
+        return;
+      }
+      const scroller = scrollerRef.current;
+      const body = scroller?.querySelector(".markdown-preview__body");
+      const target = body ? elementForLine(body, zero) : null;
+      if (!scroller || !target) return;
+      const offset =
+        target.getBoundingClientRect().top -
+        scroller.getBoundingClientRect().top +
+        scroller.scrollTop;
+      scroller.scrollTop = Math.max(0, offset - 8);
+    });
+  }, [placeWindow, slice.full]);
 
   const jumpTo = (slug: string, line: number) => {
     if (!slice.full) {

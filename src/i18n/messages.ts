@@ -119,7 +119,7 @@ export const zh: MessageCatalog = {
   "shortcuts.dismissAi": "取消 AI 建议",
   "shortcuts.grep": "在文件夹中搜索",
   "shortcuts.tree": "显示 / 隐藏文件树",
-  "shortcuts.preview": "切换 Markdown 预览",
+  "shortcuts.preview": "在新标签中预览",
   "shortcuts.aiPanel": "显示 / 隐藏 AI 面板",
   "shortcuts.settings": "打开设置",
 
@@ -169,8 +169,13 @@ export const zh: MessageCatalog = {
   "settings.group.editor": "编辑器",
   "settings.group.ai": "AI 模型服务",
   "settings.nav.general": "通用",
-  "settings.general.sub": "编辑器的外观和界面语言",
+  "settings.general.sub": "编辑器的外观、语言和新建文件",
   "settings.general.appearance": "界面",
+  "settings.general.files": "文件",
+  "settings.general.newFile": "新建文件格式",
+  "settings.general.newFileHint": "Ctrl+N 和欢迎页的新建使用这个扩展名。已经打开的文件不会改变。",
+  "settings.general.newFile.txt": "纯文本 (.txt)",
+  "settings.general.newFile.md": "Markdown (.md)",
   "settings.general.themeHint": "跟随系统时会随 Windows 的深浅色自动切换",
   "settings.general.languageHint": "界面文字的语言，切换后立即生效",
   "settings.nav.models": "模型",
@@ -274,6 +279,20 @@ export const zh: MessageCatalog = {
   "settings.providers.removeMessage":
     "删除「{name}」及其下的 {count} 个模型？钥匙串里保存的密钥也会一起清除。",
   "settings.access.sub": "匹配的文件不会作为上下文发给模型",
+  "settings.localAgent.title": "本地 Agent",
+  "settings.localAgent.enable": "允许本机程序访问",
+  "settings.localAgent.hint":
+    "默认关闭。开启后只监听 127.0.0.1 的临时端口，调用需要下面的令牌。可以读当前文档、选区和工作区；不能直接写盘。改动先变成候选，接受后才进编辑器，保存仍走原来的确认。候选要带上读到的修订号；你在那一段里改过字，候选会放下，改在段外则会跟着挪。",
+  "settings.localAgent.address": "地址",
+  "settings.localAgent.token": "令牌",
+  "settings.localAgent.copy": "复制",
+  "settings.localAgent.copied": "已复制",
+  "settings.localAgent.discovery": "发现文件",
+  "settings.localAgent.mcpTitle": "MCP 配置",
+  "settings.localAgent.mcpHint":
+    "复制到 Cursor 或其他 Agent 的 mcp.json。6byte 需要保持打开，并且上面的开关保持打开。",
+  "settings.localAgent.mcpCopy": "复制配置",
+  "localAgent.wrongFile": "当前打开的不是这个文件。候选没有放入编辑器。",
   "ai.providers": "服务商",
   "ai.provider.add": "添加服务商",
   "ai.provider.remove": "删除服务商",
@@ -426,6 +445,7 @@ export const zh: MessageCatalog = {
 
   // Tabs
   "tab.untitled": "未命名 {n}",
+  "tab.previewName": "预览 · {name}",
   "tab.unsaved": "未保存",
   "tab.close": "关闭",
   "tab.new": "新建 (Ctrl+N)",
@@ -482,7 +502,8 @@ export const zh: MessageCatalog = {
   "status.mixed": "混合换行",
   "status.mixed.title": "文件混合了多种换行符，保存时会统一为主导换行符",
   "status.preview": "预览",
-  "status.preview.title": "切换 Markdown 分屏预览（Ctrl+Shift+M）",
+  "status.preview.title": "在新标签中预览（Ctrl+Shift+M）",
+  "status.preview.titleBack": "回到源码标签（Ctrl+Shift+M）",
   "status.model": "模型",
   "status.model.title":
     "Ctrl+K 或点这里：用选区向模型提问。Tab 接受，Esc 取消；接受后替换原文，不会自动保存。",
@@ -538,8 +559,8 @@ export const zh: MessageCatalog = {
   "preview.outlineToggle": "显示 / 隐藏大纲",
   "preview.outlineLabel": "大纲",
   "preview.line": "第 {line} 行",
-  "preview.source.title": "查看源码和预览（Ctrl+Shift+M）",
-  "preview.source.titleOn": "只看预览（Ctrl+Shift+M）",
+  "preview.source.title": "回到源码标签",
+  "preview.source.titleOn": "回到源码标签",
   "preview.export": "导出 HTML",
   "preview.empty": "没有可预览的内容。",
   "preview.window":
@@ -712,7 +733,7 @@ export const en: MessageCatalog = {
   "shortcuts.dismissAi": "Dismiss AI suggestion",
   "shortcuts.grep": "Search in folder",
   "shortcuts.tree": "Show / hide file tree",
-  "shortcuts.preview": "Toggle Markdown preview",
+  "shortcuts.preview": "Preview in a new tab",
   "shortcuts.aiPanel": "Show / hide AI panel",
   "shortcuts.settings": "Open settings",
 
@@ -764,8 +785,14 @@ export const en: MessageCatalog = {
   "settings.group.editor": "Editor",
   "settings.group.ai": "AI models",
   "settings.nav.general": "General",
-  "settings.general.sub": "Appearance and interface language",
+  "settings.general.sub": "Appearance, language, and new files",
   "settings.general.appearance": "Interface",
+  "settings.general.files": "Files",
+  "settings.general.newFile": "New file format",
+  "settings.general.newFileHint":
+    "Ctrl+N and the welcome page use this extension. Files that are already open stay as they are.",
+  "settings.general.newFile.txt": "Plain text (.txt)",
+  "settings.general.newFile.md": "Markdown (.md)",
   "settings.general.themeHint": "System follows the light or dark mode of your OS",
   "settings.general.languageHint": "Language of the interface. Applies immediately",
   "settings.nav.models": "Models",
@@ -879,6 +906,20 @@ export const en: MessageCatalog = {
   "settings.providers.removeMessage":
     "Delete “{name}” and its {count} models? The key saved in the keychain is removed too.",
   "settings.access.sub": "Matching files are never sent to the model as context",
+  "settings.localAgent.title": "Local agent",
+  "settings.localAgent.enable": "Allow programs on this computer",
+  "settings.localAgent.hint":
+    "Off by default. When on, 6byte listens on 127.0.0.1 at a temporary port and requires the token below. A caller can read the current document, selection, and workspace. It cannot write files directly. A change is offered as a candidate, enters the editor only when you accept it, and saving still uses the usual checks. A candidate must carry the revision it saw. Editing inside that range drops it; editing outside moves it.",
+  "settings.localAgent.address": "Address",
+  "settings.localAgent.token": "Token",
+  "settings.localAgent.copy": "Copy",
+  "settings.localAgent.copied": "Copied",
+  "settings.localAgent.discovery": "Discovery file",
+  "settings.localAgent.mcpTitle": "MCP config",
+  "settings.localAgent.mcpHint":
+    "Paste this into Cursor or another agent's mcp.json. Keep 6byte open and leave the switch above on.",
+  "settings.localAgent.mcpCopy": "Copy config",
+  "localAgent.wrongFile": "The open file is different. The candidate was not placed in the editor.",
   "ai.providers": "Providers",
   "ai.provider.add": "Add provider",
   "ai.provider.remove": "Remove provider",
@@ -1039,6 +1080,7 @@ export const en: MessageCatalog = {
 
   // Tabs
   "tab.untitled": "Untitled {n}",
+  "tab.previewName": "Preview · {name}",
   "tab.unsaved": "Unsaved",
   "tab.close": "Close",
   "tab.new": "New (Ctrl+N)",
@@ -1094,7 +1136,8 @@ export const en: MessageCatalog = {
   "status.mixed": "Mixed EOL",
   "status.mixed.title": "File mixes line endings; saving normalizes to the dominant one",
   "status.preview": "Preview",
-  "status.preview.title": "Toggle Markdown split preview (Ctrl+Shift+M)",
+  "status.preview.title": "Preview in a new tab (Ctrl+Shift+M)",
+  "status.preview.titleBack": "Back to the source tab (Ctrl+Shift+M)",
   "status.model": "Model",
   "status.model.title":
     "Ctrl+K or click here to rewrite the selection. Tab accepts, Esc cancels; accepting replaces the original and does not save the file.",
@@ -1156,8 +1199,8 @@ export const en: MessageCatalog = {
   "preview.outlineToggle": "Show / hide outline",
   "preview.outlineLabel": "Outline",
   "preview.line": "Line {line}",
-  "preview.source.title": "Show source and preview (Ctrl+Shift+M)",
-  "preview.source.titleOn": "Preview only (Ctrl+Shift+M)",
+  "preview.source.title": "Back to the source tab",
+  "preview.source.titleOn": "Back to the source tab",
   "preview.export": "Export HTML",
   "preview.empty": "Nothing to preview.",
   "preview.window":

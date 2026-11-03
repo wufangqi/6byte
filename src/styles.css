@@ -180,9 +180,17 @@ code {
 
 .workspace__body {
   position: relative;
+  display: flex;
   flex: 1;
+  flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.workspace__body > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .file-tree {
@@ -325,11 +333,15 @@ code {
 }
 
 .editor-host {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   height: 100%;
   overflow: hidden;
 }
 
 .editor-host .cm-editor {
+  width: 100%;
   height: 100%;
 }
 
@@ -1324,6 +1336,20 @@ code {
   padding: 2px 14px 14px 34px;
 }
 
+.settings__snippet {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-editor);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .settings__field {
   display: grid;
   grid-template-columns: 96px minmax(0, 1fr);
@@ -1780,6 +1806,30 @@ code {
   display: flex;
   height: 100%;
   min-height: 0;
+}
+
+.editor-frame {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-frame__source {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-frame__source--off {
+  display: none;
+}
+
+.editor-frame > .markdown-preview {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .markdown-preview {

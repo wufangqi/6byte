@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenedFile } from "../ipc/types";
 import {
   SETTINGS_TAB_ID,
@@ -76,14 +76,25 @@ describe("countLines", () => {
 });
 
 describe("newTab", () => {
-  it("starts a Markdown document that is ready to edit and preview", () => {
+  it("starts a plain-text document", () => {
     useWorkspace.getState().newTab();
 
     const tab = selectActiveTab(useWorkspace.getState());
-    expect(tab?.name).toMatch(/\.md$/);
+    expect(tab?.name).toMatch(/\.txt$/);
     expect(tab?.path).toBeNull();
-    expect(tab?.preview).toBe(true);
+    expect(tab?.preview).toBe(false);
     expect(tab?.source).toBe(true);
+    expect(tab?.previewOf).toBeNull();
+  });
+
+  it("uses the markdown format chosen in settings", () => {
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => (key === "ainative.newFileFormat" ? "md" : null),
+      setItem: () => {},
+    });
+    useWorkspace.getState().newTab();
+    expect(selectActiveTab(useWorkspace.getState())?.name).toMatch(/\.md$/);
+    vi.unstubAllGlobals();
   });
 });
 
@@ -293,37 +304,52 @@ describe("removeRecent", () => {
   });
 });
 
-describe("setPreview", () => {
-  it("opens markdown in preview and keeps other files in the editor", () => {
+describe("openPreview", () => {
+  it("opens one preview tab beside the source and focuses it again", () => {
     const markdown = tabFromFile(makeFile("D:/tmp/a.md"));
-    const plain = tabFromFile(makeFile("D:/tmp/b.txt"));
-    expect(markdown.preview).toBe(true);
-    expect(markdown.source).toBe(false);
-    expect(plain.preview).toBe(false);
-    expect(plain.source).toBe(true);
+    expect(markdown.preview).toBe(false);
+    expect(markdown.source).toBe(true);
+    expect(markdown.previewOf).toBeNull();
 
     useWorkspace.getState().addTab(markdown);
-    useWorkspace.getState().addTab(plain);
-    useWorkspace.getState().setSource(markdown.id, true);
-    useWorkspace.getState().setPreview(plain.id, true);
+    useWorkspace.getState().openPreview(markdown.id);
+    useWorkspace.getState().openPreview(markdown.id);
 
     const state = useWorkspace.getState();
-    expect(state.tabs.find((tab) => tab.id === markdown.id)?.source).toBe(true);
-    expect(state.tabs.find((tab) => tab.id === plain.id)?.preview).toBe(true);
-    expect(state.tabs.find((tab) => tab.id === plain.id)?.source).toBe(true);
+    expect(state.tabs).toHaveLength(2);
+    expect(state.tabs[1]?.previewOf).toBe(markdown.id);
+    expect(state.tabs[1]?.path).toBeNull();
+    expect(state.activeId).toBe(state.tabs[1]?.id);
   });
 
-  it("reopens a markdown file in preview, with the source hidden", () => {
-    const opened = tabFromFile(makeFile("D:/tmp/a.md"));
-    useWorkspace.getState().addTab(opened);
-    useWorkspace.getState().setSource(opened.id, true);
-    useWorkspace.getState().closeTab(opened.id);
+  it("closes the preview tab together with its source", () => {
+    const markdown = tabFromFile(makeFile("D:/tmp/a.md"));
+    const plain = tabFromFile(makeFile("D:/tmp/b.txt"));
+    useWorkspace.getState().addTab(markdown);
+    useWorkspace.getState().openPreview(markdown.id);
+    useWorkspace.getState().addTab(plain);
 
-    const again = tabFromFile(makeFile("D:/tmp/a.md"));
-    useWorkspace.getState().addTab(again);
-    const active = selectActiveTab(useWorkspace.getState());
-    expect(active?.preview).toBe(true);
-    expect(active?.source).toBe(false);
+    useWorkspace.getState().closeTab(markdown.id);
+
+    const state = useWorkspace.getState();
+    expect(state.tabs.map((tab) => tab.name)).toEqual(["b.txt"]);
+    expect(state.activeId).toBe(plain.id);
+  });
+
+  it("keeps the preview label in step with a rename", () => {
+    const markdown = tabFromFile(makeFile("D:/tmp/a.md", "# Title"));
+    useWorkspace.getState().addTab(markdown);
+    useWorkspace.getState().openPreview(markdown.id);
+    useWorkspace.getState().renameTab(markdown.id, {
+      path: "D:/tmp/renamed.md",
+      name: "renamed.md",
+      mtimeMs: 1,
+    });
+
+    expect(useWorkspace.getState().tabs.map((tab) => tab.name)).toEqual([
+      "renamed.md",
+      "renamed.md",
+    ]);
   });
 });
 

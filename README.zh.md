@@ -10,7 +10,7 @@
 
 **中文** · [English](./README.md)
 
-**当前版本：v0.3.1**（2026-10-30），Windows、Linux、macOS 安装包齐全。
+**当前版本：v0.3.2**（2026-11-03），Windows、Linux、macOS 安装包齐全。
 
 ![在段落、渲染结果和源码旁边审阅 AI 改写](./assets/hero-zh.png)
 
@@ -34,7 +34,8 @@
 - **工作区文件树**：打开一个文件夹，目录按需逐层展开，不扫描整棵树。隐藏名、依赖目录和符号链接不列出。`Ctrl+Shift+E` 开关，折叠状态重启后保持。
 - **标签与历史**：会话恢复、最近文件、按标签保留撤销历史、拖拽打开、中键关闭；标签或文件树右键 / `F2` 均可重命名，已打开标签跟随新路径。
 - **搜索**：`Ctrl+F` 查找替换（正则、捕获组）；`Ctrl+Shift+F` 跨文件 grep（跳过二进制与依赖目录）。
-- **Markdown**：默认渲染，`<>` / `Ctrl+Shift+M` 在旁边显示源码；大纲跳转、可拖分栏、Mermaid 缩放 / 平移 / 重置（25%–300%，深浅色两套出图）、KaTeX、Shiki、图片粘贴，文件菜单和命令面板都能导出 HTML。
+- **Markdown**：默认渲染。`Ctrl+Shift+M` 或状态栏「预览」在新标签打开预览，不再和源码左右分屏；再按一次回到源码。大纲跳转、Mermaid 缩放 / 平移 / 重置（25%–300%，深浅色两套出图）、KaTeX、Shiki、图片粘贴，文件菜单和命令面板都能导出 HTML。
+- **新建文件**默认是 `.txt`，可在设置 → 通用里改成 Markdown。
 - **长 Markdown**：超过 8 万字符只渲染阅读位置附近约 2.4 万字符，代码围栏不从中间切开。
 - **界面**：中英双语、深色 / 浅色 / 跟随系统、自定义标题栏；`.txt` 与未命名笔记自动换行。
 
@@ -56,19 +57,19 @@
 
 **Windows**
 
-- `6byte_0.3.1_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
-- `6byte_0.3.1_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
+- `6byte_0.3.2_x64-setup.exe` — NSIS，单用户安装，无需管理员权限（推荐）
+- `6byte_0.3.2_x64_en-US.msi` — MSI，适合企业部署 / 静默安装
 
 **Linux**
 
-- `6byte_0.3.1_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.3.1_amd64.deb`
-- `6byte_0.3.1_amd64.AppImage` — 免安装：`chmod +x 6byte_0.3.1_amd64.AppImage && ./6byte_0.3.1_amd64.AppImage`
+- `6byte_0.3.2_amd64.deb` — Debian / Ubuntu：`sudo apt install ./6byte_0.3.2_amd64.deb`
+- `6byte_0.3.2_amd64.AppImage` — 免安装：`chmod +x 6byte_0.3.2_amd64.AppImage && ./6byte_0.3.2_amd64.AppImage`
 
 依赖 WebKitGTK 4.1（Ubuntu 22.04+ / Debian 12+ 的 `libwebkit2gtk-4.1-0`）。
 
 **macOS**
 
-- `6byte_0.3.1_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
+- `6byte_0.3.2_universal.dmg` — 通用包（Apple Silicon + Intel）。未签名、未公证：首次打开需右键 →「打开」，或执行 `xattr -dr com.apple.quarantine /Applications/6byte.app`。
 
 卸载走「设置 → 应用」，或安装目录里的 `uninstall.exe`。
 
