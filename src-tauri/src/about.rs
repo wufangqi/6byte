@@ -7,6 +7,21 @@ pub fn app_platform() -> String {
     format!("{} {}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
+/// Path of the MCP stdio program that sits next to this executable.
+#[tauri::command]
+pub fn app_mcp_command() -> String {
+    let name = if cfg!(windows) {
+        "6byte-mcp.exe"
+    } else {
+        "6byte-mcp"
+    };
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join(name)))
+        .map(|path| path.to_string_lossy().into_owned())
+        .unwrap_or_else(|| name.to_string())
+}
+
 /// Open the issue chooser in the system browser.
 #[tauri::command]
 pub fn open_feedback() -> Result<(), String> {

@@ -49,6 +49,7 @@ export function loadDenylistText(): string {
 
 export function saveDenylistText(text: string): void {
   localStorage.setItem(AGENT_DENY_KEY, text);
+  window.dispatchEvent(new Event("ainative-agent-deny"));
 }
 
 export function loadDenylist(): string[] {

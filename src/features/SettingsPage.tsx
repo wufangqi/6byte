@@ -9,8 +9,17 @@ import {
   aiSetKey,
   appInfo,
   isTauri,
+  localAgentStatus,
+  mcpCommandPath,
 } from "../ipc/api";
 import { loadDenylistText, saveDenylistText } from "./agentAccess";
+import {
+  disableLocalAgent,
+  enableLocalAgent,
+  localAgentPreferred,
+  mcpConfigText,
+  type LocalAgentInfo,
+} from "./localAgent";
 import {
   acceptanceRate,
   averageFirstTokenMs,
@@ -71,6 +80,7 @@ import {
 } from "./completionSettings";
 import { ask } from "./dialogStore";
 import { AppLogo } from "./MenuBar";
+import { loadNewFileFormat, saveNewFileFormat, type NewFileFormat } from "./newFileFormat";
 import { setThemePreference, useThemePreference, type ThemePreference } from "./theme";
 import { useWorkspace, type SettingsSection } from "../stores/workspace";
 
@@ -226,6 +236,7 @@ function Switch({
 function GeneralSection() {
   const { t, locale } = useI18n();
   const preference = useThemePreference();
+  const [newFileFormat, setNewFileFormat] = useState<NewFileFormat>(loadNewFileFormat);
   const themes: { id: ThemePreference; label: string }[] = [
     { id: "light", label: t("menu.light") },
     { id: "dark", label: t("menu.dark") },
@@ -262,6 +273,24 @@ function GeneralSection() {
           >
             <option value="zh">{t("menu.langZh")}</option>
             <option value="en">{t("menu.langEn")}</option>
+          </select>
+        </Row>
+      </div>
+      <h2 className="settings__section">{t("settings.general.files")}</h2>
+      <div className="settings__card">
+        <Row title={t("settings.general.newFile")} hint={t("settings.general.newFileHint")}>
+          <select
+            className="settings__select"
+            aria-label={t("settings.general.newFile")}
+            value={newFileFormat}
+            onChange={(event) => {
+              const next = event.target.value === "md" ? "md" : "txt";
+              setNewFileFormat(next);
+              saveNewFileFormat(next);
+            }}
+          >
+            <option value="txt">{t("settings.general.newFile.txt")}</option>
+            <option value="md">{t("settings.general.newFile.md")}</option>
           </select>
         </Row>
       </div>
@@ -1263,9 +1292,113 @@ function LimitInput({
 function AccessSection() {
   const { t } = useI18n();
   const [denyText, setDenyText] = useState(loadDenylistText);
+  const [agentOn, setAgentOn] = useState(localAgentPreferred);
+  const [agent, setAgent] = useState<LocalAgentInfo | null>(null);
+  const [agentError, setAgentError] = useState("");
+  const [copied, setCopied] = useState("");
+  const [mcpCommand, setMcpCommand] = useState("");
+
+  useEffect(() => {
+    if (!isTauri) return;
+    void mcpCommandPath()
+      .then(setMcpCommand)
+      .catch(() => setMcpCommand(""));
+  }, []);
+
+  useEffect(() => {
+    if (!isTauri || !localAgentPreferred()) return;
+    void localAgentStatus().then((status) => {
+      if (!status.enabled) return;
+      setAgent(status);
+    });
+  }, []);
+
+  const copy = (value: string, which: string) => {
+    void navigator.clipboard?.writeText(value).then(() => {
+      setCopied(which);
+      window.setTimeout(() => setCopied(""), 1500);
+    });
+  };
+
   return (
     <>
       <Header title={t("settings.nav.access")} sub={t("settings.access.sub")} />
+      <div className="settings__card">
+        <Row title={t("settings.localAgent.title")} hint={t("settings.localAgent.hint")}>
+          <Switch
+            checked={agentOn}
+            label={t("settings.localAgent.enable")}
+            onChange={(enabled) => {
+              setAgentError("");
+              if (!isTauri) return;
+              if (!enabled) {
+                void disableLocalAgent().then(() => {
+                  setAgentOn(false);
+                  setAgent(null);
+                });
+                return;
+              }
+              void enableLocalAgent()
+                .then((info) => {
+                  setAgentOn(true);
+                  setAgent(info);
+                })
+                .catch((error: unknown) => {
+                  setAgentOn(false);
+                  setAgentError(error instanceof Error ? error.message : String(error));
+                });
+            }}
+          />
+        </Row>
+        {agentOn && agent && (
+          <div className="settings__provider-body">
+            <p className="settings__mono">
+              {t("settings.localAgent.address")}: {agent.origin}{" "}
+              <button type="button" className="btn" onClick={() => copy(agent.origin, "origin")}>
+                {copied === "origin"
+                  ? t("settings.localAgent.copied")
+                  : t("settings.localAgent.copy")}
+              </button>
+            </p>
+            <p className="settings__mono">
+              {t("settings.localAgent.token")}: {agent.token}{" "}
+              <button type="button" className="btn" onClick={() => copy(agent.token, "token")}>
+                {copied === "token"
+                  ? t("settings.localAgent.copied")
+                  : t("settings.localAgent.copy")}
+              </button>
+            </p>
+            {agent.discoveryPath && (
+              <p className="settings__row-hint">
+                {t("settings.localAgent.discovery")}: {agent.discoveryPath}
+              </p>
+            )}
+          </div>
+        )}
+        {mcpCommand && (
+          <div className="settings__provider-body">
+            <p className="settings__mono">{t("settings.localAgent.mcpTitle")}</p>
+            <p className="settings__row-hint">{t("settings.localAgent.mcpHint")}</p>
+            <pre className="settings__snippet">{mcpConfigText(mcpCommand)}</pre>
+            <div>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => copy(mcpConfigText(mcpCommand), "mcp")}
+              >
+                {copied === "mcp"
+                  ? t("settings.localAgent.copied")
+                  : t("settings.localAgent.mcpCopy")}
+              </button>
+            </div>
+          </div>
+        )}
+        {agentError && (
+          <p className="settings__status" role="status">
+            {agentError}
+          </p>
+        )}
+      </div>
       <div className="settings__card">
         <Row title={t("ai.deny.title")} hint={t("ai.deny.hint")} />
         <textarea

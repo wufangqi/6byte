@@ -1,4 +1,5 @@
 import type { EditorView } from "@codemirror/view";
+import type { DocEdit } from "./docEdits";
 import { getDocText as cachedDocText } from "./docStates";
 
 /**
@@ -97,17 +98,43 @@ export function insertTextAtSelection(tabId: string, text: string): boolean {
 }
 
 type DocListener = () => void;
-const docListeners = new Map<string, Set<DocListener>>();
+type DocEditListener = (edits: DocEdit[]) => void;
+const docListeners = new Map<string, Set<DocEditListener>>();
 
-/** Signal that a tab's buffer changed (O(1); listeners read the text themselves). */
-export function notifyDocChanged(tabId: string): void {
+/** Signal that a tab's buffer changed. `edits` use that transaction's original coordinates. */
+export function notifyDocChanged(tabId: string, edits: DocEdit[]): void {
   const listeners = docListeners.get(tabId);
+  if (!listeners) return;
+  for (const listener of listeners) listener(edits);
+}
+
+/** Subscribe to buffer changes of a tab. Returns an unsubscribe function. */
+const caretListeners = new Map<string, Set<DocListener>>();
+
+/** Signal that the visible selection changed. Listeners read the view themselves. */
+export function notifySelectionChanged(tabId: string): void {
+  const listeners = caretListeners.get(tabId);
   if (!listeners) return;
   for (const listener of listeners) listener();
 }
 
-/** Subscribe to buffer changes of a tab. Returns an unsubscribe function. */
-export function subscribeDocChanges(tabId: string, listener: DocListener): () => void {
+/** Subscribe to selection changes of a tab. Returns an unsubscribe function. */
+export function subscribeSelectionChanges(tabId: string, listener: DocListener): () => void {
+  let listeners = caretListeners.get(tabId);
+  if (!listeners) {
+    listeners = new Set();
+    caretListeners.set(tabId, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    const current = caretListeners.get(tabId);
+    if (!current) return;
+    current.delete(listener);
+    if (current.size === 0) caretListeners.delete(tabId);
+  };
+}
+
+export function subscribeDocChanges(tabId: string, listener: DocEditListener): () => void {
   let listeners = docListeners.get(tabId);
   if (!listeners) {
     listeners = new Set();

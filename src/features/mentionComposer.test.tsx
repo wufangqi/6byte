@@ -71,6 +71,7 @@ describe("rewrite mention composer", () => {
           version: 1,
           preview: true,
           source: true,
+          previewOf: null,
         },
       ],
       activeId: "note",

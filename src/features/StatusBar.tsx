@@ -2,7 +2,7 @@ import { useAiActivity } from "./aiActivity";
 import { useI18n } from "../i18n";
 import { formatSize } from "../lib/format";
 import { useFileTree } from "../stores/fileTree";
-import { selectActiveTab, useWorkspace } from "../stores/workspace";
+import { resolveDocument, selectActiveTab, useWorkspace } from "../stores/workspace";
 
 const EOL_LABEL: Record<string, string> = {
   lf: "LF",
@@ -22,8 +22,6 @@ function PanelIcon() {
 interface Props {
   previewOn?: boolean;
   canPreview?: boolean;
-  /** Markdown uses `</>` to reveal source beside the preview. Other files keep the preview label. */
-  sourceToggle?: boolean;
   onTogglePreview?: () => void;
   hasWorkspace?: boolean;
   treeHidden?: boolean;
@@ -35,7 +33,6 @@ interface Props {
 export default function StatusBar({
   previewOn = false,
   canPreview = false,
-  sourceToggle = false,
   onTogglePreview,
   hasWorkspace = false,
   treeHidden = false,
@@ -43,7 +40,7 @@ export default function StatusBar({
   aiPanelOpen = false,
   onToggleAiPanel,
 }: Props) {
-  const tab = useWorkspace(selectActiveTab);
+  const tab = useWorkspace((state) => resolveDocument(state, selectActiveTab(state)));
   const workspaceName = useFileTree((state) => (state.rootPath ? state.rootName : ""));
   const workspacePath = useFileTree((state) => state.rootPath);
   const { t, tp } = useI18n();
@@ -126,16 +123,12 @@ export default function StatusBar({
       {canPreview && onTogglePreview && (
         <button
           type="button"
-          className={`statusbar__action${sourceToggle ? " statusbar__source" : ""}${previewOn ? " statusbar__action--on" : ""}`}
+          className={`statusbar__action${previewOn ? " statusbar__action--on" : ""}`}
           aria-pressed={previewOn}
-          title={
-            sourceToggle
-              ? t(previewOn ? "preview.source.titleOn" : "preview.source.title")
-              : t("status.preview.title")
-          }
+          title={t(previewOn ? "status.preview.titleBack" : "status.preview.title")}
           onClick={onTogglePreview}
         >
-          {sourceToggle ? "</>" : t("status.preview")}
+          {t("status.preview")}
         </button>
       )}
 

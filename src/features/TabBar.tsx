@@ -55,8 +55,12 @@ export default function TabBar({ onClose, onRename }: Props) {
             key={tab.id}
             role="tab"
             aria-selected={tab.id === activeId}
-            className={`tab ${tab.id === activeId ? "tab--active" : ""}`}
-            title={tab.path ?? tab.name}
+            className={`tab${tab.previewOf ? " tab--preview" : ""}${tab.id === activeId ? " tab--active" : ""}`}
+            title={
+              tab.previewOf
+                ? t("tab.previewName", { name: tab.path ?? tab.name })
+                : (tab.path ?? tab.name)
+            }
             onClick={() => setActive(tab.id)}
             onContextMenu={(event) => {
               event.preventDefault();
@@ -70,8 +74,12 @@ export default function TabBar({ onClose, onRename }: Props) {
               }
             }}
           >
-            <span className="tab__name">{tab.name}</span>
-            {tab.dirty && <span className="tab__dot" aria-label={t("tab.unsaved")} />}
+            <span className="tab__name">
+              {tab.previewOf ? t("tab.previewName", { name: tab.name }) : tab.name}
+            </span>
+            {(tab.previewOf
+              ? tabs.find((item) => item.id === tab.previewOf)?.dirty
+              : tab.dirty) && <span className="tab__dot" aria-label={t("tab.unsaved")} />}
             <button
               type="button"
               className="tab__close"

@@ -1,6 +1,7 @@
 import { EditorState } from "@codemirror/state";
 import { getLocale } from "../i18n/locale";
 import { getResolvedTheme } from "../features/theme";
+import type { DocEdit } from "./docEdits";
 import {
   buildExtensions,
   editorChrome,
@@ -26,7 +27,8 @@ export interface DocStateInit {
   /** L1 files (5–20 MB) drop folding/bracket/selection decorations. */
   simplified?: boolean;
   onStats: (stats: { lines: number; chars: number }) => void;
-  onDocChanged?: () => void;
+  onDocChanged?: (edits: DocEdit[]) => void;
+  onSelectionChanged?: () => void;
   onStateChanged?: (state: EditorState) => void;
   onPasteImage?: (file: File) => Promise<string | null>;
 }
@@ -46,6 +48,7 @@ function createState(init: DocStateInit): EditorState {
     extensions: buildExtensions(init.filename, init.onStats, {
       simplified: init.simplified,
       onDocChanged: init.onDocChanged,
+      onSelectionChanged: init.onSelectionChanged,
       onStateChanged: init.onStateChanged,
       onPasteImage: init.onPasteImage,
     }),

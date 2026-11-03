@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { duplicateTab, isWatcherEcho, statConflicts } from "./fileSafety";
+import {
+  duplicateTab,
+  cancelOwnWrite,
+  finishOwnWrite,
+  isOwnWriteEvent,
+  isWatcherEcho,
+  saveTouchesDisk,
+  statConflicts,
+  beginOwnWrite,
+} from "./fileSafety";
 
 describe("file safety", () => {
   it("finds a tab that already owns the save path", () => {
@@ -23,5 +32,31 @@ describe("file safety", () => {
     expect(isWatcherEcho({ mode: "text", mtimeMs: 5, size: 8 }, { mtimeMs: 5, size: 9 })).toBe(
       false
     );
+  });
+
+  it("does not write a clean file that is already on disk", () => {
+    const clean = {
+      path: "C:/docs/a.txt",
+      dirty: false,
+      meta: { lossy: false, mixedEol: false },
+    };
+    expect(saveTouchesDisk(clean, false)).toBe(false);
+    expect(saveTouchesDisk({ ...clean, dirty: true }, false)).toBe(true);
+    expect(saveTouchesDisk({ ...clean, path: null }, false)).toBe(true);
+    expect(saveTouchesDisk(clean, true)).toBe(true);
+    expect(saveTouchesDisk({ ...clean, meta: { lossy: true, mixedEol: false } }, false)).toBe(true);
+  });
+
+  it("treats a watcher event during our own save as an echo, before the stat is stored", () => {
+    beginOwnWrite("C:/docs/a.txt");
+    expect(isOwnWriteEvent("C:\\docs\\a.txt", { size: 4, mtimeMs: 9 })).toBe(true);
+    finishOwnWrite("C:/docs/a.txt", { size: 4, mtimeMs: 9 });
+    expect(isOwnWriteEvent("C:\\docs\\a.txt", { size: 4, mtimeMs: 9 })).toBe(true);
+    expect(isOwnWriteEvent("C:/docs/a.txt", { size: 8, mtimeMs: 10 })).toBe(false);
+
+    beginOwnWrite("C:/docs/a.txt");
+    finishOwnWrite("C:/docs/a.txt", { size: 4, mtimeMs: 9 });
+    expect(isOwnWriteEvent("C:\\docs\\a.txt", { size: 4, mtimeMs: 9 })).toBe(true);
+    cancelOwnWrite("C:/docs/missing.txt");
   });
 });

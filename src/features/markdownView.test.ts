@@ -16,14 +16,14 @@ const file = (name: string): OpenedFile => ({
 beforeEach(() => localStorage.clear());
 
 describe("markdown view preference", () => {
-  it("opens markdown in preview until the source has been shown", () => {
+  it("remembers the source choice without opening a file in the preview pane", () => {
     expect(markdownSourcePreferred()).toBe(false);
-    expect(tabFromFile(file("a.md")).source).toBe(false);
     rememberMarkdownSource(true);
-    expect(tabFromFile(file("b.md")).source).toBe(true);
+    expect(markdownSourcePreferred()).toBe(true);
+    const opened = tabFromFile(file("a.md"));
+    expect(opened.source).toBe(true);
+    expect(opened.preview).toBe(false);
+    expect(opened.previewOf).toBeNull();
     expect(tabFromFile(file("c.txt")).source).toBe(true);
-    rememberMarkdownSource(false);
-    expect(tabFromFile(file("d.md")).preview).toBe(true);
-    expect(tabFromFile(file("d.md")).source).toBe(false);
   });
 });
