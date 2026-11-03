@@ -42,8 +42,7 @@ function restore() {
 
 const base = baseVersion(JSON.parse(originals.conf).version);
 const version = localVersion(base);
-let status = 1;
-
+let exitCode;
 try {
   const conf = JSON.parse(originals.conf);
   conf.version = version;
@@ -62,9 +61,9 @@ try {
     shell: true,
     env: { ...process.env, CI: "true" },
   });
-  status = result.status ?? 1;
+  exitCode = result.status ?? 1;
 } finally {
   restore();
 }
 
-process.exit(status);
+process.exit(exitCode ?? 1);
