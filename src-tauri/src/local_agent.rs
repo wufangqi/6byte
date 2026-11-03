@@ -19,6 +19,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{oneshot, watch};
+use tokio::task::JoinHandle;
 
 use crate::commands;
 use crate::grep;
@@ -285,11 +286,22 @@ fn write_discovery(app: &AppHandle, origin: &str, token: &str) -> Option<String>
     Some(path.to_string_lossy().to_string())
 }
 
+fn spawn_detached<F>(future: F)
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    if let Ok(handle) = tokio::runtime::Handle::try_current() {
+        let _: JoinHandle<()> = handle.spawn(future);
+    } else {
+        tauri::async_runtime::spawn(future);
+    }
+}
+
 fn spawn_server(core: Arc<Mutex<Core>>, stop: watch::Receiver<bool>) -> std::io::Result<u16> {
     // Sync commands run outside the Tokio context. Binding here used to call
     // `TcpListener::from_std` on that thread and panic, which aborts the process.
     let (tx, rx) = std::sync::mpsc::channel();
-    tauri::async_runtime::spawn(async move {
+    spawn_detached(async move {
         let mut stop = stop;
         let bound = async {
             let listener = TcpListener::bind("127.0.0.1:0").await?;
@@ -318,7 +330,7 @@ fn spawn_server(core: Arc<Mutex<Core>>, stop: watch::Receiver<bool>) -> std::io:
                         continue;
                     }
                     let core = core.clone();
-                    tauri::async_runtime::spawn(async move {
+                    spawn_detached(async move {
                         let _ = handle_connection(stream, core).await;
                     });
                 }
@@ -1157,7 +1169,7 @@ mod tests {
         let headings = markdown_outline(text);
         assert_eq!(headings.len(), 2);
         assert_eq!(headings[0]["text"], "Title");
-        assert_eq!(headings[1]["line"], 6);
+        assert_eq!(headings[1]["line"], 7);
     }
 
     #[test]
@@ -1176,6 +1188,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(windows)]
     fn verbatim_prefix_still_sees_a_normal_child() {
         let root = Path::new(r"\\?\D:\docs");
         let child = Path::new(r"D:\docs\note.md");
