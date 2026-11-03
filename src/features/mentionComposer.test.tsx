@@ -178,4 +178,24 @@ describe("rewrite mention composer", () => {
     });
     expect(host.querySelector(".ai-stream__chip--mention")).toBeNull();
   });
+
+  it("closes the open popover when switching between rewrite and ask", async () => {
+    await renderPanel();
+    const history = host.querySelector<HTMLButtonElement>('[aria-label="历史对话"]');
+    expect(history).toBeTruthy();
+    await act(async () => {
+      history?.click();
+    });
+    expect(host.querySelector(".ai-stream__popover")).toBeTruthy();
+
+    const ask = [...host.querySelectorAll<HTMLButtonElement>(".ai-stream__mode")].find(
+      (button) => button.textContent?.trim() === "询问"
+    );
+    expect(ask).toBeTruthy();
+    await act(async () => {
+      ask?.click();
+    });
+    expect(host.querySelector(".ai-stream__popover")).toBeNull();
+    expect(host.querySelector(".ai-stream__mode.is-on")?.textContent?.trim()).toBe("询问");
+  });
 });

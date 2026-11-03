@@ -1590,7 +1590,10 @@ export default function AiStreamPanel({
               role="radio"
               aria-checked={mode === item}
               className={`ai-stream__mode${mode === item ? " is-on" : ""}`}
-              onClick={() => setMode(item)}
+              onClick={() => {
+                setMenu(null);
+                setMode(item);
+              }}
             >
               {t(`ai.mode.${item}`)}
             </button>
