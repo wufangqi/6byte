@@ -566,7 +566,7 @@ filler paragraph two
 filler paragraph three
 '@
 # Enough content that the preview actually overflows and can scroll.
-$filler = (1..60 | ForEach-Object { "filler line $_" }) -join "`n"
+$filler = (1..60 | ForEach-Object { "filler line $_" }) -join "`n`n"
 $outlineSource = "# One`n`n$filler`n`n## Two`n`n$filler`n`n### Three`n`n$filler"
 Set-Content -Path $outlineFile -Value $outlineSource -Encoding UTF8
 $socket = Set-SessionAndReload -Paths @($outlineFile)
@@ -575,20 +575,22 @@ $outline = @'
 (async () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
   await new Promise((resolve) => setTimeout(resolve, 700));
-  const toggle = document.querySelector('.markdown-preview__outline-toggle');
-  if (!toggle) return { toggle: false };
+  const preview = [...document.querySelectorAll('.markdown-preview')].pop();
+  const toggle = preview?.querySelector('.markdown-preview__outline-toggle');
+  if (!preview || !toggle) return { toggle: false };
   toggle.click();
-  await new Promise((resolve) => setTimeout(resolve, 200));
-  const items = [...document.querySelectorAll('.markdown-preview__outline-item')];
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  const items = [...preview.querySelectorAll('.markdown-preview__outline-item')];
   const last = items.find((item) => item.textContent.trim() === 'Three');
   if (last) last.click();
-  await new Promise((resolve) => setTimeout(resolve, 400));
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  const scroller = preview.querySelector('.markdown-preview__scroll');
   return {
     toggle: true,
     toggleLabel: toggle.textContent.trim(),
     count: items.length,
     labels: items.map((item) => item.textContent.trim()),
-    scrolled: (document.querySelector('.markdown-preview__scroll')?.scrollTop ?? 0) > 0,
+    scrolled: (scroller?.scrollTop ?? 0) > 0,
   };
 })()
 '@
@@ -612,6 +614,9 @@ $paste = @'
 (async () => {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'm', ctrlKey: true, shiftKey: true, bubbles: true }));
   await new Promise((resolve) => setTimeout(resolve, 600));
+  const sourceTab = [...document.querySelectorAll('.tab')].find((el) => (el.textContent || '').includes('paste-target.md') && !el.classList.contains('tab--preview'));
+  sourceTab?.click();
+  await new Promise((resolve) => setTimeout(resolve, 300));
   const editor = document.querySelector('.cm-content');
   editor.focus();
   const base64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -621,6 +626,8 @@ $paste = @'
   transfer.items.add(file);
   editor.dispatchEvent(new ClipboardEvent('paste', { clipboardData: transfer, bubbles: true, cancelable: true }));
   await new Promise((resolve) => setTimeout(resolve, 1500));
+  document.querySelector('.tab--preview')?.click();
+  await new Promise((resolve) => setTimeout(resolve, 600));
   const imageSrc = document.querySelector('.markdown-preview img')?.getAttribute('src') ?? null;
   document.querySelector('.markdown-preview__export')?.click();
   await new Promise((resolve) => setTimeout(resolve, 1500));
