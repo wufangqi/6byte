@@ -18,9 +18,6 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-// The dialog plugin pulls in comctl32 v6 APIs; the unit-test harness has no
-// application manifest, so linking it there fails to start the test binary.
-#[cfg(not(test))]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
