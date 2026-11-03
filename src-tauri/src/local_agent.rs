@@ -298,25 +298,18 @@ where
 }
 
 fn spawn_server(core: Arc<Mutex<Core>>, stop: watch::Receiver<bool>) -> std::io::Result<u16> {
-    // Sync commands run outside the Tokio context. Binding here used to call
-    // `TcpListener::from_std` on that thread and panic, which aborts the process.
-    let (tx, rx) = std::sync::mpsc::channel();
+    // Bind synchronously so callers get the port without blocking the runtime.
+    // Converting to a Tokio listener happens inside the async task; doing it on
+    // the command thread would require a reactor and used to panic.
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let port = listener.local_addr()?.port();
     spawn_detached(async move {
-        let mut stop = stop;
-        let bound = async {
-            let listener = TcpListener::bind("127.0.0.1:0").await?;
-            let port = listener.local_addr()?.port();
-            Ok::<_, std::io::Error>((listener, port))
-        }
-        .await;
-        let (listener, port) = match bound {
-            Ok(pair) => pair,
-            Err(error) => {
-                let _ = tx.send(Err(error));
-                return;
-            }
+        let listener = match TcpListener::from_std(listener) {
+            Ok(listener) => listener,
+            Err(_) => return,
         };
-        let _ = tx.send(Ok(port));
+        let mut stop = stop;
         loop {
             tokio::select! {
                 changed = stop.changed() => {
@@ -337,11 +330,7 @@ fn spawn_server(core: Arc<Mutex<Core>>, stop: watch::Receiver<bool>) -> std::io:
             }
         }
     });
-    rx.recv().unwrap_or_else(|_| {
-        Err(std::io::Error::other(
-            "local agent server stopped before binding",
-        ))
-    })
+    Ok(port)
 }
 
 async fn handle_connection(mut stream: TcpStream, core: Arc<Mutex<Core>>) -> std::io::Result<()> {
