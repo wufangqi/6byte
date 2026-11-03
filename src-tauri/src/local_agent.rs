@@ -1229,8 +1229,12 @@ mod tests {
             next_offer: 1,
             pending: HashMap::new(),
         }));
-        let (_tx, rx) = watch::channel(false);
+        let (tx, rx) = watch::channel(false);
         let port = spawn_server(core.clone(), rx).expect("bind");
+        // Keep the stop sender alive for the duration of the test process;
+        // dropping it makes `stop.changed()` return and the server exits
+        // before the first request.
+        std::mem::forget(tx);
         (port, core)
     }
 
