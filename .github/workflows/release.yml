@@ -137,6 +137,21 @@ jobs:
         with:
           workspaces: src-tauri
 
+      # The bundle expects the sidecar next to the universal binary. Tauri builds
+      # the main app for both architectures, but not the extra `[[bin]]`, so build
+      # and lipo it here before bundling.
+      - name: Build the universal MCP sidecar
+        if: runner.os == 'macOS'
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml --release --bin 6byte-mcp --target aarch64-apple-darwin
+          cargo build --manifest-path src-tauri/Cargo.toml --release --bin 6byte-mcp --target x86_64-apple-darwin
+          mkdir -p src-tauri/target/universal-apple-darwin/release
+          lipo -create \
+            src-tauri/target/aarch64-apple-darwin/release/6byte-mcp \
+            src-tauri/target/x86_64-apple-darwin/release/6byte-mcp \
+            -output src-tauri/target/universal-apple-darwin/release/6byte-mcp
+          file src-tauri/target/universal-apple-darwin/release/6byte-mcp
+
       - name: Build and attach ${{ matrix.name }}
         uses: tauri-apps/tauri-action@v0
         env:
