@@ -118,8 +118,12 @@ export function PanelIcon({ kind, size = 16 }: { kind: PanelIconKind; size?: num
 }
 
 export function UserBubble({ entry }: { entry: UserEntry }) {
+  const { t } = useI18n();
   return (
     <div className="ai-stream__user">
+      <span className="ai-stream__user-mode">
+        {t(entry.mode === "ask" ? "ai.action.ask" : "ai.action.rewrite")}
+      </span>
       {entry.chips.map((chip) => (
         <span key={`${chip.kind}-${chip.label}`} className="ai-stream__chip">
           <PanelIcon kind={chip.kind === "file" ? "file" : "text"} size={12} />

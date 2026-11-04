@@ -16,8 +16,8 @@ describe("AI component render smoke tests", () => {
     );
 
     expect(html).toContain("AI 面板");
-    expect(html).toContain("询问");
-    expect(html).toContain("请先在文档里选中一段文字。");
+    expect(html).toContain("提问");
+    expect(html).toContain("请先打开一个文件夹。");
   });
 
   it("renders the command palette dialog", () => {

@@ -256,7 +256,9 @@ export default function AiStreamPanel({
   const { t } = useI18n();
   const [instruction, setInstruction] = useState("");
   const [catalog, setCatalog] = useState<AiCatalog>(loadAiSettings);
-  const [mode, setMode] = useState<ChatMode>("rewrite");
+  const [mode, setMode] = useState<ChatMode>(() => (getSelectionSpan(tabId) ? "rewrite" : "ask"));
+  /** A manual Ask/Rewrite choice wins over the selection-based default. */
+  const actionTouched = useRef(false);
   const [documentOnly, setDocumentOnly] = useState(false);
   const [asking, setAsking] = useState(false);
   const [agentTrace, setAgentTrace] = useState<AgentTrace[]>([]);
@@ -267,7 +269,9 @@ export default function AiStreamPanel({
   const [rewriteSession, setRewriteSession] = useState<RewriteSession | null>(null);
   const [proposal, setProposal] = useState("");
   const [excluded, setExcluded] = useState<ContextPartId[]>([]);
-  const [span, setSpan] = useState<{ from: number; to: number; text: string } | null>(null);
+  const [span, setSpan] = useState<{ from: number; to: number; text: string } | null>(() =>
+    getSelectionSpan(tabId)
+  );
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([]);
   const [referenceText, setReferenceText] = useState("");
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -537,6 +541,22 @@ export default function AiStreamPanel({
       stopSource();
     };
   }, [tabId]);
+
+  // Until the person picks an action explicitly, follow the selection: selected
+  // text means rewrite, no selection means ask. The composer always shows the
+  // current action, so this default is visible rather than guessed silently.
+  useEffect(() => {
+    if (
+      actionTouched.current ||
+      entries.length > 0 ||
+      offer ||
+      running ||
+      asking ||
+      instruction.trim()
+    )
+      return;
+    setMode(span ? "rewrite" : "ask");
+  }, [span, entries.length, offer, running, asking, instruction]);
 
   useEffect(() => {
     if (!workspaceRoot) return;
@@ -1258,6 +1278,7 @@ export default function AiStreamPanel({
   };
 
   const convertAnswerToRewrite = (answer: string) => {
+    actionTouched.current = true;
     setMode("rewrite");
     setInstruction(t("ai.answer.rewriteSeed", { answer }));
     inputRef.current?.focus();
@@ -1278,6 +1299,8 @@ export default function AiStreamPanel({
     setPinnedMentions([]);
     setMentionQuery(null);
     setMenu(null);
+    actionTouched.current = false;
+    setMode(span ? "rewrite" : "ask");
     show(IDLE_STREAM);
   };
 
@@ -1398,6 +1421,13 @@ export default function AiStreamPanel({
   };
 
   const busy = mode === "ask" ? asking : running;
+  const chooseMode = (next: ChatMode) => {
+    if (busy) return;
+    actionTouched.current = true;
+    setMenu(null);
+    setMode(next);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
   const canSend =
     mode === "ask"
       ? Boolean((documentOnly || workspaceRoot) && instruction.trim()) && !running
@@ -1582,23 +1612,6 @@ export default function AiStreamPanel({
     >
       <div className="ai-stream__head">
         <strong className="ai-stream__title">{t("ai.panel.title")}</strong>
-        <div className="ai-stream__modes" role="radiogroup" aria-label={t("ai.mode.label")}>
-          {(["rewrite", "ask"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              role="radio"
-              aria-checked={mode === item}
-              className={`ai-stream__mode${mode === item ? " is-on" : ""}`}
-              onClick={() => {
-                setMenu(null);
-                setMode(item);
-              }}
-            >
-              {t(`ai.mode.${item}`)}
-            </button>
-          ))}
-        </div>
         <span className="ai-stream__spacer" />
         <span className="ai-stream__menu-anchor">
           <button
@@ -1670,7 +1683,15 @@ export default function AiStreamPanel({
         {entries.length === 0 ? (
           <div className="ai-stream__empty">
             <AppLogo className="ai-stream__empty-logo" />
-            <h3>{t(mode === "ask" ? "ai.panel.emptyAsk" : "ai.panel.emptyRewrite")}</h3>
+            <h3>
+              {t(
+                mode === "ask"
+                  ? "ai.panel.emptyAsk"
+                  : span || offer
+                    ? "ai.panel.emptyRewrite"
+                    : "ai.panel.emptyRewriteNoSelection"
+              )}
+            </h3>
             <p>
               {mode === "ask"
                 ? documentOnly
@@ -1678,7 +1699,11 @@ export default function AiStreamPanel({
                   : workspaceRoot
                     ? t("ai.mode.askHint")
                     : t("ai.mode.needWorkspace")
-                : t(sourceShown ? "ai.panel.emptyRewriteHint" : "ai.panel.emptyRewriteHintPreview")}
+                : span || offer
+                  ? t(
+                      sourceShown ? "ai.panel.emptyRewriteHint" : "ai.panel.emptyRewriteHintPreview"
+                    )
+                  : t("ai.panel.emptyRewriteNoSelectionHint")}
             </p>
           </div>
         ) : (
@@ -1720,6 +1745,28 @@ export default function AiStreamPanel({
           </div>
         )}
         <div className="ai-stream__composer">
+          <div
+            className="ai-stream__modes ai-stream__composer-modes"
+            role="group"
+            aria-label={t("ai.action.label")}
+          >
+            {(["ask", "rewrite"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                data-action={item}
+                aria-pressed={mode === item}
+                className={`ai-stream__mode${mode === item ? " is-on" : ""}`}
+                disabled={busy || (item === "rewrite" && !span && !offer)}
+                title={
+                  item === "rewrite" && !span && !offer ? t("ai.action.needSelection") : undefined
+                }
+                onClick={() => chooseMode(item)}
+              >
+                {t(`ai.action.${item}`)}
+              </button>
+            ))}
+          </div>
           {(pinnedMentions.length > 0 || (mode === "rewrite" && span && !offer)) && (
             <div className="ai-stream__composer-ctx">
               {mode === "rewrite" && span && !offer && (
@@ -1796,7 +1843,9 @@ export default function AiStreamPanel({
                 ? t("ai.mode.askPlaceholder")
                 : offer
                   ? t("ai.stream.followupPlaceholder")
-                  : t("ai.panel.placeholder")
+                  : span
+                    ? t("ai.panel.placeholder")
+                    : t("ai.action.needSelection")
             }
             onChange={(event) => {
               const value = event.target.value;
@@ -1993,8 +2042,20 @@ export default function AiStreamPanel({
             <button
               type="button"
               className={`ai-stream__send${busy ? " is-stop" : ""}`}
-              aria-label={busy ? t("ai.panel.stop") : t("ai.panel.send")}
-              title={busy ? t("ai.panel.stop") : t("ai.panel.send")}
+              aria-label={
+                busy
+                  ? t("ai.panel.stop")
+                  : mode === "ask"
+                    ? t("ai.action.sendAsk")
+                    : t("ai.action.sendRewrite")
+              }
+              title={
+                busy
+                  ? t("ai.panel.stop")
+                  : mode === "ask"
+                    ? t("ai.action.sendAsk")
+                    : t("ai.action.sendRewrite")
+              }
               disabled={!busy && !canSend}
               onClick={submit}
             >

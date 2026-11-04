@@ -26,6 +26,7 @@ import { getLocale, type Locale } from "../i18n/locale";
 import { translate } from "../i18n/messages";
 import { getResolvedTheme, type ResolvedTheme } from "../features/theme";
 import { completionExtension } from "./completion";
+import { viewPersistenceSuppressed } from "./viewLifetime";
 import type { DocEdit } from "./docEdits";
 import { rewritePreviewField } from "./rewritePreview";
 
@@ -186,6 +187,12 @@ export interface ExtensionOptions {
    * to leave the paste alone. Provided by the app (needs the document directory).
    */
   onPasteImage?: (file: File) => Promise<string | null>;
+  /**
+   * When this returns false, document and selection changes are dropped. Used
+   * while the editor is detached, where a DOM teardown would otherwise replace
+   * the buffer with the few lines still on screen.
+   */
+  editorLive?: () => boolean;
 }
 
 export function buildExtensions(
@@ -246,8 +253,18 @@ export function buildExtensions(
       },
     }),
     rewritePreviewField,
+    EditorState.transactionFilter.of((tr) => {
+      if (!options.editorLive || options.editorLive()) return tr;
+      if (tr.docChanged || tr.selection) return [];
+      return tr;
+    }),
     EditorView.updateListener.of((update) => {
-      // Keep the per-tab state cache fresh for saves, exports and inactive previews.
+      if (viewPersistenceSuppressed(update.view)) return;
+      const scroller = update.view.scrollDOM;
+      const laidOut = scroller.isConnected && scroller.clientHeight > 0;
+      // A detached editor reports a caret at 0 and a DOM that only holds the
+      // viewport. Neither is the reader's document.
+      if (!laidOut) return;
       options.onStateChanged?.(update.state);
       if (update.docChanged) {
         // O(1) statistics only: the full text never enters React state per keystroke.

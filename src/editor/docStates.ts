@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState } from "@codemirror/state";
 import { getLocale } from "../i18n/locale";
 import { getResolvedTheme } from "../features/theme";
 import type { DocEdit } from "./docEdits";
@@ -31,6 +31,8 @@ export interface DocStateInit {
   onSelectionChanged?: () => void;
   onStateChanged?: (state: EditorState) => void;
   onPasteImage?: (file: File) => Promise<string | null>;
+  /** Drops document/selection changes while the shared view is detached. */
+  editorLive?: () => boolean;
 }
 
 interface DocEntry {
@@ -38,6 +40,8 @@ interface DocEntry {
   version: number;
   filename: string;
   scrollTop: number;
+  /** Document position that was at the top of the viewport. */
+  scrollAnchor: number;
 }
 
 const entries = new Map<string, DocEntry>();
@@ -51,6 +55,7 @@ function createState(init: DocStateInit): EditorState {
       onSelectionChanged: init.onSelectionChanged,
       onStateChanged: init.onStateChanged,
       onPasteImage: init.onPasteImage,
+      editorLive: init.editorLive,
     }),
   });
 }
@@ -77,16 +82,23 @@ export function ensureDocState(tabId: string, init: DocStateInit): EditorState {
     version: init.version,
     filename: init.filename,
     scrollTop: existing?.scrollTop ?? 0,
+    scrollAnchor: existing?.scrollAnchor ?? 0,
   });
   return state;
 }
 
 /** Persist the live state (and scroll offset) of the tab currently in the view. */
-export function saveDocState(tabId: string, state: EditorState, scrollTop?: number): void {
+export function saveDocState(
+  tabId: string,
+  state: EditorState,
+  scrollTop?: number,
+  scrollAnchor?: number
+): void {
   const entry = entries.get(tabId);
   if (!entry) return;
   entry.state = state;
   if (typeof scrollTop === "number") entry.scrollTop = scrollTop;
+  if (typeof scrollAnchor === "number") entry.scrollAnchor = scrollAnchor;
 }
 
 export function getDocState(tabId: string): EditorState | null {
@@ -102,6 +114,37 @@ export function getDocText(tabId: string): string | null {
 /** Scroll offset remembered for a tab (restored after swapping it into the view). */
 export function getDocScrollTop(tabId: string): number {
   return entries.get(tabId)?.scrollTop ?? 0;
+}
+
+/** Document position that was at the top of the viewport for `tabId`. */
+export function getDocScrollAnchor(tabId: string): number {
+  return entries.get(tabId)?.scrollAnchor ?? 0;
+}
+
+/**
+ * Scroll offset of a scroller that is actually on screen.
+ *
+ * A detached node, or one hidden with `display: none`, reports `scrollTop` 0.
+ * Callers keep the last real offset and pass it back so a tab switch cannot
+ * overwrite the place the reader left.
+ */
+export function readScrollTop(scroller: HTMLElement, remembered: number): number {
+  if (!scroller.isConnected || scroller.clientHeight <= 0) return remembered;
+  return scroller.scrollTop;
+}
+
+/**
+ * The browser moved the caret to the start of the document while the editor
+ * was being hidden, swapped, or focused. A selection the reader placed at the
+ * start is left alone.
+ */
+export function selectionJumpedHome(
+  current: EditorSelection,
+  remembered: EditorSelection
+): boolean {
+  if (current.eq(remembered)) return false;
+  const main = current.main;
+  return main.empty && main.head === 0 && !(remembered.main.empty && remembered.main.head === 0);
 }
 
 export function dropDocState(tabId: string): void {

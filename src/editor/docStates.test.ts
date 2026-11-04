@@ -2,15 +2,19 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { undoDepth } from "@codemirror/commands";
 import { language } from "@codemirror/language";
+import { EditorSelection } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import {
   docStateCount,
   dropDocStatesExcept,
   ensureDocState,
+  getDocScrollAnchor,
   getDocScrollTop,
   getDocText,
+  readScrollTop,
   reconfigureDocStates,
   saveDocState,
+  selectionJumpedHome,
   type DocStateInit,
 } from "./docStates";
 
@@ -90,8 +94,38 @@ describe("per-tab editor states (M-06)", () => {
   it("remembers the scroll offset per tab", () => {
     const state = ensureDocState("a", init("hello"));
     expect(getDocScrollTop("a")).toBe(0);
-    saveDocState("a", state, 120);
+    saveDocState("a", state, 120, 40);
     expect(getDocScrollTop("a")).toBe(120);
+    expect(getDocScrollAnchor("a")).toBe(40);
+  });
+
+  it("keeps a remembered scroll when the scroller is detached or hidden", () => {
+    const laidOut = document.createElement("div");
+    document.body.append(laidOut);
+    Object.defineProperty(laidOut, "clientHeight", { value: 400 });
+    laidOut.scrollTop = 180;
+    expect(readScrollTop(laidOut, 10)).toBe(180);
+
+    const hidden = document.createElement("div");
+    document.body.append(hidden);
+    Object.defineProperty(hidden, "clientHeight", { value: 0 });
+    hidden.scrollTop = 0;
+    expect(readScrollTop(hidden, 180)).toBe(180);
+
+    const detached = document.createElement("div");
+    Object.defineProperty(detached, "clientHeight", { value: 400 });
+    detached.scrollTop = 0;
+    expect(readScrollTop(detached, 180)).toBe(180);
+    laidOut.remove();
+    hidden.remove();
+  });
+
+  it("detects a caret that the browser collapsed to the start", () => {
+    const left = EditorSelection.single(40);
+    expect(selectionJumpedHome(EditorSelection.single(0), left)).toBe(true);
+    expect(selectionJumpedHome(left, left)).toBe(false);
+    expect(selectionJumpedHome(EditorSelection.single(0), EditorSelection.single(0))).toBe(false);
+    expect(selectionJumpedHome(EditorSelection.single(12), left)).toBe(false);
   });
 
   it("reconfigures inactive states for theme / language without losing text", () => {

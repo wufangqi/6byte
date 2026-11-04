@@ -3,13 +3,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_META } from "../ipc/types";
+import { getSelectionSpan } from "../editor/registry";
 import { useFileTree } from "../stores/fileTree";
 import { useWorkspace } from "../stores/workspace";
 import AiStreamPanel from "./AiStreamPanel";
 
 vi.mock("../editor/registry", () => ({
   getEditorView: () => null,
-  getSelectionSpan: () => ({ from: 0, to: 2, text: "正文" }),
+  getSelectionSpan: vi.fn(() => ({ from: 0, to: 2, text: "正文" })),
   insertTextAtSelection: () => {},
   readBuffer: (_tabId: string, snapshot: string) => snapshot,
   subscribeDocChanges: () => () => {},
@@ -188,14 +189,33 @@ describe("rewrite mention composer", () => {
     });
     expect(host.querySelector(".ai-stream__popover")).toBeTruthy();
 
-    const ask = [...host.querySelectorAll<HTMLButtonElement>(".ai-stream__mode")].find(
-      (button) => button.textContent?.trim() === "询问"
-    );
+    const ask = host.querySelector<HTMLButtonElement>('[data-action="ask"]');
     expect(ask).toBeTruthy();
     await act(async () => {
       ask?.click();
     });
     expect(host.querySelector(".ai-stream__popover")).toBeNull();
-    expect(host.querySelector(".ai-stream__mode.is-on")?.textContent?.trim()).toBe("询问");
+    expect(host.querySelector(".ai-stream__mode.is-on")?.textContent?.trim()).toBe("提问");
+  });
+
+  it("defaults to rewrite when text is selected", async () => {
+    await renderPanel();
+    const rewrite = host.querySelector<HTMLButtonElement>('[data-action="rewrite"]');
+    expect(rewrite?.getAttribute("aria-pressed")).toBe("true");
+    expect(rewrite?.disabled).toBe(false);
+  });
+
+  it("defaults to ask without a selection and disables rewrite", async () => {
+    const selection = vi.mocked(getSelectionSpan);
+    selection.mockReturnValue(null);
+    try {
+      await renderPanel();
+      expect(host.querySelector('[data-action="ask"]')?.getAttribute("aria-pressed")).toBe("true");
+      expect(host.querySelector<HTMLButtonElement>('[data-action="rewrite"]')?.disabled).toBe(true);
+      expect(host.querySelector("textarea")?.getAttribute("placeholder")).toContain("例如");
+      expect(host.textContent).toContain("在工作区里查找并回答");
+    } finally {
+      selection.mockImplementation(() => ({ from: 0, to: 2, text: "正文" }));
+    }
   });
 });
