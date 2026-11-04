@@ -1,4 +1,4 @@
-﻿#requires -version 5.1
+#requires -version 5.1
 <#
 .SYNOPSIS
   AI smoke test for an installed debug-enabled 6byte build.
@@ -292,7 +292,7 @@ JSON.stringify({
     Assert-True $false 'selected rewrite block applies once' 'skipped because no review was offered'
   }
 
-  Invoke-CdpEval $socket "document.querySelector('.ai-stream__mode:not(.is-on)')?.click(); 'ok'" | Out-Null
+  Invoke-CdpEval $socket 'document.querySelector("[data-action=ask]")?.click(); ''ok''' | Out-Null
   Start-Sleep -Milliseconds 100
   $setAskInput = @'
 (() => {

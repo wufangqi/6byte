@@ -59,6 +59,7 @@ import {
 import { readBuffer, revealLineWhenReady } from "./editor/registry";
 import { dismissRewriteForSave } from "./editor/rewriteGate";
 import { dropDocStatesExcept } from "./editor/docStates";
+import { dropPreviewScrollExcept } from "./features/previewScroll";
 import { DEFAULT_META, type FileChangeEvent } from "./ipc/types";
 import { localizeError, t as tr, useI18n } from "./i18n";
 import { formatSize, formatTime } from "./lib/format";
@@ -711,7 +712,9 @@ export default function App() {
   // Forget the cached EditorState of closed tabs (M-06).
   useEffect(() => {
     const unsubscribe = useWorkspace.subscribe((state) => {
-      dropDocStatesExcept(new Set(state.tabs.map((tab) => tab.id)));
+      const open = new Set(state.tabs.map((tab) => tab.id));
+      dropDocStatesExcept(open);
+      dropPreviewScrollExcept(open);
     });
     return unsubscribe;
   }, []);

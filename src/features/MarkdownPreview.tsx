@@ -9,6 +9,7 @@ import {
 } from "../editor/registry";
 import { sourceRangeForPreviewSelection } from "./previewSelection";
 import { subscribePreviewJump } from "./previewJump";
+import { notePreviewScroll, previewScrollTop } from "./previewScroll";
 import { loadImageDataUrl } from "./images";
 import { useWorkspace } from "../stores/workspace";
 import { enhanceMermaidDiagram } from "./diagramViewport";
@@ -123,6 +124,7 @@ export default function MarkdownPreview({
   const [outlineOpen, setOutlineOpen] = useState(false);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const syncing = useRef<"editor" | "preview" | null>(null);
+  const scrollRestored = useRef(false);
   const { html, headings, slice } = rendered;
 
   const placeWindow = useCallback(
@@ -180,6 +182,26 @@ export default function MarkdownPreview({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [html]);
+
+  // The preview unmounts with the tab. Put the reader back where they left it
+  // once the document is tall enough to scroll.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || scrollRestored.current) return;
+    const top = previewScrollTop(tabId);
+    if (top <= 0) {
+      scrollRestored.current = true;
+      return;
+    }
+    if (scroller.clientHeight <= 0 || scroller.scrollHeight <= scroller.clientHeight) return;
+    adjusting.current = true;
+    scroller.scrollTop = top;
+    scrollRestored.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      adjusting.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [html, tabId]);
 
   // A selection in the preview becomes the editor selection, so Ctrl+K, the
   // floating AI action and the AI panel work the same with the source hidden.
@@ -514,7 +536,16 @@ export default function MarkdownPreview({
           })}
         </p>
       )}
-      <div className="markdown-preview__scroll" ref={scrollerRef} onClick={onPreviewClick}>
+      <div
+        className="markdown-preview__scroll"
+        ref={scrollerRef}
+        onClick={onPreviewClick}
+        onScroll={() => {
+          const node = scrollerRef.current;
+          if (!node || adjusting.current) return;
+          notePreviewScroll(tabId, node);
+        }}
+      >
         {html ? (
           <div
             key={resolvedTheme}

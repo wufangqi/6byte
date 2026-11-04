@@ -1809,6 +1809,7 @@ code {
 }
 
 .editor-frame {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   width: 100%;
@@ -1823,8 +1824,13 @@ code {
   min-height: 0;
 }
 
+/* Keep the source editor laid out while a preview tab is in front.
+   `display: none` zeroes scrollTop and collapses the caret to the start. */
 .editor-frame__source--off {
-  display: none;
+  position: absolute;
+  inset: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .editor-frame > .markdown-preview {
@@ -2431,6 +2437,15 @@ code {
   color: var(--accent);
 }
 
+.ai-stream__mode:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ai-stream__composer-modes {
+  margin-bottom: 6px;
+}
+
 .ai-stream__menu-anchor {
   position: relative;
   display: inline-flex;
@@ -2518,6 +2533,16 @@ code {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-size: var(--text-md);
+}
+
+.ai-stream__user-mode {
+  margin-right: auto;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-dim);
+  font-size: var(--text-xs);
+  line-height: 1.5;
 }
 
 .ai-stream__chip {
