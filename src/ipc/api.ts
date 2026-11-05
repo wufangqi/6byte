@@ -416,6 +416,15 @@ export function onLocalAgentCandidate(
   return listen<LocalAgentCandidate>("local-agent-candidate", (event) => handler(event.payload));
 }
 
+export interface LocalAgentOpen {
+  path: string;
+}
+
+export function onLocalAgentOpen(handler: (request: LocalAgentOpen) => void): Promise<() => void> {
+  if (!isTauri) return Promise.resolve(() => {});
+  return listen<LocalAgentOpen>("local-agent-open", (event) => handler(event.payload));
+}
+
 /** Pick a folder (used as the cross-file search root). */
 export async function pickDirectory(): Promise<string | null> {
   const selected = await openDialog({ directory: true, multiple: false });

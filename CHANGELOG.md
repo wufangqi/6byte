@@ -5,7 +5,12 @@
 
 ## [Unreleased]
 
-（下一版本）
+- `6byte-mcp` 新增 `open_document`：agent 可以按工作区路径把文件带进编辑器，再读取修订号并提交候选；工具同时带上只读 / 非破坏注解。
+- `6byte-mcp` 新增 `find_files` 和 `read_document`：按文件名模式递归查找（最多 200 个），读取 2 MB 以内的整篇文本，都不切换当前标签；`read_range` 的 `path` 省略时读当前打开的文件。
+- `propose_edit` 支持 `from == to` 的插入，不再要求候选必须替换一段已有文字。插入同样先显示候选，接受后才进入正文。
+- MCP 初始化按支持的协议版本协商，不再回显未支持的版本号。
+- 本地构建先编译 `6byte-mcp`，避免 NSIS 安装包带入上一次构建的旧 sidecar。
+- 新增 `scripts/e2e-mcp-smoke.mjs`（`pnpm e2e:mcp`）：覆盖协议协商、工具列表、查找 / 读取、打开文档、插入候选和密钥路径拒绝。
 
 ## [0.3.2] - 2026-11-03
 

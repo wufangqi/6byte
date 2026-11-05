@@ -12,7 +12,8 @@ use std::time::Duration;
 
 use serde_json::{json, Value};
 
-const KNOWN_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
+const SUPPORTED_VERSIONS: &[&str] = &["2024-11-05", "2025-03-26", "2025-06-18"];
+const LATEST_VERSION: &str = "2025-06-18";
 const BODY_CAP: usize = 8 * 1024 * 1024;
 
 struct Discovery {
@@ -83,18 +84,16 @@ fn initialize_result(params: Option<&Value>) -> Value {
         .and_then(|value| value.get("protocolVersion"))
         .and_then(Value::as_str)
         .unwrap_or("");
-    let protocol = if requested.is_empty() {
-        "2024-11-05".to_string()
-    } else if KNOWN_VERSIONS.contains(&requested) || looks_like_protocol(requested) {
+    let protocol = if SUPPORTED_VERSIONS.contains(&requested) {
         requested.to_string()
     } else {
-        "2024-11-05".to_string()
+        LATEST_VERSION.to_string()
     };
     json!({
         "protocolVersion": protocol,
         "capabilities": { "tools": { "listChanged": false } },
         "serverInfo": { "name": "6byte", "version": env!("CARGO_PKG_VERSION") },
-        "instructions": "这些工具面向 6byte 里打开的那份文档。propose_edit 必须带上 get_editor 的 revision 和字符偏移 from/to。它只提交候选，saved 为 false；人在范围内改过字时调用失败，正文不变。"
+        "instructions": "这些工具面向 6byte 里的工作区与当前文档。find_files 和 read_document 可先浏览、读取而不切换界面；要修改时用 open_document 打开文件，再用 get_editor 取 revision 和字符偏移；propose_edit 只提交候选，saved 为 false，人在范围内改过字时调用失败，正文不变。"
     })
 }
 
@@ -109,6 +108,39 @@ fn tool_list() -> Vec<Value> {
             "get_workspace",
             "读取当前工作区根目录。没有打开工作区时 root 为空。",
             json!({ "type": "object", "properties": {}, "additionalProperties": false }),
+        ),
+        tool(
+            "open_document",
+            "打开工作区里的一个文件，让它成为当前文档并返回正文。path 是相对工作区的路径。要修改一个还没打开的文件，先调用这个工具。",
+            json!({
+                "type": "object",
+                "properties": { "path": { "type": "string", "description": "相对工作区的文件路径" } },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "find_files",
+            "按文件名模式递归查找工作区文件，最多 200 个。pattern 用 * 和 ?，例如 *.md、README*。隐藏文件、依赖目录、密钥文件和禁读名单不会出现。",
+            json!({
+                "type": "object",
+                "properties": {
+                    "pattern": { "type": "string", "description": "文件名模式，例如 *.md" },
+                    "path": { "type": "string", "description": "相对工作区的起点目录，省略表示根" }
+                },
+                "required": ["pattern"],
+                "additionalProperties": false
+            }),
+        ),
+        tool(
+            "read_document",
+            "读取整个文本文件，不会切换当前文档。超过 2 MB 或二进制文件会拒绝。要修改它时，仍先用 open_document 打开。",
+            json!({
+                "type": "object",
+                "properties": { "path": { "type": "string", "description": "相对工作区的文件路径" } },
+                "required": ["path"],
+                "additionalProperties": false
+            }),
         ),
         tool(
             "list_dir",
@@ -134,15 +166,14 @@ fn tool_list() -> Vec<Value> {
         ),
         tool(
             "read_range",
-            "按从 1 开始的行号读取文件，一次最多 80 行。当前打开的文件读未保存正文。",
+            "按从 1 开始的行号读取文件，一次最多 80 行。path 省略时读当前打开的文件；当前打开的文件读未保存正文。",
             json!({
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string" },
+                    "path": { "type": "string", "description": "省略时用当前打开的文件" },
                     "start": { "type": "integer", "minimum": 1 },
                     "end": { "type": "integer", "minimum": 1 }
                 },
-                "required": ["path"],
                 "additionalProperties": false
             }),
         ),
@@ -157,7 +188,7 @@ fn tool_list() -> Vec<Value> {
         ),
         tool(
             "propose_edit",
-            "把一段替换交给当前文档审阅。revision、from、to 必须来自同一次 get_editor。人在范围内改过字时失败，正文不变；人在范围外打字时，编辑器挪到新位置再显示。接受前不会写入，saved 恒为 false。不要用写文件代替这个工具。",
+            "把一段替换或插入交给当前文档审阅。revision、from、to 必须来自同一次 get_editor；from 等于 to 时表示插入。人在范围内改过字时失败，正文不变；人在范围外打字时，编辑器挪到新位置再显示。接受前不会写入，saved 恒为 false。不要用写文件代替这个工具。",
             json!({
                 "type": "object",
                 "properties": {
@@ -174,10 +205,20 @@ fn tool_list() -> Vec<Value> {
 }
 
 fn tool(name: &str, description: &str, input_schema: Value) -> Value {
+    let read_only = matches!(
+        name,
+        "get_editor" | "get_workspace" | "list_dir" | "grep" | "read_range" | "outline"
+    );
     json!({
         "name": name,
         "description": description,
-        "inputSchema": input_schema
+        "inputSchema": input_schema,
+        "annotations": {
+            "readOnlyHint": read_only,
+            "destructiveHint": false,
+            "idempotentHint": read_only || name == "open_document",
+            "openWorldHint": false
+        }
     })
 }
 
@@ -194,6 +235,25 @@ fn call_tool(params: Option<&Value>, api: &dyn AgentApi) -> Value {
     let result = match name {
         "get_editor" => api.call("GET", "/v1/editor", None),
         "get_workspace" => api.call("GET", "/v1/workspace", None),
+        "open_document" => match required_str(&arguments, "path") {
+            Ok(path) => api.call("POST", "/v1/open", Some(&json!({ "path": path }))),
+            Err(message) => Err(message),
+        },
+        "read_document" => match required_str(&arguments, "path") {
+            Ok(path) => api.call("POST", "/v1/document", Some(&json!({ "path": path }))),
+            Err(message) => Err(message),
+        },
+        "find_files" => match required_str(&arguments, "pattern") {
+            Ok(pattern) => api.call(
+                "POST",
+                "/v1/find",
+                Some(&json!({
+                    "pattern": pattern,
+                    "path": arguments.get("path").and_then(Value::as_str).unwrap_or("")
+                })),
+            ),
+            Err(message) => Err(message),
+        },
         "list_dir" => api.call(
             "POST",
             "/v1/list_dir",
@@ -210,19 +270,18 @@ fn call_tool(params: Option<&Value>, api: &dyn AgentApi) -> Value {
             ),
             Err(message) => Err(message),
         },
-        "read_range" => match required_str(&arguments, "path") {
-            Ok(path) => {
-                let mut body = json!({ "path": path });
-                if let Some(start) = arguments.get("start").and_then(Value::as_u64) {
-                    body["start"] = json!(start);
-                }
-                if let Some(end) = arguments.get("end").and_then(Value::as_u64) {
-                    body["end"] = json!(end);
-                }
-                api.call("POST", "/v1/read_range", Some(&body))
+        "read_range" => {
+            let mut body = json!({
+                "path": arguments.get("path").and_then(Value::as_str).unwrap_or("")
+            });
+            if let Some(start) = arguments.get("start").and_then(Value::as_u64) {
+                body["start"] = json!(start);
             }
-            Err(message) => Err(message),
-        },
+            if let Some(end) = arguments.get("end").and_then(Value::as_u64) {
+                body["end"] = json!(end);
+            }
+            api.call("POST", "/v1/read_range", Some(&body))
+        }
         "outline" => api.call(
             "POST",
             "/v1/outline",
@@ -251,8 +310,8 @@ fn propose(arguments: &Value, api: &dyn AgentApi) -> Result<Value, String> {
     if text.trim().is_empty() {
         return Err("候选不能为空。不会写入文件。".to_string());
     }
-    if from >= to {
-        return Err("候选范围是空的。不会写入文件。".to_string());
+    if from > to {
+        return Err("候选范围不成立。不会写入文件。".to_string());
     }
     api.call(
         "POST",
@@ -434,16 +493,6 @@ fn parse_http(bytes: &[u8]) -> Result<Value, String> {
     Err(message.to_string())
 }
 
-fn looks_like_protocol(value: &str) -> bool {
-    let bytes = value.as_bytes();
-    bytes.len() >= 10
-        && bytes[4] == b'-'
-        && bytes[7] == b'-'
-        && bytes[..4].iter().all(u8::is_ascii_digit)
-        && bytes[5..7].iter().all(u8::is_ascii_digit)
-        && bytes[8..10].iter().all(u8::is_ascii_digit)
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Frame {
     Headers,
@@ -543,7 +592,7 @@ mod tests {
     }
 
     #[test]
-    fn newline_messages_round_trip_and_keep_the_clients_protocol() {
+    fn newline_messages_round_trip_and_negotiate_a_supported_version() {
         let raw = b"{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\"}}\n";
         let (message, frame) = read_message(&mut io::Cursor::new(&raw[..]))
             .unwrap()
@@ -560,7 +609,7 @@ mod tests {
         assert!(!String::from_utf8_lossy(&out).contains("Content-Length"));
         let parsed: Value =
             serde_json::from_str(std::str::from_utf8(&out).unwrap().trim()).unwrap();
-        assert_eq!(parsed["result"]["protocolVersion"], "2025-11-25");
+        assert_eq!(parsed["result"]["protocolVersion"], "2025-06-18");
     }
 
     #[test]
@@ -594,6 +643,9 @@ mod tests {
             .collect();
         assert!(names.contains(&"propose_edit"));
         assert!(names.contains(&"get_editor"));
+        assert!(names.contains(&"open_document"));
+        assert!(names.contains(&"read_document"));
+        assert!(names.contains(&"find_files"));
         assert!(handle_rpc(&json!({ "method": "notifications/initialized" }), &api).is_none());
     }
 
@@ -672,6 +724,134 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("正文没有改动"));
+    }
+
+    #[test]
+    fn propose_edit_accepts_an_insertion_at_one_position() {
+        let api = Scripted {
+            result: Ok(
+                json!({ "status": "offered", "saved": false, "from": 4, "to": 4, "revision": 2 }),
+            ),
+            calls: Mutex::new(Vec::new()),
+        };
+        let response = handle_rpc(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": {
+                    "name": "propose_edit",
+                    "arguments": { "revision": 2, "from": 4, "to": 4, "text": "inserted" }
+                }
+            }),
+            &api,
+        )
+        .unwrap();
+        assert!(response["result"].get("isError").is_none());
+        let calls = api.calls.lock().unwrap();
+        assert_eq!(calls[0].1, "/v1/candidate");
+        assert_eq!(calls[0].2.as_ref().unwrap()["from"], 4);
+        assert_eq!(calls[0].2.as_ref().unwrap()["to"], 4);
+    }
+
+    #[test]
+    fn open_document_forwards_a_workspace_path() {
+        let api = Scripted {
+            result: Ok(json!({ "path": "/work/README.md", "revision": 1, "text": "# hi" })),
+            calls: Mutex::new(Vec::new()),
+        };
+        let response = handle_rpc(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {
+                    "name": "open_document",
+                    "arguments": { "path": "docs/README.md" }
+                }
+            }),
+            &api,
+        )
+        .unwrap();
+        assert!(response["result"].get("isError").is_none());
+        let calls = api.calls.lock().unwrap();
+        assert_eq!(calls[0].0, "POST");
+        assert_eq!(calls[0].1, "/v1/open");
+        assert_eq!(calls[0].2.as_ref().unwrap()["path"], "docs/README.md");
+    }
+
+    #[test]
+    fn read_document_forwards_a_workspace_path() {
+        let api = Scripted {
+            result: Ok(json!({ "path": "/work/README.md", "text": "# hi", "lines": 1 })),
+            calls: Mutex::new(Vec::new()),
+        };
+        let response = handle_rpc(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "tools/call",
+                "params": {
+                    "name": "read_document",
+                    "arguments": { "path": "docs/README.md" }
+                }
+            }),
+            &api,
+        )
+        .unwrap();
+        assert!(response["result"].get("isError").is_none());
+        let calls = api.calls.lock().unwrap();
+        assert_eq!(calls[0].1, "/v1/document");
+        assert_eq!(calls[0].2.as_ref().unwrap()["path"], "docs/README.md");
+    }
+
+    #[test]
+    fn find_files_forwards_the_pattern_and_start() {
+        let api = Scripted {
+            result: Ok(json!({ "files": [], "truncated": false })),
+            calls: Mutex::new(Vec::new()),
+        };
+        let response = handle_rpc(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "tools/call",
+                "params": {
+                    "name": "find_files",
+                    "arguments": { "pattern": "*.md", "path": "docs" }
+                }
+            }),
+            &api,
+        )
+        .unwrap();
+        assert!(response["result"].get("isError").is_none());
+        let calls = api.calls.lock().unwrap();
+        assert_eq!(calls[0].1, "/v1/find");
+        assert_eq!(calls[0].2.as_ref().unwrap()["pattern"], "*.md");
+        assert_eq!(calls[0].2.as_ref().unwrap()["path"], "docs");
+    }
+
+    #[test]
+    fn read_range_without_a_path_uses_the_current_document() {
+        let api = Scripted {
+            result: Ok(json!({ "start": 1, "end": 1, "text": "" })),
+            calls: Mutex::new(Vec::new()),
+        };
+        let response = handle_rpc(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 13,
+                "method": "tools/call",
+                "params": { "name": "read_range", "arguments": { "start": 3, "end": 4 } }
+            }),
+            &api,
+        )
+        .unwrap();
+        assert!(response["result"].get("isError").is_none());
+        let calls = api.calls.lock().unwrap();
+        assert_eq!(calls[0].1, "/v1/read_range");
+        assert_eq!(calls[0].2.as_ref().unwrap()["path"], "");
+        assert_eq!(calls[0].2.as_ref().unwrap()["start"], 3);
     }
 
     #[test]

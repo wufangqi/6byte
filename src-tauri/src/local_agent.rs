@@ -11,7 +11,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -23,12 +23,15 @@ use tokio::task::JoinHandle;
 
 use crate::commands;
 use crate::grep;
+use crate::skip::is_skipped_dir;
 use crate::tree::list_dir_children;
 
 const EDITOR_TEXT_CAP: usize = 400_000;
 const SELECTION_CAP: usize = 32_000;
 const CANDIDATE_CAP: usize = 64 * 1024;
 const READ_RANGE_CAP: u64 = 80;
+const DOCUMENT_CAP: usize = 2 * 1024 * 1024;
+const FIND_CAP: usize = 200;
 const GREP_CAP: usize = 40;
 const BODY_CAP: usize = 256 * 1024;
 const HEADER_CAP: usize = 8 * 1024;
@@ -441,6 +444,8 @@ async fn respond(request: &HttpRequest, core: &Arc<Mutex<Core>>) -> Vec<u8> {
     let path = request.path.split('?').next().unwrap_or("");
     let result = if request.method == "POST" && path == "/v1/candidate" {
         offer_candidate(core, &request.body).await
+    } else if request.method == "POST" && path == "/v1/open" {
+        open_document(core, &request.body).await
     } else {
         dispatch(request, core)
     };
@@ -475,6 +480,9 @@ fn dispatch(request: &HttpRequest, core: &Arc<Mutex<Core>>) -> Result<Value, Rej
                 "POST /v1/grep",
                 "POST /v1/read_range",
                 "POST /v1/outline",
+                "POST /v1/find",
+                "POST /v1/document",
+                "POST /v1/open",
                 "POST /v1/candidate"
             ]
         })),
@@ -489,6 +497,8 @@ fn dispatch(request: &HttpRequest, core: &Arc<Mutex<Core>>) -> Result<Value, Rej
         ("POST", "/v1/grep") => search(core, &request.body),
         ("POST", "/v1/read_range") => read_span(core, &request.body),
         ("POST", "/v1/outline") => outline_of(core, &request.body),
+        ("POST", "/v1/find") => find_files(core, &request.body),
+        ("POST", "/v1/document") => read_document(core, &request.body),
         _ => reject(404, "没有这个接口。"),
     }
 }
@@ -498,8 +508,11 @@ fn editor_view(core: &Arc<Mutex<Core>>) -> Result<Value, Rejection> {
     if blocked_editor(&guard) {
         return reject(403, "拒绝：当前文件是隐藏文件、密钥文件或在禁读名单里。");
     }
-    let editor = &guard.editor;
-    Ok(json!({
+    Ok(editor_json(&guard.editor))
+}
+
+fn editor_json(editor: &EditorSnapshot) -> Value {
+    json!({
         "path": display_path(Path::new(&editor.path)),
         "name": editor.name,
         "revision": editor.revision,
@@ -510,7 +523,7 @@ fn editor_view(core: &Arc<Mutex<Core>>) -> Result<Value, Rejection> {
             "to": editor.selection_to,
             "text": editor.selection_text,
         }
-    }))
+    })
 }
 
 fn blocked_editor(core: &Core) -> bool {
@@ -590,6 +603,123 @@ fn search(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
     }))
 }
 
+fn read_document(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
+    let requested = json_path(body);
+    if requested.trim().is_empty() {
+        return reject(400, "需要一个文件路径。");
+    }
+    let (root, denylist) = gate(core)?;
+    let path = resolve(&root, &requested)?;
+    if blocked(&root, &denylist, &path) {
+        return reject(403, "拒绝：这是隐藏文件、密钥文件或在禁读名单里。");
+    }
+    let file =
+        commands::read_file(path.to_string_lossy().to_string()).map_err(|error| Rejection {
+            status: 400,
+            message: error,
+        })?;
+    if file.content.len() > DOCUMENT_CAP {
+        return reject(400, "文件太大，read_document 只读取 2 MB 以内的文本。");
+    }
+    Ok(json!({
+        "path": display_path(&path),
+        "name": file.name,
+        "text": file.content,
+        "lines": file.content.lines().count(),
+        "truncated": false,
+    }))
+}
+
+fn find_files(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
+    let value = parse_body(body)?;
+    let pattern = value
+        .get("pattern")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if pattern.is_empty() {
+        return reject(400, "需要一个文件名模式，例如 *.md。");
+    }
+    let requested = value
+        .get("path")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    let (root, denylist) = gate(core)?;
+    let start = resolve(&root, &requested)?;
+    if !start.is_dir() {
+        return reject(400, "起点不是文件夹。");
+    }
+    if blocked(&root, &denylist, &start) {
+        return reject(403, "拒绝：这是隐藏文件、密钥文件或在禁读名单里。");
+    }
+    let mut files = Vec::new();
+    let mut truncated = false;
+    collect_files(
+        &start,
+        &root,
+        &denylist,
+        &glob_regex(&pattern),
+        &mut files,
+        &mut truncated,
+        0,
+    );
+    Ok(json!({ "files": files, "truncated": truncated }))
+}
+
+fn collect_files(
+    dir: &Path,
+    root: &Path,
+    denylist: &[String],
+    pattern: &regex::Regex,
+    files: &mut Vec<Value>,
+    truncated: &mut bool,
+    depth: usize,
+) {
+    if *truncated || files.len() >= FIND_CAP {
+        *truncated = true;
+        return;
+    }
+    if depth > 32 {
+        *truncated = true;
+        return;
+    }
+    let Ok(read) = fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<_> = read.filter_map(Result::ok).collect();
+    entries.sort_by_key(|entry| entry.file_name());
+    for entry in entries {
+        if *truncated || files.len() >= FIND_CAP {
+            *truncated = true;
+            return;
+        }
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if file_type.is_symlink() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.is_empty() || name.starts_with('.') || is_skipped_dir(&name) {
+            continue;
+        }
+        let path = entry.path();
+        if blocked(root, denylist, &path) {
+            continue;
+        }
+        if file_type.is_dir() {
+            collect_files(&path, root, denylist, pattern, files, truncated, depth + 1);
+        } else if file_type.is_file() && pattern.is_match(&name) {
+            files.push(json!({
+                "path": display_path(&path),
+                "name": name,
+            }));
+        }
+    }
+}
+
 fn read_span(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
     let value = parse_body(body)?;
     let requested = value
@@ -617,7 +747,14 @@ fn read_span(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
         })?;
         (root, guard.denylist.clone(), guard.editor.clone())
     };
-    let path = resolve(&root, &requested)?;
+    let path = if requested.trim().is_empty() {
+        if editor.path.is_empty() {
+            return reject(409, "没有打开的文件。请带上 path。");
+        }
+        PathBuf::from(&editor.path)
+    } else {
+        resolve(&root, &requested)?
+    };
     if blocked(&root, &denylist, &path) {
         return reject(403, "拒绝：这是隐藏文件、密钥文件或在禁读名单里。");
     }
@@ -709,8 +846,8 @@ async fn offer_candidate(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, 
     let Some(to) = value.get("to").and_then(Value::as_u64) else {
         return reject(400, "候选需要带上修订号和范围。不会写入文件。");
     };
-    if from >= to {
-        return reject(400, "候选范围是空的。不会写入文件。");
+    if from > to {
+        return reject(400, "候选范围不成立。不会写入文件。");
     }
     if from > u64::from(u32::MAX) || to > u64::from(u32::MAX) {
         return reject(400, "候选范围太大。不会写入文件。");
@@ -767,6 +904,47 @@ async fn offer_candidate(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, 
         Ok(Ok(OfferDecision::Unavailable)) => reject(409, "候选没有放进编辑器。正文没有改动。"),
         _ => reject(409, "编辑器没有确认这次候选。正文没有改动。"),
     }
+}
+
+async fn open_document(core: &Arc<Mutex<Core>>, body: &[u8]) -> Result<Value, Rejection> {
+    let requested = json_path(body);
+    if requested.trim().is_empty() {
+        return reject(400, "需要一个文件路径。");
+    }
+    let (root, denylist) = gate(core)?;
+    let path = resolve(&root, &requested)?;
+    if blocked(&root, &denylist, &path) {
+        return reject(403, "拒绝：路径是隐藏文件、密钥文件或在禁读名单里。");
+    }
+    if !path.is_file() {
+        return reject(400, "路径不是文件。");
+    }
+    let size = fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+    if size > crate::bigfile::L2_MAX_BYTES {
+        return reject(400, "文件太大，MCP 只能把可编辑的文本带进编辑器。");
+    }
+    let (app, display) = {
+        let guard = core.lock().expect("local agent core");
+        let Some(app) = guard.app.clone() else {
+            return reject(409, "编辑器没有接上。");
+        };
+        (app, display_path(&path))
+    };
+    let _ = app.emit("local-agent-open", json!({ "path": display }));
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        {
+            let guard = core.lock().expect("local agent core");
+            if !guard.editor.path.is_empty() && same_path(Path::new(&guard.editor.path), &path) {
+                return Ok(editor_json(&guard.editor));
+            }
+        }
+        if Instant::now() >= deadline {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    reject(409, "编辑器没有确认打开这个文件。")
 }
 
 fn gate(core: &Arc<Mutex<Core>>) -> Result<(PathBuf, Vec<String>), Rejection> {
@@ -1143,6 +1321,40 @@ pub fn local_agent_set_editor(agent: tauri::State<'_, LocalAgent>, update: Edito
 mod tests {
     use super::*;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[test]
+    fn collect_files_skips_hidden_and_dependency_dirs() {
+        let root = std::env::temp_dir().join(format!("6byte-find-{}", std::process::id()));
+        let docs = root.join("docs");
+        let deps = root.join("node_modules");
+        fs::create_dir_all(&docs).unwrap();
+        fs::create_dir_all(&deps).unwrap();
+        fs::write(docs.join("a.md"), "# a").unwrap();
+        fs::write(docs.join("b.txt"), "b").unwrap();
+        fs::write(docs.join(".hidden.md"), "hidden").unwrap();
+        fs::write(docs.join(".env"), "secret").unwrap();
+        fs::write(deps.join("c.md"), "# c").unwrap();
+        let canonical = root.canonicalize().unwrap();
+        let mut files = Vec::new();
+        let mut truncated = false;
+        collect_files(
+            &canonical,
+            &canonical,
+            &[],
+            &glob_regex("*.md"),
+            &mut files,
+            &mut truncated,
+            0,
+        );
+        let names: Vec<String> = files
+            .iter()
+            .filter_map(|file| file.get("name").and_then(Value::as_str))
+            .map(str::to_string)
+            .collect();
+        assert_eq!(names, vec!["a.md"]);
+        assert!(!truncated);
+        let _ = fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn token_compare_rejects_a_different_value() {

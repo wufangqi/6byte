@@ -55,6 +55,17 @@ try {
   manifest.version = version;
   writeFileSync(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
   console.log(`local version ${version}`);
+  // The bundler picks up an existing target/release/6byte-mcp.exe but does not
+  // build it, so build the sidecar first or the installer ships a stale copy.
+  const sidecar = spawnSync("cargo", ["build", "--release", "--bin", "6byte-mcp"], {
+    cwd: join(root, "src-tauri"),
+    stdio: "inherit",
+    shell: true,
+    env: { ...process.env, CI: "true" },
+  });
+  if ((sidecar.status ?? 1) !== 0) {
+    throw new Error("6byte-mcp build failed");
+  }
   const result = spawnSync("pnpm", ["exec", "tauri", "build", "--bundles", "nsis"], {
     cwd: root,
     stdio: "inherit",

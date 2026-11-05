@@ -204,6 +204,13 @@ export default function App() {
     []
   );
 
+  const openAgentPath = useCallback(
+    (path: string) => {
+      void openPaths([path]);
+    },
+    [openPaths]
+  );
+
   const openViaDialog = useCallback(async () => {
     try {
       const paths = await pickOpenPaths();
@@ -961,7 +968,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <LocalAgentHost />
+      <LocalAgentHost onOpenDocument={openAgentPath} />
       <MenuBar
         onNew={() => useWorkspace.getState().newTab()}
         onNewWindow={() => void createWindow()}
