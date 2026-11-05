@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e:mcp": "node scripts/e2e-mcp-smoke.mjs",
     "tauri": "tauri",
     "build:local": "node scripts/build-local.mjs"
   },

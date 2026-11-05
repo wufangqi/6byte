@@ -3,7 +3,12 @@ import type { EditorView } from "@codemirror/view";
 import { getEditorView, subscribeDocChanges, subscribeSelectionChanges } from "../editor/registry";
 import { clearRewritePreview, commitRewrite, showRewritePreview } from "../editor/rewritePreview";
 import { useI18n } from "../i18n";
-import { isTauri, onLocalAgentCandidate, resolveLocalAgentCandidate } from "../ipc/api";
+import {
+  isTauri,
+  onLocalAgentCandidate,
+  onLocalAgentOpen,
+  resolveLocalAgentCandidate,
+} from "../ipc/api";
 import { samePath } from "../lib/paths";
 import { selectActiveTab, useWorkspace } from "../stores/workspace";
 import { useFileTree } from "../stores/fileTree";
@@ -40,11 +45,20 @@ interface AgentCopy {
  * A candidate carries the revision the agent read. Typing outside that range
  * moves it; typing inside drops it. Accept is what writes the text.
  */
-export default function LocalAgentHost() {
+export default function LocalAgentHost({
+  onOpenDocument,
+}: {
+  onOpenDocument?: (path: string) => void;
+}) {
   const { t } = useI18n();
+  const openRef = useRef(onOpenDocument);
   const logs = useRef(new Map<string, RevisionLog>());
   const versions = useRef(new Map<string, number>());
   const shown = useRef<ShownCandidate | null>(null);
+  useEffect(() => {
+    openRef.current = onOpenDocument;
+  }, [onOpenDocument]);
+
   const copy = useRef<AgentCopy>({
     stale: "",
     wrongFile: "",
@@ -206,7 +220,14 @@ export default function LocalAgentHost() {
 
     if (!isTauri) return;
     let stop = () => {};
+    let stopOpen = () => {};
     let alive = true;
+    void onLocalAgentOpen((request) => {
+      openRef.current?.(request.path);
+    }).then((unlisten) => {
+      if (!alive) unlisten();
+      else stopOpen = unlisten;
+    });
     void onLocalAgentCandidate((candidate) => {
       let settled = false;
       const finish = (
@@ -258,6 +279,7 @@ export default function LocalAgentHost() {
     return () => {
       alive = false;
       stop();
+      stopOpen();
     };
   }, [t]);
 

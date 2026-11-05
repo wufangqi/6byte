@@ -23,8 +23,17 @@ function mapBatch(
   from: number,
   to: number
 ): { from: number; to: number } | null {
-  if (from < 0 || from >= to) return null;
+  if (from < 0 || from > to) return null;
   let delta = 0;
+  if (from === to) {
+    // Insertion point: any edit that covers it makes the position ambiguous.
+    for (const edit of edits) {
+      if (edit.from <= from && edit.to > from) return null;
+      if (edit.from === from && edit.to === from) return null;
+      if (edit.to <= from) delta += edit.insert - (edit.to - edit.from);
+    }
+    return { from: from + delta, to: from + delta };
+  }
   for (const edit of edits) {
     if (edit.from < to && edit.to > from) return null;
     if (edit.to <= from) delta += edit.insert - (edit.to - edit.from);
@@ -74,7 +83,7 @@ export function placeCandidate(
   | { status: "offered"; from: number; to: number; revision: number }
   | { status: "stale"; revision: number } {
   const mapped = log.rebase(seen, from, to);
-  if (!mapped || mapped.from < 0 || mapped.to > docLength || mapped.from >= mapped.to) {
+  if (!mapped || mapped.from < 0 || mapped.to > docLength || mapped.from > mapped.to) {
     return { status: "stale", revision: log.revision };
   }
   return { status: "offered", from: mapped.from, to: mapped.to, revision: log.revision };

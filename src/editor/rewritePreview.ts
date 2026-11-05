@@ -1,5 +1,11 @@
 import { undo } from "@codemirror/commands";
-import { StateEffect, StateField, type EditorState, type TransactionSpec } from "@codemirror/state";
+import {
+  StateEffect,
+  StateField,
+  type EditorState,
+  type Range,
+  type TransactionSpec,
+} from "@codemirror/state";
 import { Decoration, EditorView, WidgetType, type DecorationSet } from "@codemirror/view";
 
 /**
@@ -117,15 +123,24 @@ class RewriteWidget extends WidgetType {
 }
 
 function previewDecorations(preview: RewritePreview): DecorationSet {
-  const original = Decoration.mark({
-    class: "cm-ai-original",
-    attributes: { title: preview.originalLabel },
-  }).range(preview.from, preview.to);
-  const label = Decoration.widget({
-    widget: new LabelWidget(preview.originalLabel, "original"),
-    side: -1,
-  }).range(preview.from);
-  const marks = [label, original];
+  const marks: Range<Decoration>[] = [];
+  // An empty range is an insertion: there is no original text to mark, so the
+  // proposal widget itself sits at the insertion point.
+  const insertion = preview.from === preview.to;
+  if (!insertion) {
+    marks.push(
+      Decoration.widget({
+        widget: new LabelWidget(preview.originalLabel, "original"),
+        side: -1,
+      }).range(preview.from)
+    );
+    marks.push(
+      Decoration.mark({
+        class: "cm-ai-original",
+        attributes: { title: preview.originalLabel },
+      }).range(preview.from, preview.to)
+    );
+  }
   if (preview.text) {
     marks.push(
       Decoration.widget({
@@ -138,9 +153,10 @@ function previewDecorations(preview: RewritePreview): DecorationSet {
           preview.discardLabel
         ),
         side: 1,
-      }).range(preview.to)
+      }).range(insertion ? preview.from : preview.to)
     );
   }
+  if (marks.length === 0) return Decoration.none;
   return Decoration.set(marks, true);
 }
 
@@ -164,7 +180,7 @@ export const rewritePreviewField = StateField.define<DecorationSet>({
 });
 
 function inRange(state: EditorState, preview: RewritePreview): boolean {
-  return preview.from >= 0 && preview.to <= state.doc.length && preview.from < preview.to;
+  return preview.from >= 0 && preview.to <= state.doc.length && preview.from <= preview.to;
 }
 
 export function showRewritePreview(view: EditorView, preview: RewritePreview): void {
@@ -179,7 +195,7 @@ export function clearRewritePreview(view: EditorView): void {
 
 /** Replace the marked range in one history entry. One undo restores the original. */
 export function commitRewrite(view: EditorView, from: number, to: number, text: string): boolean {
-  if (from < 0 || to > view.state.doc.length || from >= to) return false;
+  if (from < 0 || to > view.state.doc.length || from > to) return false;
   view.dispatch(commitSpec(from, to, text));
   return true;
 }

@@ -54,6 +54,33 @@ describe("candidate revision", () => {
     expect(placeCandidate(log, 0, 6, 11, 40)).toEqual({ status: "stale", revision: 2 });
   });
 
+  it("shifts an insertion point when the person types before it", () => {
+    const log = new RevisionLog();
+    log.note([{ from: 2, to: 2, insert: 3 }]);
+    expect(placeCandidate(log, 0, 6, 6, 23)).toEqual({
+      status: "offered",
+      from: 9,
+      to: 9,
+      revision: 1,
+    });
+  });
+
+  it("drops an insertion point when the person types at it", () => {
+    const log = new RevisionLog();
+    log.note([{ from: 6, to: 6, insert: 1 }]);
+    expect(placeCandidate(log, 0, 6, 6, 21)).toEqual({ status: "stale", revision: 1 });
+  });
+
+  it("allows an insertion at the end of the document", () => {
+    const log = new RevisionLog();
+    expect(placeCandidate(log, 0, 20, 20, 20)).toEqual({
+      status: "offered",
+      from: 20,
+      to: 20,
+      revision: 0,
+    });
+  });
+
   it("drops a candidate whose revision was not observed", () => {
     const log = new RevisionLog();
     log.note([{ from: 0, to: 0, insert: 1 }]);

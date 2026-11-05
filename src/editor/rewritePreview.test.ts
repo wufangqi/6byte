@@ -45,6 +45,50 @@ describe("rewrite preview", () => {
     parent.remove();
   });
 
+  it("shows an insertion without marking original text, then one undo removes it", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({
+        doc: "ab",
+        extensions: [history(), rewritePreviewField],
+      }),
+    });
+
+    showRewritePreview(view, {
+      from: 1,
+      to: 1,
+      text: "X",
+      originalLabel: "原文",
+      rewriteLabel: "改写",
+    });
+    expect(view.state.doc.toString()).toBe("ab");
+    expect(view.dom.querySelector(".cm-ai-original")).toBeNull();
+    expect(view.dom.textContent).toContain("X");
+
+    expect(commitRewrite(view, 1, 1, "X")).toBe(true);
+    expect(view.state.doc.toString()).toBe("aXb");
+    expect(undoRewrite(view)).toBe(true);
+    expect(view.state.doc.toString()).toBe("ab");
+
+    view.destroy();
+    parent.remove();
+  });
+
+  it("refuses a range whose end precedes its start", () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const view = new EditorView({
+      parent,
+      state: EditorState.create({ doc: "ab", extensions: [history(), rewritePreviewField] }),
+    });
+    expect(commitRewrite(view, 2, 1, "X")).toBe(false);
+    expect(view.state.doc.toString()).toBe("ab");
+    view.destroy();
+    parent.remove();
+  });
+
   it("exposes per-proposal decisions in the editor instead of the side panel", () => {
     const parent = document.createElement("div");
     document.body.append(parent);
