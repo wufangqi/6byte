@@ -259,7 +259,7 @@ export default function SshTree({ profileId, homePath }: Props) {
   return (
     <div className="ssh-tree" ref={treeRef}>
       <input
-        className="ai-settings__input ssh-tree__jump"
+        className="settings__input ssh-tree__jump"
         placeholder={t("ssh.tree.jump.placeholder")}
         value={jumpPath}
         onChange={(e) => setJumpPath(e.target.value)}

@@ -136,15 +136,25 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
         aria-label={profile ? t("ssh.connect.titleEdit") : t("ssh.connect.title")}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="dialog__title">
-          {profile ? t("ssh.connect.titleEdit") : t("ssh.connect.title")}
-        </h2>
+        <div className="dialog__head">
+          <h2 className="dialog__title">
+            {profile ? t("ssh.connect.titleEdit") : t("ssh.connect.title")}
+          </h2>
+          <button
+            type="button"
+            className="dialog__close"
+            aria-label={t("ssh.connect.cancel")}
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
 
         <div className="ssh-dialog__fields">
           <label className="ssh-dialog__field">
             <span>{t("ssh.connect.name")}</span>
             <input
-              className="ssh-dialog__name ai-settings__input"
+              className="ssh-dialog__name settings__input"
               value={form.name}
               onChange={(e) => setField("name", e.target.value)}
               autoFocus
@@ -155,7 +165,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
             <label className="ssh-dialog__field ssh-dialog__field--grow">
               <span>{t("ssh.connect.host")}</span>
               <input
-                className="ai-settings__input"
+                className="settings__input"
                 value={form.host}
                 onChange={(e) => setField("host", e.target.value)}
               />
@@ -163,7 +173,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
             <label className="ssh-dialog__field ssh-dialog__field--port">
               <span>{t("ssh.connect.port")}</span>
               <input
-                className="ai-settings__input"
+                className="settings__input"
                 type="number"
                 min={1}
                 max={65535}
@@ -176,7 +186,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
           <label className="ssh-dialog__field">
             <span>{t("ssh.connect.username")}</span>
             <input
-              className="ai-settings__input"
+              className="settings__input"
               value={form.username}
               onChange={(e) => setField("username", e.target.value)}
             />
@@ -185,7 +195,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
           <label className="ssh-dialog__field">
             <span>{t("ssh.connect.auth")}</span>
             <select
-              className="ai-settings__input"
+              className="settings__input"
               value={form.auth}
               onChange={(e) => setField("auth", e.target.value as SshAuth)}
             >
@@ -199,7 +209,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
             <label className="ssh-dialog__field">
               <span>{t("ssh.connect.password")}</span>
               <input
-                className="ai-settings__input"
+                className="settings__input"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -214,7 +224,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
                 <span>{t("ssh.connect.keyPath")}</span>
                 <div className="ssh-dialog__key-row">
                   <input
-                    className="ai-settings__input ssh-dialog__key-input"
+                    className="settings__input ssh-dialog__key-input"
                     value={form.keyPath}
                     onChange={(e) => setField("keyPath", e.target.value)}
                   />
@@ -226,7 +236,7 @@ export default function SshConnectDialog({ profile, onClose }: Props) {
               <label className="ssh-dialog__field">
                 <span>{t("ssh.connect.passphrase")}</span>
                 <input
-                  className="ai-settings__input"
+                  className="settings__input"
                   type="password"
                   value={passphrase}
                   onChange={(e) => setPassphrase(e.target.value)}

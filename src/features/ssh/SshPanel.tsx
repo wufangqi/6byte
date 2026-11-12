@@ -135,71 +135,119 @@ export default function SshPanel({ width }: Props) {
 
   return (
     <div className="ssh-panel" style={{ width }}>
-      {/* Connection selector */}
-      <div className="ssh-panel__header">
-        <select
-          className="ai-settings__input ssh-panel__select"
-          value={selectedProfileId}
-          onChange={(e) => setSelectedProfileId(e.target.value)}
-        >
-          {profiles.length === 0 && <option value="">{t("ssh.panel.noProfiles")}</option>}
-          {profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.host})
-            </option>
-          ))}
-        </select>
-
-        <div className="ssh-panel__actions">
-          <button
-            type="button"
-            className="btn ssh-panel__action-btn"
-            title={t("ssh.panel.newProfile")}
-            onClick={() => setDialogMode("new")}
-          >
-            +
+      {/* Empty state: no saved connection yet. */}
+      {profiles.length === 0 ? (
+        <div className="ssh-panel__empty">
+          <div className="ssh-panel__empty-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none" stroke="currentColor">
+              <rect x="2.5" y="4" width="19" height="13" rx="2" strokeWidth="1.5" />
+              <path d="M8 20h8M12 17v3" strokeWidth="1.5" strokeLinecap="round" />
+              <path
+                d="M7 9.5l2.5 2L7 13.5"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <p className="ssh-panel__empty-title">{t("ssh.panel.empty.title")}</p>
+          <p className="ssh-panel__empty-hint">{t("ssh.panel.empty.hint")}</p>
+          <button type="button" className="btn btn--primary" onClick={() => setDialogMode("new")}>
+            {t("ssh.panel.newProfile")}
           </button>
-          {effectiveProfileId && (
-            <>
-              <button
-                type="button"
-                className="btn ssh-panel__action-btn"
-                title={t("ssh.panel.editProfile")}
-                onClick={() => setDialogMode("edit")}
-              >
-                ✎
-              </button>
+        </div>
+      ) : (
+        <>
+          {/* Connection selector + actions */}
+          <div className="ssh-panel__header">
+            <select
+              className="settings__input settings__select ssh-panel__select"
+              value={effectiveProfileId}
+              onChange={(e) => setSelectedProfileId(e.target.value)}
+            >
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.host})
+                </option>
+              ))}
+            </select>
+
+            <div className="ssh-panel__actions">
               {!isConnected ? (
                 <button
                   type="button"
                   className="btn btn--primary ssh-panel__action-btn"
                   title={t("ssh.panel.connect")}
+                  aria-label={t("ssh.panel.connect")}
+                  disabled={!effectiveProfileId || activeSession?.state === "connecting"}
                   onClick={() => void handleConnect()}
                 >
-                  ⚡
+                  {activeSession?.state === "connecting"
+                    ? t("ssh.panel.connecting")
+                    : t("ssh.panel.connect")}
                 </button>
               ) : (
                 <button
                   type="button"
                   className="btn ssh-panel__action-btn"
                   title={t("ssh.panel.disconnect")}
+                  aria-label={t("ssh.panel.disconnect")}
                   onClick={() => void handleDisconnect()}
                 >
-                  ✕
+                  {t("ssh.panel.disconnect")}
                 </button>
               )}
+            </div>
+          </div>
+
+          <div className="ssh-panel__toolbar">
+            <span className="ssh-panel__state">
+              {isConnected ? (
+                <>
+                  <span className="ssh-panel__dot ssh-panel__dot--on" aria-hidden="true" />
+                  {profiles.find((p) => p.id === effectiveProfileId)?.name}
+                </>
+              ) : (
+                <>
+                  <span className="ssh-panel__dot" aria-hidden="true" />
+                  {t("ssh.panel.notConnected")}
+                </>
+              )}
+            </span>
+            <div className="ssh-panel__icon-actions">
               <button
                 type="button"
-                className="btn ssh-panel__action-btn"
+                className="ssh-panel__icon-btn"
+                title={t("ssh.panel.newProfile")}
+                aria-label={t("ssh.panel.newProfile")}
+                onClick={() => setDialogMode("new")}
+              >
+                +
+              </button>
+              <button
+                type="button"
+                className="ssh-panel__icon-btn"
+                title={t("ssh.panel.editProfile")}
+                aria-label={t("ssh.panel.editProfile")}
+                disabled={!effectiveProfileId}
+                onClick={() => setDialogMode("edit")}
+              >
+                ✎
+              </button>
+              <button
+                type="button"
+                className="ssh-panel__icon-btn ssh-panel__icon-btn--danger"
                 title={t("ssh.panel.deleteProfile")}
+                aria-label={t("ssh.panel.deleteProfile")}
+                disabled={!effectiveProfileId}
                 onClick={() => void handleDelete()}
               >
                 🗑
               </button>
-            </>
-          )}
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Session status */}
       {activeSession && activeSession.state !== "connected" && activeSession.message && (
@@ -235,21 +283,17 @@ export default function SshPanel({ width }: Props) {
         </>
       )}
 
-      {/* Welcome / not connected */}
+      {/* Not connected yet, but a profile exists. */}
       {!isConnected && profiles.length > 0 && (
         <div className="ssh-panel__welcome">
           <p>{t("ssh.panel.welcome")}</p>
-          <button type="button" className="btn btn--primary" onClick={() => void handleConnect()}>
+          <button
+            type="button"
+            className="btn btn--primary"
+            disabled={!effectiveProfileId || activeSession?.state === "connecting"}
+            onClick={() => void handleConnect()}
+          >
             {t("ssh.panel.connect")}
-          </button>
-        </div>
-      )}
-
-      {profiles.length === 0 && (
-        <div className="ssh-panel__welcome">
-          <p>{t("ssh.panel.noProfiles")}</p>
-          <button type="button" className="btn btn--primary" onClick={() => setDialogMode("new")}>
-            {t("ssh.panel.newProfile")}
           </button>
         </div>
       )}

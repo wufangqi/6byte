@@ -99,7 +99,7 @@ export default function SshPortsPanel({ profileId }: Props) {
           <label className="ssh-ports__field">
             <span>{t("ssh.ports.kind")}</span>
             <select
-              className="ai-settings__input"
+              className="settings__input"
               value={kind}
               onChange={(e) => setKind(e.target.value as AddKind)}
             >
@@ -112,7 +112,7 @@ export default function SshPortsPanel({ profileId }: Props) {
           <label className="ssh-ports__field">
             <span>{t("ssh.ports.listenPort")}</span>
             <input
-              className="ai-settings__input"
+              className="settings__input"
               type="number"
               min={0}
               max={65535}
@@ -127,7 +127,7 @@ export default function SshPortsPanel({ profileId }: Props) {
               <label className="ssh-ports__field">
                 <span>{t("ssh.ports.targetHost")}</span>
                 <input
-                  className="ai-settings__input"
+                  className="settings__input"
                   value={targetHost}
                   onChange={(e) => setTargetHost(e.target.value)}
                 />
@@ -135,7 +135,7 @@ export default function SshPortsPanel({ profileId }: Props) {
               <label className="ssh-ports__field">
                 <span>{t("ssh.ports.targetPort")}</span>
                 <input
-                  className="ai-settings__input"
+                  className="settings__input"
                   type="number"
                   min={0}
                   max={65535}
@@ -169,54 +169,45 @@ export default function SshPortsPanel({ profileId }: Props) {
       )}
 
       {forwards.length > 0 && (
-        <table className="ssh-ports__table">
-          <thead>
-            <tr>
-              <th>{t("ssh.ports.column.status")}</th>
-              <th>{t("ssh.ports.column.spec")}</th>
-              <th>{t("ssh.ports.column.connections")}</th>
-              <th>{t("ssh.ports.column.traffic")}</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {forwards.map((fwd) => (
-              <tr key={fwd.id}>
-                <td>
-                  <span className={`ssh-ports__status ssh-ports__status--${fwd.status}`}>
-                    {t(`ssh.ports.status.${fwd.status}`)}
+        <ul className="ssh-ports__list">
+          {forwards.map((fwd) => (
+            <li key={fwd.id} className="ssh-ports__item">
+              <div className="ssh-ports__item-head">
+                <span className={`ssh-ports__status ssh-ports__status--${fwd.status}`}>
+                  {t(`ssh.ports.status.${fwd.status}`)}
+                </span>
+                <span className="ssh-ports__spec" title={describeSpec(fwd)}>
+                  {describeSpec(fwd)}
+                </span>
+                {fwd.status === "active" && (
+                  <button
+                    type="button"
+                    className="btn ssh-ports__stop"
+                    onClick={() => void stopForward(profileId, fwd.id)}
+                  >
+                    {t("ssh.ports.stop")}
+                  </button>
+                )}
+                {fwd.status === "error" && fwd.error && (
+                  <span className="ssh-ports__error-text" title={fwd.error}>
+                    ⚠
                   </span>
-                </td>
-                <td className="ssh-ports__spec">{describeSpec(fwd)}</td>
-                <td className="ssh-ports__connections">
+                )}
+              </div>
+              <div className="ssh-ports__item-meta">
+                <span>
                   {tp("ssh.ports.connections", fwd.connections, { count: fwd.connections })}
-                </td>
-                <td className="ssh-ports__traffic">
+                </span>
+                <span>
                   {t("ssh.ports.traffic", {
                     up: formatSize(fwd.upBytes),
                     down: formatSize(fwd.downBytes),
                   })}
-                </td>
-                <td>
-                  {fwd.status === "active" && (
-                    <button
-                      type="button"
-                      className="btn ssh-ports__stop"
-                      onClick={() => void stopForward(profileId, fwd.id)}
-                    >
-                      {t("ssh.ports.stop")}
-                    </button>
-                  )}
-                  {fwd.status === "error" && fwd.error && (
-                    <span className="ssh-ports__error-text" title={fwd.error}>
-                      ⚠
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
