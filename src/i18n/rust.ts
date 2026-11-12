@@ -185,6 +185,164 @@ const RULES: Rule[] = [
     key: "aiKeyring",
     params: (m) => ({ detail: m[1] }),
   },
+  // SSH errors (§6 of ssh-remote-design.md)
+  { pattern: /^SSH 配置不存在。$/, key: "sshProfileMissing" },
+  {
+    pattern: /^SSH 配置无效：([\s\S]+)$/,
+    key: "sshProfileInvalid",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH 连接失败：([\s\S]+)$/,
+    key: "sshConnectFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH 认证失败：([\s\S]+)$/,
+    key: "sshAuthFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  { pattern: /^SSH 会话未连接。$/, key: "sshSessionNotConnected" },
+  { pattern: /^SSH 连接已断开。$/, key: "sshSessionDisconnected" },
+  {
+    pattern:
+      /^主机密钥已更改（(.+):(\d+)），已拒绝连接。若确认服务器已重装，请清除该主机记录后重试。$/,
+    key: "sshHostKeyChanged",
+    params: (m) => ({ host: m[1], port: m[2] }),
+  },
+  {
+    pattern: /^私钥文件无效：([\s\S]+)$/,
+    key: "sshPrivateKeyInvalid",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH Agent 不可用：([\s\S]+)$/,
+    key: "sshAgentUnavailable",
+    params: (m) => ({ detail: m[1] }),
+  },
+  { pattern: /^远程路径无效。$/, key: "sshRemotePathInvalid" },
+  {
+    pattern: /^远程编辑上限为 ([\d.]+) MB，该文件 ([\d.]+) MB；请下载后查看。$/,
+    key: "sshRemoteEditLimit",
+    params: (m) => ({ limit: m[1], size: m[2] }),
+  },
+  {
+    pattern: /^目标已存在：([\s\S]+)$/,
+    key: "sshTargetExists",
+    params: (m) => ({ name: m[1] }),
+  },
+  {
+    pattern: /^端口转发失败：([\s\S]+)$/,
+    key: "sshForwardFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^本地端口已被占用：(\d+)$/,
+    key: "sshLocalPortBusy",
+    params: (m) => ({ port: m[1] }),
+  },
+  {
+    pattern: /^上传失败：([\s\S]+)$/,
+    key: "sshUploadFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^下载失败：([\s\S]+)$/,
+    key: "sshDownloadFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  // SSH: session / transport failures
+  {
+    pattern: /^SSH 会话未连接：([\s\S]+)$/,
+    key: "sshSessionNotConnectedDetail",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH 会话通道打开失败：([\s\S]+)$/,
+    key: "sshChannelFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH 操作失败：([\s\S]+)$/,
+    key: "sshOperationFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^获取家目录失败：([\s\S]+)$/,
+    key: "sshHomeFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  // SSH: config / known-hosts persistence
+  {
+    pattern: /^读取 SSH 配置失败：([\s\S]+)$/,
+    key: "sshConfigReadFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^写入 SSH 配置失败：([\s\S]+)$/,
+    key: "sshConfigWriteFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^序列化 SSH 配置失败：([\s\S]+)$/,
+    key: "sshConfigSerializeFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^SSH 配置文件损坏：([\s\S]+)$/,
+    key: "sshConfigCorrupt",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^创建配置目录失败：([\s\S]+)$/,
+    key: "sshConfigDirFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^读取已知主机失败：([\s\S]+)$/,
+    key: "sshKnownHostsReadFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^写入已知主机失败：([\s\S]+)$/,
+    key: "sshKnownHostsWriteFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^序列化已知主机失败：([\s\S]+)$/,
+    key: "sshKnownHostsSerializeFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^已知主机文件损坏：([\s\S]+)$/,
+    key: "sshKnownHostsCorrupt",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^(读取|写入|序列化)已知主机失败：锁中毒。$/,
+    key: "sshKnownHostsLockPoisoned",
+  },
+  // SSH: remote file operations
+  {
+    pattern: /^创建文件夹失败：([\s\S]+)$/,
+    key: "sshMkdirFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^创建文件失败：([\s\S]+)$/,
+    key: "sshCreateFileFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^重命名失败：([\s\S]+)$/,
+    key: "sshRenameFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
+  {
+    pattern: /^删除失败：([\s\S]+)$/,
+    key: "sshDeleteFailed",
+    params: (m) => ({ detail: m[1] }),
+  },
 ];
 
 const EN: Record<string, string> = {
@@ -257,6 +415,43 @@ const EN: Record<string, string> = {
   aiKeyEmpty: "The API key cannot be empty.",
   aiProfileId: "The model id is invalid.",
   aiKeyring: "Keychain operation failed: {detail}",
+  // SSH errors
+  sshProfileMissing: "SSH profile does not exist.",
+  sshProfileInvalid: "SSH profile is invalid: {detail}",
+  sshConnectFailed: "SSH connection failed: {detail}",
+  sshAuthFailed: "SSH authentication failed: {detail}",
+  sshSessionNotConnected: "SSH session is not connected.",
+  sshSessionDisconnected: "SSH connection was closed.",
+  sshHostKeyChanged:
+    "The host key for {host}:{port} has changed; the connection was refused. If the server was reinstalled, clear the host record and try again.",
+  sshPrivateKeyInvalid: "The private key file is invalid: {detail}",
+  sshAgentUnavailable: "SSH Agent is not available: {detail}",
+  sshRemotePathInvalid: "The remote path is invalid.",
+  sshRemoteEditLimit:
+    "The remote editing limit is {limit} MB; this file is {size} MB. Please download it instead.",
+  sshTargetExists: "Target already exists: {name}",
+  sshForwardFailed: "Port forwarding failed: {detail}",
+  sshLocalPortBusy: "Local port {port} is already in use.",
+  sshUploadFailed: "Upload failed: {detail}",
+  sshDownloadFailed: "Download failed: {detail}",
+  sshSessionNotConnectedDetail: "SSH session is not connected: {detail}",
+  sshChannelFailed: "Could not open an SSH channel: {detail}",
+  sshOperationFailed: "SSH operation failed: {detail}",
+  sshHomeFailed: "Could not resolve the remote home directory: {detail}",
+  sshConfigReadFailed: "Could not read the SSH profiles: {detail}",
+  sshConfigWriteFailed: "Could not save the SSH profiles: {detail}",
+  sshConfigSerializeFailed: "Could not encode the SSH profiles: {detail}",
+  sshConfigCorrupt: "The SSH profile file is corrupted: {detail}",
+  sshConfigDirFailed: "Could not create the config directory: {detail}",
+  sshKnownHostsReadFailed: "Could not read the known-hosts file: {detail}",
+  sshKnownHostsWriteFailed: "Could not write the known-hosts file: {detail}",
+  sshKnownHostsSerializeFailed: "Could not encode the known-hosts file: {detail}",
+  sshKnownHostsCorrupt: "The known-hosts file is corrupted: {detail}",
+  sshKnownHostsLockPoisoned: "Known-hosts storage is unavailable (lock poisoned).",
+  sshMkdirFailed: "Could not create the folder: {detail}",
+  sshCreateFileFailed: "Could not create the file: {detail}",
+  sshRenameFailed: "Rename failed: {detail}",
+  sshDeleteFailed: "Delete failed: {detail}",
 };
 
 /** Map a Chinese Rust error onto the current language; unknown errors pass through. */

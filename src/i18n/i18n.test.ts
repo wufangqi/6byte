@@ -156,6 +156,52 @@ describe("Rust error localisation", () => {
     expect(localizeRustMessage("完全未知的错误", "en")).toBe("完全未知的错误");
   });
 
+  it("localizes the SSH errors the remote backend can raise", () => {
+    // Contract §6 messages.
+    expect(localizeRustMessage("SSH 配置不存在。", "en")).toBe("SSH profile does not exist.");
+    expect(localizeRustMessage("SSH 会话未连接。", "en")).toBe("SSH session is not connected.");
+    expect(localizeRustMessage("SSH 认证失败：用户名或密码错误。", "en")).toBe(
+      "SSH authentication failed: 用户名或密码错误。"
+    );
+    expect(localizeRustMessage("远程路径无效。", "en")).toBe("The remote path is invalid.");
+    expect(
+      localizeRustMessage(
+        "主机密钥已更改（example.com:2222），已拒绝连接。若确认服务器已重装，请清除该主机记录后重试。",
+        "en"
+      )
+    ).toContain("example.com:2222");
+    expect(localizeRustMessage("本地端口已被占用：8080", "en")).toBe(
+      "Local port 8080 is already in use."
+    );
+    expect(localizeRustMessage("目标已存在：notes.md", "en")).toBe(
+      "Target already exists: notes.md"
+    );
+    expect(localizeRustMessage("远程编辑上限为 10 MB，该文件 12.0 MB；请下载后查看。", "en")).toBe(
+      "The remote editing limit is 10 MB; this file is 12.0 MB. Please download it instead."
+    );
+    // Storage / transport failures the backend also emits.
+    expect(localizeRustMessage("SSH 会话通道打开失败：closed", "en")).toBe(
+      "Could not open an SSH channel: closed"
+    );
+    expect(localizeRustMessage("SSH 操作失败：cancelled", "en")).toBe(
+      "SSH operation failed: cancelled"
+    );
+    expect(localizeRustMessage("读取 SSH 配置失败：denied", "en")).toBe(
+      "Could not read the SSH profiles: denied"
+    );
+    expect(localizeRustMessage("已知主机文件损坏：bad json", "en")).toBe(
+      "The known-hosts file is corrupted: bad json"
+    );
+    expect(localizeRustMessage("创建文件夹失败：exists", "en")).toBe(
+      "Could not create the folder: exists"
+    );
+    expect(localizeRustMessage("重命名失败：missing", "en")).toBe("Rename failed: missing");
+    expect(localizeRustMessage("删除失败：busy", "en")).toBe("Delete failed: busy");
+    expect(localizeRustMessage("SSH Agent 不可用：未设置 SSH_AUTH_SOCK。", "en")).toBe(
+      "SSH Agent is not available: 未设置 SSH_AUTH_SOCK。"
+    );
+  });
+
   it("localizes errors thrown through the helper", () => {
     setLocale("en");
     expect(localizeError(new Error("正则表达式无效：unclosed group"))).toBe(

@@ -2,6 +2,7 @@ import { useAiActivity } from "./aiActivity";
 import { useI18n } from "../i18n";
 import { formatSize } from "../lib/format";
 import { useFileTree } from "../stores/fileTree";
+import { useSshStore } from "../stores/ssh";
 import { resolveDocument, selectActiveTab, useWorkspace } from "../stores/workspace";
 
 const EOL_LABEL: Record<string, string> = {
@@ -19,6 +20,20 @@ function PanelIcon() {
   );
 }
 
+function SshIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+      <path
+        d="M2 4h12M2 8h12M2 12h8"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+      <circle cx="13" cy="12" r="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
 interface Props {
   previewOn?: boolean;
   canPreview?: boolean;
@@ -26,6 +41,8 @@ interface Props {
   hasWorkspace?: boolean;
   treeHidden?: boolean;
   onToggleTree?: () => void;
+  sshPanelOpen?: boolean;
+  onToggleSshPanel?: () => void;
   aiPanelOpen?: boolean;
   onToggleAiPanel?: () => void;
 }
@@ -37,6 +54,8 @@ export default function StatusBar({
   hasWorkspace = false,
   treeHidden = false,
   onToggleTree,
+  sshPanelOpen = false,
+  onToggleSshPanel,
   aiPanelOpen = false,
   onToggleAiPanel,
 }: Props) {
@@ -66,13 +85,31 @@ export default function StatusBar({
   const panelToggle = hasWorkspace && onToggleTree && (
     <button
       type="button"
-      className={`statusbar__icon${treeHidden ? "" : " statusbar__icon--on"}`}
+      className={`statusbar__icon${treeHidden && !sshPanelOpen ? "" : " statusbar__icon--on"}`}
       aria-label={t("menu.fileTreeToggle")}
-      aria-pressed={!treeHidden}
+      aria-pressed={!treeHidden && !sshPanelOpen}
       title={t("menu.fileTreeToggle")}
-      onClick={onToggleTree}
+      onClick={() => {
+        if (sshPanelOpen) onToggleSshPanel?.();
+        onToggleTree();
+      }}
     >
       <PanelIcon />
+    </button>
+  );
+  const sshToggle = onToggleSshPanel && (
+    <button
+      type="button"
+      className={`statusbar__icon${sshPanelOpen ? " statusbar__icon--on" : ""}`}
+      aria-label={t("ssh.panel.title")}
+      aria-pressed={sshPanelOpen}
+      title={t("ssh.panel.title")}
+      onClick={() => {
+        if (!sshPanelOpen && !treeHidden) onToggleTree?.();
+        onToggleSshPanel();
+      }}
+    >
+      <SshIcon />
     </button>
   );
   const workspace = workspaceName ? (
@@ -81,10 +118,24 @@ export default function StatusBar({
     </span>
   ) : null;
 
+  // Detect SSH remote tab and resolve profile name
+  const isRemote = tab?.path?.startsWith("ssh://") ?? false;
+  const sshProfiles = useSshStore((s) => s.profiles);
+  const sshProfileName = (() => {
+    if (!isRemote || !tab?.path) return "";
+    const rest = tab.path.slice(6); // strip "ssh://"
+    const slash = rest.indexOf("/");
+    if (slash < 0) return "";
+    const profileId = rest.slice(0, slash);
+    const profile = sshProfiles.find((p) => p.id === profileId);
+    return profile?.name ?? profileId;
+  })();
+
   if (!tab) {
     return (
       <footer className="statusbar">
         {panelToggle}
+        {sshToggle}
         {workspace}
         {activityItem}
         <span className="statusbar__item">{t("status.ready")}</span>
@@ -95,10 +146,17 @@ export default function StatusBar({
   return (
     <footer className="statusbar">
       {panelToggle}
+      {sshToggle}
       {workspace}
       <span className="statusbar__item statusbar__path" title={tab.path ?? undefined}>
         {tab.path ?? t("status.unsavedFile")}
       </span>
+
+      {isRemote && sshProfileName && (
+        <span className="statusbar__item statusbar__ssh-badge">
+          {t("ssh.status.badge", { name: sshProfileName })}
+        </span>
+      )}
 
       {tab.mode === "large" && (
         <span className="statusbar__warn" title={t("status.large.title")}>

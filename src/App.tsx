@@ -77,6 +77,9 @@ import {
   tabFromLarge,
   useWorkspace,
 } from "./stores/workspace";
+import SshPanel from "./features/ssh/SshPanel";
+import { isSshUri, parseSshUri } from "./features/ssh/remotePath";
+import { sshReadFile, sshStat, sshWriteFile } from "./ipc/ssh";
 
 const SESSION_KEY = "ainative.session";
 const RECENT_KEY = "ainative.recent";
@@ -107,6 +110,7 @@ export default function App() {
   const settingsActive = useWorkspace((state) => state.activeId === SETTINGS_TAB_ID);
   const notice = useWorkspace((state) => state.notice);
   const [grepOpen, setGrepOpen] = useState(false);
+  const [sshPanelOpen, setSshPanelOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpDialog, setHelpDialog] = useState<"about" | "shortcuts" | null>(null);
   const [streamOpen, setStreamOpen] = useState(false);
@@ -177,10 +181,20 @@ export default function App() {
           continue;
         }
         try {
-          const document = await openDocument(path);
-          store.addTab(
-            document.mode === "large" ? tabFromLarge(document.info) : tabFromFile(document.file)
-          );
+          if (isSshUri(path)) {
+            const parsed = parseSshUri(path);
+            if (!parsed) {
+              failures.push({ path, reason: tr("sshRemotePathInvalid") });
+              continue;
+            }
+            const file = await sshReadFile(parsed.profileId, parsed.remotePath);
+            store.addTab(tabFromFile(file));
+          } else {
+            const document = await openDocument(path);
+            store.addTab(
+              document.mode === "large" ? tabFromLarge(document.info) : tabFromFile(document.file)
+            );
+          }
         } catch (e) {
           failures.push({ path, reason: friendlyReason(e) });
         }
@@ -352,9 +366,16 @@ export default function App() {
     const tab = store.tabs.find((t) => t.id === tabId);
     if (!tab?.path) return;
     try {
-      const document = await openDocument(tab.path);
-      if (document.mode === "large") store.reloadLargeTab(tabId, document.info);
-      else store.reloadTab(tabId, document.file);
+      if (isSshUri(tab.path)) {
+        const parsed = parseSshUri(tab.path);
+        if (!parsed) return;
+        const file = await sshReadFile(parsed.profileId, parsed.remotePath);
+        store.reloadTab(tabId, file);
+      } else {
+        const document = await openDocument(tab.path);
+        if (document.mode === "large") store.reloadLargeTab(tabId, document.info);
+        else store.reloadTab(tabId, document.file);
+      }
     } catch (e) {
       store.setError(localizeError(e));
     }
@@ -380,6 +401,12 @@ export default function App() {
       // the first line.
       if (!saveTouchesDisk(tab, saveAs)) return true;
       const content = readBuffer(tab.id, tab.content);
+
+      // Remote files: no "Save As" — use download instead.
+      if (tab.path && isSshUri(tab.path) && saveAs) {
+        store.setError(tr("ssh.saveAs.unsupported"));
+        return false;
+      }
 
       let path = tab.path;
       if (!path || saveAs) {
@@ -462,6 +489,67 @@ export default function App() {
       }
 
       const meta = tab.meta.lossy ? { ...tab.meta, lossy: false } : tab.meta;
+
+      // SSH remote write path
+      if (isSshUri(path)) {
+        const parsed = parseSshUri(path);
+        if (!parsed) {
+          store.setError(tr("sshRemotePathInvalid"));
+          return false;
+        }
+        // Stat conflict check for remote files
+        if (tab.path && !saveAs) {
+          try {
+            const remoteStat = await sshStat(parsed.profileId, parsed.remotePath);
+            if (remoteStat.mtimeMs > tab.mtimeMs) {
+              const choice = await ask({
+                title: tr("dialog.external.title"),
+                message: tr("dialog.external.message", {
+                  name: tab.name,
+                  diskSize: formatSize(remoteStat.size),
+                  diskTime: formatTime(remoteStat.mtimeMs),
+                  openSize: formatSize(tab.size),
+                  openTime: formatTime(tab.mtimeMs),
+                }),
+                buttons: [
+                  { label: tr("dialog.cancel"), value: "cancel" },
+                  { label: tr("dialog.reload"), value: "reload", variant: "ghost" },
+                  { label: tr("dialog.overwrite"), value: "overwrite", variant: "danger" },
+                ],
+              });
+              if (choice === "reload") {
+                await reloadFromDisk(tab.id);
+                return false;
+              }
+              if (choice !== "overwrite") return false;
+            }
+          } catch {
+            /* file may be gone; let write surface the error */
+          }
+        }
+        try {
+          const result = await sshWriteFile({
+            profileId: parsed.profileId,
+            path: parsed.remotePath,
+            content,
+            meta,
+            allowLossy: tab.meta.lossy,
+          });
+          store.markSaved(tab.id, {
+            path,
+            content,
+            meta: result.meta,
+            size: result.size,
+            mtimeMs: result.mtimeMs,
+          });
+          return true;
+        } catch (e) {
+          store.setError(localizeError(e));
+          return false;
+        }
+      }
+
+      // Local write path
       beginOwnWrite(path);
       try {
         const result = await writeFile(path, content, meta, tab.meta.lossy);
@@ -994,6 +1082,7 @@ export default function App() {
           const tab = selectActiveTab(useWorkspace.getState());
           if (tab) void requestRenameTab(tab.id);
         }}
+        onConnectSsh={() => setSshPanelOpen(true)}
         onOpenModelSettings={() => useWorkspace.getState().openSettings("models")}
         onOpenSettings={() => useWorkspace.getState().openSettings("general")}
         aiPanelOpen={streamOpen}
@@ -1008,13 +1097,30 @@ export default function App() {
         onToggleAiMarker={() => setAiFloatingMarkerEnabled((enabled) => !enabled)}
       />
       <div className="workspace" ref={workspaceRef}>
-        {showTree && (
+        {showTree && !sshPanelOpen && (
           <>
             <FileTree
               width={treeWidth}
               onOpenFile={(path) => void openPaths([path])}
               onRenameFile={(path) => void requestRenamePath(path)}
             />
+            <div
+              className="split__divider file-tree__divider"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label={t("tree.resize")}
+              aria-valuemin={160}
+              aria-valuemax={400}
+              aria-valuenow={treeWidth}
+              tabIndex={0}
+              onPointerDown={startTreeDrag}
+              onDoubleClick={() => useFileTree.getState().setWidth(240)}
+            />
+          </>
+        )}
+        {sshPanelOpen && (
+          <>
+            <SshPanel width={treeWidth} />
             <div
               className="split__divider file-tree__divider"
               role="separator"
@@ -1158,6 +1264,8 @@ export default function App() {
         hasWorkspace={Boolean(treeRoot)}
         treeHidden={treeHidden}
         onToggleTree={toggleTree}
+        sshPanelOpen={sshPanelOpen}
+        onToggleSshPanel={() => setSshPanelOpen((v) => !v)}
         aiPanelOpen={streamOpen}
         onToggleAiPanel={toggleAiPanel}
       />

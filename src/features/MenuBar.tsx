@@ -29,6 +29,7 @@ interface Props {
   onSaveAll(): void;
   onExportHtml(): void;
   onRename(): void;
+  onConnectSsh?(): void;
   onOpenModelSettings(): void;
   onOpenSettings(): void;
   aiPanelOpen: boolean;
@@ -58,6 +59,7 @@ export default function MenuBar({
   onSaveAll,
   onExportHtml,
   onRename,
+  onConnectSsh,
   onOpenModelSettings,
   onOpenSettings,
   aiPanelOpen,
@@ -267,6 +269,12 @@ export default function MenuBar({
                 shortcut="F2"
                 disabled={!active}
                 onClick={onRename}
+                close={() => setMenu(null)}
+              />
+              <div className="menu__sep" />
+              <FileItem
+                label={t("menu.connectSsh")}
+                onClick={() => onConnectSsh?.()}
                 close={() => setMenu(null)}
               />
             </div>
