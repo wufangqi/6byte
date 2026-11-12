@@ -256,6 +256,36 @@ export default function SshTree({ profileId, homePath }: Props) {
     );
   }
 
+  // The root node is implicit (it is not drawn as a row), so its own
+  // loading/error state has to be surfaced here or a failed first listing
+  // would look like an endless spinner.
+  if (tree.loading && !tree.loaded && tree.children.length === 0) {
+    return (
+      <div className="ssh-tree ssh-tree--empty">
+        <span className="ssh-tree__loading">{t("ssh.tree.loading")}</span>
+      </div>
+    );
+  }
+
+  if (tree.error && !tree.loaded) {
+    return (
+      <div className="ssh-tree">
+        <div className="ssh-tree__root-error">
+          <span className="ssh-tree__root-error-text" title={tree.error}>
+            {localizeError(tree.error)}
+          </span>
+          <button
+            type="button"
+            className="btn ssh-tree__retry-btn"
+            onClick={() => void expandDir(profileId, tree.path)}
+          >
+            {t("ssh.tree.retry")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="ssh-tree" ref={treeRef}>
       <input
@@ -266,15 +296,19 @@ export default function SshTree({ profileId, homePath }: Props) {
         onKeyDown={(e) => void handleJump(e)}
       />
       <div className="ssh-tree__list" role="tree">
-        <TreeNodes
-          nodes={tree.children}
-          depth={0}
-          profileId={profileId}
-          onToggle={toggleDir}
-          onOpen={openFile}
-          onContextMenu={handleContextMenu}
-          expandDir={expandDir}
-        />
+        {tree.children.length === 0 ? (
+          <div className="ssh-tree__empty">{t("ssh.tree.empty")}</div>
+        ) : (
+          <TreeNodes
+            nodes={tree.children}
+            depth={0}
+            profileId={profileId}
+            onToggle={toggleDir}
+            onOpen={openFile}
+            onContextMenu={handleContextMenu}
+            expandDir={expandDir}
+          />
+        )}
       </div>
 
       {menu && (

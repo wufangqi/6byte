@@ -100,8 +100,22 @@ fn basename(posix_path: &str) -> String {
         .to_string()
 }
 
+/// A Windows OpenSSH server answers with paths such as `C:/Users/name`, so an
+/// absolute path may start with `/` or with a drive letter. Everything else
+/// (empty, relative) is rejected before it reaches the server.
 fn validate_remote_path(path: &str) -> Result<(), String> {
-    if path.is_empty() || !path.starts_with('/') {
+    if path.is_empty() {
+        return Err("远程路径无效。".into());
+    }
+    let posix_absolute = path.starts_with('/');
+    let drive_absolute = {
+        let bytes = path.as_bytes();
+        bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && (bytes[2] == b'/' || bytes[2] == b'\\')
+    };
+    if !posix_absolute && !drive_absolute {
         return Err("远程路径无效。".into());
     }
     Ok(())
@@ -640,4 +654,30 @@ pub async fn open_sftp(handle: &SessionHandle) -> Result<SftpSession, String> {
     SftpSession::new(channel.into_stream())
         .await
         .map_err(|error| format!("SSH 会话未连接：{error}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{basename, validate_remote_path};
+
+    #[test]
+    fn remote_paths_accept_posix_and_windows_absolute_forms() {
+        // POSIX servers.
+        assert!(validate_remote_path("/home/deploy").is_ok());
+        assert!(validate_remote_path("/").is_ok());
+        // Windows OpenSSH answers with drive-letter paths.
+        assert!(validate_remote_path("C:/Users/admin").is_ok());
+        assert!(validate_remote_path("D:\\\\data").is_ok());
+        // Empty or relative paths never reach the server.
+        assert!(validate_remote_path("").is_err());
+        assert!(validate_remote_path("relative/path").is_err());
+        assert!(validate_remote_path("./x").is_err());
+    }
+
+    #[test]
+    fn basename_returns_the_last_segment() {
+        assert_eq!(basename("/home/me/notes.md"), "notes.md");
+        assert_eq!(basename("C:/Users/admin/a.txt"), "a.txt");
+        assert_eq!(basename("/"), "/");
+    }
 }

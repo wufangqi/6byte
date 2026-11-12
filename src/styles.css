@@ -4157,6 +4157,23 @@ code {
   font-size: var(--text-xs);
 }
 
+.ssh-tree__root-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px 6px;
+}
+
+.ssh-tree__root-error-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: 1.55;
+  word-break: break-word;
+  user-select: text;
+}
+
 .ssh-tree__menu {
   position: fixed;
   z-index: 70;

@@ -57,6 +57,28 @@ function nodeFromEntry(entry: {
   };
 }
 
+/**
+ * Root node for a profile's tree. Created lazily the first time `expandDir`
+ * runs for that profile: a fresh session has no cached tree, and without a node
+ * there is nothing for the listing to attach to.
+ */
+function rootNode(dirPath: string): SshTreeNode {
+  const trimmed = dirPath.replace(/\/+$/, "");
+  const name = trimmed === "" ? "/" : (trimmed.split("/").pop() ?? dirPath);
+  return {
+    name,
+    path: dirPath,
+    kind: "dir",
+    size: 0,
+    mtimeMs: 0,
+    children: [],
+    loaded: false,
+    loading: true,
+    error: null,
+    truncated: false,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Store shape
 // ---------------------------------------------------------------------------
@@ -108,7 +130,8 @@ function updateNodeAtPath(
 ): SshTreeNode[] {
   return nodes.map((node) => {
     if (node.path === targetPath) return updater(node);
-    if (node.kind === "dir" && targetPath.startsWith(node.path + "/")) {
+    const childPrefix = node.path.endsWith("/") ? node.path : `${node.path}/`;
+    if (node.kind === "dir" && targetPath.startsWith(childPrefix)) {
       return { ...node, children: updateNodeAtPath(node.children, targetPath, updater) };
     }
     return node;
@@ -185,13 +208,18 @@ export const useSshStore = create<SshState>((set, get) => ({
   async disconnect(profileId) {
     const { sshDisconnect } = await import("../ipc/ssh");
     await sshDisconnect(profileId);
-    set((state) => ({
-      sessions: state.sessions.map((s) =>
-        s.profileId === profileId
-          ? { ...s, state: "disconnected" as const, home: "", message: "" }
-          : s
-      ),
-    }));
+    set((state) => {
+      const trees = new Map(state.trees);
+      trees.delete(profileId);
+      return {
+        sessions: state.sessions.map((s) =>
+          s.profileId === profileId
+            ? { ...s, state: "disconnected" as const, home: "", message: "" }
+            : s
+        ),
+        trees,
+      };
+    });
   },
 
   async refreshSessions() {
@@ -217,10 +245,13 @@ export const useSshStore = create<SshState>((set, get) => ({
   async expandDir(profileId, dirPath) {
     const { sshListDir } = await import("../ipc/ssh");
 
-    // Mark loading
+    // Mark loading; on the first call for a profile this is also what creates
+    // the root node the listing attaches to.
     set((state) => {
       const tree = state.trees.get(profileId);
-      if (!tree) return state;
+      if (!tree) {
+        return { trees: new Map(state.trees).set(profileId, rootNode(dirPath)) };
+      }
       const roots = updateNodeAtPath([tree], dirPath, (n) => ({
         ...n,
         loading: true,
