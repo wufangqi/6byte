@@ -20,7 +20,8 @@ vi.mock("../ipc/ssh", () => ({
   sshProfileDelete: vi.fn(),
 }));
 
-import { useSshStore } from "./ssh";
+import type { ForwardInfo } from "../ipc/ssh";
+import { NO_FORWARDS, forwardsOf, useSshStore } from "./ssh";
 
 const entry = (name: string, kind: "file" | "dir", path: string) => ({
   name,
@@ -99,5 +100,23 @@ describe("SSH tree loading", () => {
 
     await useSshStore.getState().disconnect("p1");
     expect(useSshStore.getState().trees.has("p1")).toBe(false);
+  });
+});
+
+describe("forward selector stability", () => {
+  // A selector returning a fresh array on every read makes React loop until it
+  // throws "Maximum update depth exceeded", which blanks the window (the ports
+  // tab used to do exactly that).
+  it("returns one shared empty array when the profile has no forwards", () => {
+    const map = new Map<string, ForwardInfo[]>();
+    expect(forwardsOf(map, "a")).toBe(NO_FORWARDS);
+    expect(forwardsOf(map, "b")).toBe(NO_FORWARDS);
+    expect(forwardsOf(map, "a")).toBe(forwardsOf(map, "b"));
+  });
+
+  it("returns the stored list when one exists", () => {
+    const list: ForwardInfo[] = [];
+    const map = new Map([["a", list]]);
+    expect(forwardsOf(map, "a")).toBe(list);
   });
 });

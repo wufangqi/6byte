@@ -9,7 +9,7 @@ import type { ForwardInfo, ForwardSpec } from "../../ipc/ssh";
 import { useI18n } from "../../i18n";
 import { localizeError } from "../../i18n";
 import { formatSize } from "../../lib/format";
-import { useSshStore } from "../../stores/ssh";
+import { forwardsOf, useSshStore } from "../../stores/ssh";
 import { validateForwardSpec } from "./forwardSpec";
 
 interface Props {
@@ -20,7 +20,7 @@ type AddKind = "local" | "remote" | "dynamic";
 
 export default function SshPortsPanel({ profileId }: Props) {
   const { t, tp } = useI18n();
-  const forwards = useSshStore((s) => s.forwards.get(profileId) ?? []);
+  const forwards = useSshStore((s) => forwardsOf(s.forwards, profileId));
   const addForward = useSshStore((s) => s.addForward);
   const stopForward = useSshStore((s) => s.stopForward);
 

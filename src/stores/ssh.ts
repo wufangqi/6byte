@@ -119,6 +119,20 @@ interface SshState {
   clearFinishedTransfers(): void;
 }
 
+/**
+ * Stable empty list for zustand selectors.
+ *
+ * A selector like `s.forwards.get(id) ?? []` builds a new array on every store
+ * read, so the snapshot never compares equal and React keeps re-rendering until
+ * it throws "Maximum update depth exceeded" — which blanks the whole window.
+ * Keep the missing case pointing at one shared array.
+ */
+export const NO_FORWARDS: ForwardInfo[] = [];
+
+export function forwardsOf(map: Map<string, ForwardInfo[]>, profileId: string): ForwardInfo[] {
+  return map.get(profileId) ?? NO_FORWARDS;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers to update nested tree nodes immutably
 // ---------------------------------------------------------------------------
