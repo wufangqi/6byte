@@ -245,6 +245,15 @@ pub struct ForwardRegistry {
 }
 
 impl ForwardRegistry {
+    /// Profiles that currently hold at least one forward, for the stats ticker.
+    pub fn profiles(&self) -> Vec<String> {
+        self.entries
+            .iter()
+            .filter(|entry| !entry.value().is_empty())
+            .map(|entry| entry.key().clone())
+            .collect()
+    }
+
     pub fn list(&self, profile_id: &str) -> Vec<ForwardInfo> {
         self.entries
             .get(profile_id)
@@ -841,7 +850,9 @@ mod tests {
         });
         registry.insert("profile-a", state);
 
-        let hit = registry.find_remote("profile-a", 41022).expect("allocated port");
+        let hit = registry
+            .find_remote("profile-a", 41022)
+            .expect("allocated port");
         assert_eq!(hit.local_port, 3000);
         assert_eq!(hit.local_host, "127.0.0.1");
         assert!(registry.find_remote("profile-a", 0).is_none());
@@ -874,7 +885,9 @@ mod tests {
         });
         registry.insert("profile-a", state);
 
-        let hit = registry.find_remote("profile-a", 9000).expect("remote port");
+        let hit = registry
+            .find_remote("profile-a", 9000)
+            .expect("remote port");
         assert_eq!(hit.local_port, 8080);
         assert!(registry.find_remote("profile-a", 9001).is_none());
     }

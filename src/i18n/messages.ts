@@ -698,6 +698,10 @@ export const zh: MessageCatalog = {
   "ssh.ports.traffic": "↑ {up} ↓ {down}",
   "ssh.ports.serverAssigned": "服务器分配",
   "ssh.ports.empty": "没有活跃的端口转发。",
+  "ssh.ports.column.status": "状态",
+  "ssh.ports.column.spec": "转发规则",
+  "ssh.ports.column.connections": "连接数",
+  "ssh.ports.column.traffic": "流量",
   "ssh.hostkey.title": "主机密钥不一致",
   "ssh.hostkey.message":
     "「{host}:{port}」的主机密钥与之前记录的不一致。\n\n预期指纹：{expected}\n实际指纹：{actual}\n\n如果服务器已重装或更换密钥，可以清除旧记录后重新连接。否则这可能是中间人攻击。",
@@ -1434,6 +1438,10 @@ export const en: MessageCatalog = {
   "ssh.ports.traffic": "↑ {up} ↓ {down}",
   "ssh.ports.serverAssigned": "Server-assigned",
   "ssh.ports.empty": "No active port forwards.",
+  "ssh.ports.column.status": "Status",
+  "ssh.ports.column.spec": "Rule",
+  "ssh.ports.column.connections": "Connections",
+  "ssh.ports.column.traffic": "Traffic",
   "ssh.hostkey.title": "Host key mismatch",
   "ssh.hostkey.message":
     'The host key for "{host}:{port}" does not match the previously recorded key.\n\nExpected fingerprint: {expected}\nActual fingerprint: {actual}\n\nIf the server was reinstalled or its key changed, you can clear the old record and reconnect. Otherwise this may be a man-in-the-middle attack.',

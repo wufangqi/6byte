@@ -102,7 +102,15 @@ pub struct SshHub {
 
 impl SshHub {
     pub fn new(handle: AppHandle) -> Self {
-        let runtime = Arc::new(TokioRuntime::new().expect("failed to build SSH tokio runtime"));
+        // Multi-threaded: the stats ticker below runs on this runtime, and a
+        // current-thread runtime would only progress inside `block_on`.
+        let runtime = Arc::new(
+            tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+                .expect("failed to build SSH tokio runtime"),
+        );
         let config_dir = handle.path().app_config_dir().expect("app config dir");
         let profiles = SshProfileStore::new(config_dir.join("ssh_profiles.json"));
         let known_hosts = Arc::new(KnownHostsStore::new(
@@ -168,5 +176,31 @@ impl SshHub {
                 "forwards": forwards,
             }),
         );
+    }
+
+    /// Emit `ssh-forward-update` once a second for every profile that still has
+    /// active forwards, so the panel's connection count and byte counters move.
+    pub fn start_forward_ticker(&self) {
+        let forwards = self.forwards.clone();
+        let handle = self.handle.clone();
+        self.runtime.spawn(async move {
+            let mut ticker = tokio::time::interval(std::time::Duration::from_secs(1));
+            loop {
+                ticker.tick().await;
+                for profile_id in forwards.profiles() {
+                    let list = forwards.list(&profile_id);
+                    if list.is_empty() {
+                        continue;
+                    }
+                    let _ = handle.emit(
+                        "ssh-forward-update",
+                        serde_json::json!({
+                            "profileId": profile_id,
+                            "forwards": list,
+                        }),
+                    );
+                }
+            }
+        });
     }
 }

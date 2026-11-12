@@ -5,7 +5,7 @@
  * parent SshPanel subscribes to and pushes into the store.
  */
 import { useCallback, useState } from "react";
-import type { ForwardSpec } from "../../ipc/ssh";
+import type { ForwardInfo, ForwardSpec } from "../../ipc/ssh";
 import { useI18n } from "../../i18n";
 import { localizeError } from "../../i18n";
 import { formatSize } from "../../lib/format";
@@ -73,12 +73,14 @@ export default function SshPortsPanel({ profileId }: Props) {
     }
   }, [kind, listenPort, targetHost, targetPort, profileId, addForward, t]);
 
-  const describeSpec = (spec: ForwardSpec): string => {
-    if (spec.kind === "local")
-      return `-L ${spec.localPort} → ${spec.remoteHost}:${spec.remotePort}`;
-    if (spec.kind === "remote")
-      return `-R ${spec.remotePort} → ${spec.localHost}:${spec.localPort}`;
-    return `-D ${spec.localPort} (SOCKS)`;
+  /** Show the port actually in use: a request of 0 becomes the assigned one. */
+  const describeSpec = (forward: ForwardInfo): string => {
+    const spec = forward.spec;
+    const listening =
+      forward.boundPort > 0 ? String(forward.boundPort) : t("ssh.ports.serverAssigned");
+    if (spec.kind === "local") return `-L ${listening} → ${spec.remoteHost}:${spec.remotePort}`;
+    if (spec.kind === "remote") return `-R ${listening} → ${spec.localHost}:${spec.localPort}`;
+    return `-D ${listening} (SOCKS)`;
   };
 
   return (
@@ -170,10 +172,10 @@ export default function SshPortsPanel({ profileId }: Props) {
         <table className="ssh-ports__table">
           <thead>
             <tr>
-              <th>{t("ssh.ports.kind")}</th>
-              <th>{describeSpecHeader(t)}</th>
-              <th></th>
-              <th></th>
+              <th>{t("ssh.ports.column.status")}</th>
+              <th>{t("ssh.ports.column.spec")}</th>
+              <th>{t("ssh.ports.column.connections")}</th>
+              <th>{t("ssh.ports.column.traffic")}</th>
               <th></th>
             </tr>
           </thead>
@@ -185,7 +187,7 @@ export default function SshPortsPanel({ profileId }: Props) {
                     {t(`ssh.ports.status.${fwd.status}`)}
                   </span>
                 </td>
-                <td className="ssh-ports__spec">{describeSpec(fwd.spec)}</td>
+                <td className="ssh-ports__spec">{describeSpec(fwd)}</td>
                 <td className="ssh-ports__connections">
                   {tp("ssh.ports.connections", fwd.connections, { count: fwd.connections })}
                 </td>
@@ -218,8 +220,4 @@ export default function SshPortsPanel({ profileId }: Props) {
       )}
     </div>
   );
-}
-
-function describeSpecHeader(t: (key: string) => string): string {
-  return t("ssh.ports.listenPort");
 }

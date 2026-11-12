@@ -32,7 +32,9 @@ pub fn run() {
             app.manage(watcher::FileWatcher::new(Arc::new(move |event| {
                 let _ = handle.emit("file-changed", event);
             })));
-            app.manage(ssh::SshHub::new(ssh_handle));
+            let ssh_hub = ssh::SshHub::new(ssh_handle);
+            ssh_hub.start_forward_ticker();
+            app.manage(ssh_hub);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
