@@ -1,4 +1,5 @@
 import { readBinaryBase64 } from "../ipc/api";
+import { parseSshUri, posixNormalize } from "./ssh/remotePath";
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   png: "image/png",
@@ -37,11 +38,24 @@ export async function loadImageDataUrl(path: string): Promise<string | null> {
   const cached = cache.get(path);
   if (cached) return cached;
   try {
-    const base64 = await readBinaryBase64(path);
+    const base64 = await readImageBase64(path);
     const uri = toDataUri(base64, mimeForPath(path));
     cache.set(path, uri);
     return uri;
   } catch {
     return null;
   }
+}
+
+/**
+ * Remote images live at `ssh://<profile>/<path>`; everything else is a local
+ * path. The SSH reader is imported lazily so the web build (no Tauri) never
+ * pulls it in.
+ */
+async function readImageBase64(path: string): Promise<string> {
+  const remote = parseSshUri(path);
+  if (!remote) return readBinaryBase64(path);
+  const { sshReadBinaryBase64 } = await import("../ipc/ssh");
+  // Markdown may contain ../img.png; the remote side wants a resolved path.
+  return sshReadBinaryBase64(remote.profileId, posixNormalize(remote.remotePath));
 }

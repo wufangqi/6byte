@@ -403,6 +403,25 @@ pub async fn ssh_download(
     Ok(serde_json::json!({ "transferId": transfer_id }))
 }
 
+/// Read a remote image as base64 so the preview and HTML export can inline it.
+#[tauri::command]
+pub async fn ssh_read_binary_base64(
+    hub: State<'_, SshHub>,
+    profile_id: String,
+    path: String,
+) -> Result<String, String> {
+    let handle = get_session(&hub, &profile_id)?;
+    let runtime = hub.runtime.clone();
+    run(runtime, async move {
+        with_session(handle, |handle| async move {
+            let sftp = files::open_sftp(&handle).await?;
+            files::read_binary_base64(&sftp, &path).await
+        })
+        .await
+    })
+    .await
+}
+
 // ───────────────────────────── Forwards ─────────────────────────────
 
 #[tauri::command]

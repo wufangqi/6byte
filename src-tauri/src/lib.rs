@@ -78,6 +78,7 @@ pub fn run() {
             ssh::commands::ssh_list_dir,
             ssh::commands::ssh_stat,
             ssh::commands::ssh_read_file,
+            ssh::commands::ssh_read_binary_base64,
             ssh::commands::ssh_write_file,
             ssh::commands::ssh_mkdir,
             ssh::commands::ssh_create_file,

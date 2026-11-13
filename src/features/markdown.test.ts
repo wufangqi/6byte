@@ -125,4 +125,11 @@ describe("renderMarkdown", () => {
     expect(html).toContain('class="language-mermaid"');
     expect(html).toContain("A--&gt;B");
   });
+
+  it("keeps a remote document's relative image on the ssh base", () => {
+    const html = renderMarkdown("![图](.research/preview.png)", {
+      baseDir: "ssh://p1/home/zx",
+    });
+    expect(html).toContain('data-local-path="ssh://p1/home/zx/.research/preview.png"');
+  });
 });

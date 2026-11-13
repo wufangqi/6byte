@@ -639,6 +639,41 @@ where
     }
 }
 
+/// Cap for a remote image inlined into the preview, matching the local reader.
+const MAX_REMOTE_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Read a remote file as base64 so the preview and the HTML export can inline it
+/// as a data URI. Mirrors `read_binary_base64` on the local side.
+pub async fn read_binary_base64(sftp: &SftpSession, path: &str) -> Result<String, String> {
+    use base64::Engine as _;
+
+    validate_remote_path(path)?;
+    let attrs = sftp
+        .metadata(path)
+        .await
+        .map_err(|error| io_error("读取失败", error))?;
+    if !attrs.file_type().is_file() {
+        return Err("所选路径不是文件。".into());
+    }
+    if attrs.len() > MAX_REMOTE_IMAGE_BYTES {
+        return Err(format!(
+            "图片过大（上限 {} MB）。",
+            MAX_REMOTE_IMAGE_BYTES / (1024 * 1024)
+        ));
+    }
+
+    let mut handle = sftp
+        .open(path)
+        .await
+        .map_err(|error| io_error("读取失败", error))?;
+    let mut bytes = Vec::new();
+    handle
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| io_error("读取失败", error))?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+}
+
 /// Helper to obtain an SFTP session from a live SSH handle. The caller must hold
 /// the session lock; this function opens a dedicated SFTP channel inside it.
 pub async fn open_sftp(handle: &SessionHandle) -> Result<SftpSession, String> {

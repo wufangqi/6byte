@@ -178,6 +178,11 @@ export async function sshReadFile(profileId: string, path: string): Promise<Open
   return invoke<OpenedFile>("ssh_read_file", { profileId, path });
 }
 
+export async function sshReadBinaryBase64(profileId: string, path: string): Promise<string> {
+  requireTauri();
+  return invoke<string>("ssh_read_binary_base64", { profileId, path });
+}
+
 export async function sshWriteFile(params: {
   profileId: string;
   path: string;
