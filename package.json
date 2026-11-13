@@ -28,10 +28,10 @@
     "@tauri-apps/plugin-dialog": "^2.8.4",
     "katex": "^0.19.1",
     "markdown-it": "^15.0.3",
-    "mermaid": "^12.2.0",
+    "mermaid": "^12.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "shiki": "^4.5.0",
+    "shiki": "^4.6.0",
     "zustand": "^5.0.16"
   },
   "devDependencies": {
@@ -42,7 +42,7 @@
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
     "@vitejs/plugin-react": "^4.3.4",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "jsdom": "^30.1.3",
@@ -50,6 +50,6 @@
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.72.1",
     "vite": "^6.4.5",
-    "vitest": "^5.0.5"
+    "vitest": "^5.1.0"
   }
 }
