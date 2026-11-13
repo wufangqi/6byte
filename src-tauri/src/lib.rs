@@ -8,6 +8,7 @@ mod local_agent;
 mod mcp;
 mod secrets;
 mod skip;
+mod ssh;
 mod tree;
 mod watcher;
 
@@ -27,9 +28,13 @@ pub fn run() {
         .manage(local_agent::LocalAgent::default())
         .setup(|app| {
             let handle = app.handle().clone();
+            let ssh_handle = handle.clone();
             app.manage(watcher::FileWatcher::new(Arc::new(move |event| {
                 let _ = handle.emit("file-changed", event);
             })));
+            let ssh_hub = ssh::SshHub::new(ssh_handle);
+            ssh_hub.start_forward_ticker();
+            app.manage(ssh_hub);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -63,6 +68,28 @@ pub fn run() {
             about::app_mcp_command,
             about::open_feedback,
             about::open_external,
+            ssh::commands::ssh_profile_list,
+            ssh::commands::ssh_profile_save,
+            ssh::commands::ssh_profile_delete,
+            ssh::commands::ssh_connect,
+            ssh::commands::ssh_disconnect,
+            ssh::commands::ssh_sessions,
+            ssh::commands::ssh_home,
+            ssh::commands::ssh_list_dir,
+            ssh::commands::ssh_stat,
+            ssh::commands::ssh_read_file,
+            ssh::commands::ssh_read_binary_base64,
+            ssh::commands::ssh_write_file,
+            ssh::commands::ssh_mkdir,
+            ssh::commands::ssh_create_file,
+            ssh::commands::ssh_rename,
+            ssh::commands::ssh_delete,
+            ssh::commands::ssh_upload,
+            ssh::commands::ssh_download,
+            ssh::commands::ssh_forward_add,
+            ssh::commands::ssh_forward_stop,
+            ssh::commands::ssh_forward_list,
+            ssh::commands::ssh_forget_host,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
